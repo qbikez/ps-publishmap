@@ -1,0 +1,154 @@
+function process-mapfile($file) {
+    $fullname = $file
+    if ($fullname.FullName -ne $null) { $Fullname =$Fullname.FullName }
+    $map = & "$FullName"
+    
+    #$publishmap_obj = ConvertTo-Object $publishmap
+    $pmap = @{}
+   # foreach($a in $publishmap) {
+        foreach($groupk in $map.keys) {
+            # group = ne, legimi, hds, etc
+            #$group = $a[$groupk]
+            $r = process-map $map $groupk
+            $pmap += $r
+        }
+   # }
+
+   return $pmap
+}
+
+function process-map($publishmap, $groupk) {
+    Write-Verbose "processing map $groupk"
+    $settings = $publishmap.$groupk.settings
+    $globalProffiles = $publishmap.$groupk.global_profiles
+    $keys = get-propertynames $publishmap.$groupk
+    add-property $publishmap.$groupk "level" 1
+    add-property $publishmap.$groupk -name fullpath  -value "$groupk"
+    foreach($projk in $keys) {
+            #do not process special global settings
+            if ($projk -in "settings","global_profiles") {
+                continue
+            }
+            #proj = viewer,website,drmserver,vfs, etc.
+            #$proj = $group[$projk]
+            $projObj = $publishmap.$groupk.$projk        
+            if ($settings -ne $null) {
+                 add-property $projObj "settings" $settings
+                 #$projObj | add-member -name settings -membertype noteproperty -value $settings
+            }
+
+            add-property $projObj "level" 2
+            add-property $projObj -name fullpath  -value "$groupk.$projk"
+            
+            $profiles = @()
+            if ($proj.profiles -ne $null) {
+                $profiles += get-propertynames $proj.profiles
+            }
+            if ($globalProffiles -ne $null) {
+                $profiles += get-propertynames $globalProffiles
+            }
+            $profiles = $profiles | select -Unique
+            #write-host "$groupk.$projk"
+
+            foreach($profk in $profiles) {
+                $proj = $publishmap.$groupk.$projk
+                # make sure all profiles exist
+                check-profileName $proj $profk
+                $prof = $proj.profiles.$profk
+                
+                #inherit settings from project
+                inherit-properties -from $projObj -to $prof -exclude (@("profiles") + $profiles + @("level","fullpath"))
+                
+                
+                #inherit global profile settings
+                if ($globalProffiles -ne $null -and $globalProffiles.$profk -ne $null -and $prof.inherit -ne $false -and $proj.inherit -ne $false) {
+                    # inherit project-specific settings 
+                    #foreach($prop in $globalProffiles.$profk.psobject.properties | ? { $_.name -eq $projk }) {
+                    #    if ($prop.name -eq $projk) {
+                    $global = $globalProffiles.$profk
+                    inherit-properties -from $global -to $prof
+                    #    }
+                    #}                    
+                    # inherit generic settings
+                    inherit-properties -from $settings -to $prof                   
+                }
+                add-property $prof "level" 3
+
+                #fill meta properties
+                add-property $prof -name project -value $projObj
+                add-property $prof -name fullpath  -value "$groupk.$projk.$profk"
+                add-property $prof -name name -value "$profk"                
+                
+                add-property $publishmap.$groupk.$projk -name $profk -value $prof              
+            }
+        }
+
+    return $publishmap
+}
+
+
+<#
+
+#>
+function get-profile($name, $map = $null) {
+            $pmap = $map
+            if ($map -eq $null) {
+                $pmap = $global:pmap
+            }
+
+            $profName = $name
+            $splits = $profName.Split('.')
+
+            $obj = $pmap
+            $parent = $null
+            $isGroup = $false
+            foreach($split in $splits) {
+                $parent = $obj
+                $obj = $obj."$split"                
+                if ($obj -eq $null) {
+                    break
+                }
+                if ($obj -ne $null -and $obj.group -ne $null) {
+                    $isGroup = $true
+                    break
+                }
+            }    
+            $profile = $obj
+            if ($profile -eq $null)  {
+                if ($splits[1] -eq "all") {
+                    $isGroup = $true
+                    $profile = $parent
+                    break
+                }
+                else {
+                    #write-host "unknown profile $profName"
+                    return $null
+                }
+            }
+
+            return new-object -Type pscustomobject -Property @{
+                Profile = $profile
+                IsGroup = $isGroup
+                Project = $splits[0]
+                Group = $splits[1]
+                TaskName = $splits[2]
+            }
+}
+
+
+function check-profileName($proj, $profk) {
+    $prof = $proj.profiles.$profk
+                if ($prof -eq $null) {
+                    
+                    if ($proj.inherit -ne $false) {
+                        $prof = @{}
+                        if ($proj.profiles -eq $null) {
+                            add-property $proj -name "profiles" -value @{}
+                        }
+                        add-property $proj.profiles -name $profk -value $prof
+                    }
+                    else {
+                        continue
+                    }
+                }
+}

@@ -1,0 +1,6 @@
+{
+    "scripts": {
+        "init": ".paket/paket.bootstraper.exe", 
+        "restore": ".paket/paket.exe install"
+    }
+}
