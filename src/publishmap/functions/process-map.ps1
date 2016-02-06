@@ -16,7 +16,7 @@ function import-mapfile {
     $publishmap = @{}
 
     foreach($m in $maps) {
-        $publishmap += process-mapfile $m
+        $publishmap += import-singlemapfile $m
     }
 
     $global:publishmap = $publishmap
@@ -27,26 +27,32 @@ function import-mapfile {
     return $publishmap
 }
 
-function process-mapfile($file) {
+function import-singlemapfile($file) {
     $fullname = $file
     if ($fullname.FullName -ne $null) { $Fullname =$Fullname.FullName }
     $map = & "$FullName"
     
     #$publishmap_obj = ConvertTo-Object $publishmap
+    $pmap = import-mapobject $map
+
+   return $pmap
+}
+
+function import-mapobject($map) {
     $pmap = @{}
    # foreach($a in $publishmap) {
         foreach($groupk in $map.keys) {
             # group = ne, legimi, hds, etc
             #$group = $a[$groupk]
-            $r = process-map $map $groupk
+            $r = import-mapgroup $map $groupk
             $pmap += $r
         }
    # }
-
+   
    return $pmap
 }
 
-function process-map($publishmap, $groupk) {
+function import-mapgroup($publishmap, $groupk) {
     Write-Verbose "processing map $groupk"
     $settings = $publishmap.$groupk.settings
     $globalProffiles = $publishmap.$groupk.global_profiles
@@ -128,21 +134,23 @@ function get-profile($name, $map = $null) {
             $profName = $name
             $splits = $profName.Split('.')
 
-            $obj = $pmap
+            $map = $pmap
+            $entry = $null
             $parent = $null
             $isGroup = $false
             foreach($split in $splits) {
-                $parent = $obj
-                $obj = $obj."$split"                
-                if ($obj -eq $null) {
+                $parent = $entry
+                $entry = get-entry $split $map             
+                if ($entry -eq $null) {
                     break
                 }
-                if ($obj -ne $null -and $obj.group -ne $null) {
+                if ($entry -ne $null -and $entry.group -ne $null) {
                     $isGroup = $true
                     break
                 }
+                $map = $entry
             }    
-            $profile = $obj
+            $profile = $entry
             if ($profile -eq $null)  {
                 if ($splits[1] -eq "all") {
                     $isGroup = $true

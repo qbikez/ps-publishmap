@@ -7,5 +7,6 @@ Resolve-Path $helpersPath\functions\*.ps1 |
 
 
 Export-ModuleMember -Function `
-    Import-MapFile, `
-    Get-Profile
+    Import-MapFile, Import-MapObject, `
+    Get-Profile, `
+    Get-Entry
