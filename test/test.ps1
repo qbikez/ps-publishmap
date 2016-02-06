@@ -133,8 +133,8 @@ Describe "Get publishmap entry" {
             #$p.fullpath | ShouldBe "test.generic.prod3"           
         }
         It "Should replace variable placeholders" {
-            $p.computername | Should Be "prod3.cloudapp.net"
-            $p.Port | Should Be 1380
+            $p.profile.computername | Should Be "prod3.cloudapp.net"
+            $p.profile.Port | Should Be 1380
         }
     }
 }

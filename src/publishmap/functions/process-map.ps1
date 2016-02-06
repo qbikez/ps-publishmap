@@ -66,14 +66,14 @@ function import-mapgroup($publishmap, $groupk) {
             }
             #proj = viewer,website,drmserver,vfs, etc.
             #$proj = $group[$projk]
-            $projObj = $publishmap.$groupk.$projk        
-            if ($settings -ne $null) {
-                 add-property $projObj "settings" $settings
-                 #$projObj | add-member -name settings -membertype noteproperty -value $settings
+                   $proj = $publishmap.$groupk.$projk
+     if ($settings -ne $null) {
+                 add-property $proj "settings" $settings
+                 #$proj | add-member -name settings -membertype noteproperty -value $settings
             }
 
-            add-property $projObj "level" 2
-            add-property $projObj -name fullpath  -value "$groupk.$projk"
+            add-property $proj "level" 2
+            add-property $proj -name fullpath  -value "$groupk.$projk"
             
             $profiles = @()
             if ($proj.profiles -ne $null) {
@@ -84,15 +84,14 @@ function import-mapgroup($publishmap, $groupk) {
             }
             $profiles = $profiles | select -Unique
             #write-host "$groupk.$projk"
-
+                
             foreach($profk in $profiles) {
-                $proj = $publishmap.$groupk.$projk
                 # make sure all profiles exist
                 check-profileName $proj $profk
                 $prof = $proj.profiles.$profk
                 
                 #inherit settings from project
-                inherit-properties -from $projObj -to $prof -exclude (@("profiles") + $profiles + @("level","fullpath"))
+                inherit-properties -from $proj -to $prof -exclude (@("profiles") + $profiles + @("level","fullpath"))
                 
                 
                 #inherit global profile settings
@@ -110,9 +109,9 @@ function import-mapgroup($publishmap, $groupk) {
                 add-property $prof "level" 3
 
                 #fill meta properties
-                add-property $prof -name project -value $projObj
+                add-property $prof -name project -value $proj
                 add-property $prof -name fullpath  -value "$groupk.$projk.$profk"
-                add-property $prof -name name -value "$profk"                
+                add-property $prof -name name -value "$profk" -ifnotexists               
                 
                 add-property $publishmap.$groupk.$projk -name $profk -value $prof              
             }
@@ -140,7 +139,7 @@ function get-profile($name, $map = $null) {
             $isGroup = $false
             foreach($split in $splits) {
                 $parent = $entry
-                $entry = get-entry $split $map             
+                $entry = get-entry $split $map -excludeProperties @("project")             
                 if ($entry -eq $null) {
                     break
                 }

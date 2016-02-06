@@ -1,4 +1,4 @@
-function get-entry($key, $map){
+function get-entry($key, $map, $excludeProperties = @()){
    $entry = $null
    if ($map[$key] -ne $null) { return $map[$key] }     
    foreach($kvp in $map.GetEnumerator()) {
@@ -12,21 +12,23 @@ function get-entry($key, $map){
 
    if ($entry -ne $null) {
      $entry = $entry.Clone()
-     $entry = replace-properties $entry $m
+     $entry = replace-properties $entry $m -exclude $excludeProperties
      $entry.vars = $m  
    }
 
    return $entry
 }
 
-function replace-properties($obj, $vars = @{}, [switch][bool]$strict) {
+function replace-properties($obj, $vars = @{}, [switch][bool]$strict, $exclude = @()) {
     if ($obj -is [string]) {
         return replace-var $obj $vars
     }
     elseif ($obj -is [System.Collections.IDictionary]) {
         $keys = $obj.keys.Clone()
         foreach($key in $keys) {
-            $obj[$key] = replace-properties $obj[$key] $vars
+            if ($key -notin $exclude) {
+                $obj[$key] = replace-properties $obj[$key] $vars -exclude $exclude
+            }
         }
         return $obj
     }
