@@ -1,3 +1,32 @@
+function import-mapfile {
+    [cmdletbinding()]
+    param($maps = $null)
+
+    write-verbose "processing publishmap..."
+
+    $global:publishmap = $null
+
+    if ($maps -ne $null) {
+        $maps = @($maps)
+    }
+    else {
+        $maps = gci . -filter "publishmap.*.config.ps1"
+    }
+
+    $publishmap = @{}
+
+    foreach($m in $maps) {
+        $publishmap += process-mapfile $m
+    }
+
+    $global:publishmap = $publishmap
+    $global:pmap = $global:publishmap 
+
+    write-verbose "processing publishmap... DONE"
+
+    return $publishmap
+}
+
 function process-mapfile($file) {
     $fullname = $file
     if ($fullname.FullName -ne $null) { $Fullname =$Fullname.FullName }
