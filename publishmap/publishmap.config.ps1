@@ -29,7 +29,7 @@ $global:pmap = $global:publishmap
 
 write-verbose "processing publishmap... DONE"
 
-
+return $publishmap
 
 #$globalProfiles = @()
 #$globalProfiles += $publishmap.ne.global_profiles

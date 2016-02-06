@@ -5,8 +5,8 @@ $publishmap = @{
     test = [ordered]@{
         settings = @{
             siteAuth = @{
-                    username = "ne"
-                    password = "szkola2015"
+                    username = "user"
+                    password = "pass"
             }
         }
         global_profiles =@{
