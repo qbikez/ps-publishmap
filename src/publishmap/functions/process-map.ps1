@@ -16,7 +16,7 @@ function import-mapfile {
     $publishmap = @{}
 
     foreach($m in $maps) {
-        $publishmap += process-mapfile $m
+        $publishmap += import-singlemapfile $m
     }
 
     $global:publishmap = $publishmap
@@ -27,26 +27,32 @@ function import-mapfile {
     return $publishmap
 }
 
-function process-mapfile($file) {
+function import-singlemapfile($file) {
     $fullname = $file
     if ($fullname.FullName -ne $null) { $Fullname =$Fullname.FullName }
     $map = & "$FullName"
     
     #$publishmap_obj = ConvertTo-Object $publishmap
+    $pmap = import-mapobject $map
+
+   return $pmap
+}
+
+function import-mapobject($map) {
     $pmap = @{}
    # foreach($a in $publishmap) {
         foreach($groupk in $map.keys) {
             # group = ne, legimi, hds, etc
             #$group = $a[$groupk]
-            $r = process-map $map $groupk
+            $r = import-mapgroup $map $groupk
             $pmap += $r
         }
    # }
-
+   
    return $pmap
 }
 
-function process-map($publishmap, $groupk) {
+function import-mapgroup($publishmap, $groupk) {
     Write-Verbose "processing map $groupk"
     $settings = $publishmap.$groupk.settings
     $globalProffiles = $publishmap.$groupk.global_profiles
@@ -60,14 +66,14 @@ function process-map($publishmap, $groupk) {
             }
             #proj = viewer,website,drmserver,vfs, etc.
             #$proj = $group[$projk]
-            $projObj = $publishmap.$groupk.$projk        
-            if ($settings -ne $null) {
-                 add-property $projObj "settings" $settings
-                 #$projObj | add-member -name settings -membertype noteproperty -value $settings
+                   $proj = $publishmap.$groupk.$projk
+     if ($settings -ne $null) {
+                 add-property $proj "settings" $settings
+                 #$proj | add-member -name settings -membertype noteproperty -value $settings
             }
 
-            add-property $projObj "level" 2
-            add-property $projObj -name fullpath  -value "$groupk.$projk"
+            add-property $proj "level" 2
+            add-property $proj -name fullpath  -value "$groupk.$projk"
             
             $profiles = @()
             if ($proj.profiles -ne $null) {
@@ -78,15 +84,14 @@ function process-map($publishmap, $groupk) {
             }
             $profiles = $profiles | select -Unique
             #write-host "$groupk.$projk"
-
+                
             foreach($profk in $profiles) {
-                $proj = $publishmap.$groupk.$projk
                 # make sure all profiles exist
                 check-profileName $proj $profk
                 $prof = $proj.profiles.$profk
                 
                 #inherit settings from project
-                inherit-properties -from $projObj -to $prof -exclude (@("profiles") + $profiles + @("level","fullpath"))
+                inherit-properties -from $proj -to $prof -exclude (@("profiles") + $profiles + @("level","fullpath"))
                 
                 
                 #inherit global profile settings
@@ -104,9 +109,9 @@ function process-map($publishmap, $groupk) {
                 add-property $prof "level" 3
 
                 #fill meta properties
-                add-property $prof -name project -value $projObj
+                add-property $prof -name project -value $proj
                 add-property $prof -name fullpath  -value "$groupk.$projk.$profk"
-                add-property $prof -name name -value "$profk"                
+                add-property $prof -name name -value "$profk" -ifnotexists               
                 
                 add-property $publishmap.$groupk.$projk -name $profk -value $prof              
             }
@@ -128,21 +133,23 @@ function get-profile($name, $map = $null) {
             $profName = $name
             $splits = $profName.Split('.')
 
-            $obj = $pmap
+            $map = $pmap
+            $entry = $null
             $parent = $null
             $isGroup = $false
             foreach($split in $splits) {
-                $parent = $obj
-                $obj = $obj."$split"                
-                if ($obj -eq $null) {
+                $parent = $entry
+                $entry = get-entry $split $map -excludeProperties @("project")             
+                if ($entry -eq $null) {
                     break
                 }
-                if ($obj -ne $null -and $obj.group -ne $null) {
+                if ($entry -ne $null -and $entry.group -ne $null) {
                     $isGroup = $true
                     break
                 }
+                $map = $entry
             }    
-            $profile = $obj
+            $profile = $entry
             if ($profile -eq $null)  {
                 if ($splits[1] -eq "all") {
                     $isGroup = $true

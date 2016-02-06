@@ -29,7 +29,14 @@ $publishmap = @{
             #deployprop="DeployBookMeta"
             appname="svc/content"           
         }
-        db_legimi = @{
+        db_1 = @{
+        }
+        additional = @{
+            profiles = @{
+                prod = @{
+                    name = "prod"
+                }
+            }
         }
         override_default_profiles = @{
             task = "Migrate"
@@ -56,6 +63,16 @@ $publishmap = @{
                 }
             }
         }
+        generic = @{
+            profiles = @{
+                prod_N_ = @{ 
+                    computername = "prod{N}.cloudapp.net"; 
+                    Port = "1{N}80"
+                }
+                
+            }
+        }
+
     }
     
 }

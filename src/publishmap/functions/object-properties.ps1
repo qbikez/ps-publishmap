@@ -7,8 +7,9 @@ function get-propertynames($obj) {
     return $obj.psobject.Properties | select -ExpandProperty name
 }
 
-function add-property($object, $name, $value) {
+function add-property($object, $name, $value, [switch][bool] $ifNotExists) {
     if ($object.$name -ne $null) {
+        if ($ifNotExists) { return }
         throw "property '$name' already exists with value '$value'"
     }
     if ($object -is [System.Collections.IDictionary]) {
