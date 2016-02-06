@@ -8,3 +8,4 @@ test_script:
 - ps: scripts/test.ps1
 artifacts:
 - path: artifacts
+- path: src/publishmap
