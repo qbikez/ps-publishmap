@@ -1,7 +1,7 @@
 {
     "scripts": {
-        "init": "paket\\paket.bootstrapper.exe", 
-        "restore": "paket\\paket.exe install",
-        "test": "powershell test\\test.ps1"
+        "init": "powershell scripts\\init.ps1", 
+        "restore": "powershell scripts\\restore.ps1",
+        "test": "powershell scripts\\test.ps1"
     }
 }

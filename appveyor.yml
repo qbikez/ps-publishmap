@@ -1,0 +1,8 @@
+version: 1.0.{build}
+install:
+- ps: scripts/init.ps1
+- ps: scripts/restore.ps1
+build_script:
+- ps: write-host "no need to build powershell"
+test_script:
+- ps: scripts/test.ps1
