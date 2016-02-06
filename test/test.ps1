@@ -1,8 +1,6 @@
-$pester = "$psscriptroot\..\paket-files\pester\pester\pester.psm1"
+$pesterPath = "$psscriptroot\..\paket-files\pester\pester\pester.psm1"
 
-import-module $pester 
-
-
+import-module $pesterPath 
 
 
 Describe "parse publish map" {
@@ -20,4 +18,5 @@ Describe "parse publish map" {
     }
 }
 
-Invoke-Pester
+# this will search for all pester scripts
+#Invoke-Pester -Script .
