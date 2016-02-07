@@ -7,12 +7,21 @@ function get-propertynames($obj) {
     return $obj.psobject.Properties | select -ExpandProperty name
 }
 
-function add-properties([Parameter(Mandatory=$true, ValueFromPipeline = $true)] $object, $props, [switch][bool] $ifNotExists, $exclude = @()) {
+function add-properties(
+    [Parameter(Mandatory=$true, ValueFromPipeline = $true)] 
+    $object,
+     [Parameter(Mandatory=$true)]
+     $props, 
+     [switch][bool] $ifNotExists, 
+     [switch][bool] $merge, 
+     $exclude = @()
+ ) {
     foreach($prop in get-propertynames $props) {
         if ($prop -notin $exclude) {
-            add-property $object -name $prop -value $props.$prop -ifnotexists:$ifnotexists
+            $r = add-property $object -name $prop -value $props.$prop -ifnotexists:$ifnotexists -merge:$merge
         }
     }
+    return $object
 }
 
 function add-property {
@@ -21,12 +30,19 @@ function add-property {
         [Parameter(ValueFromPipeline = $true)] $object, 
         [Parameter(Mandatory=$true)] $name, 
         [Parameter(Mandatory=$true)] $value, 
-        [switch][bool] $ifNotExists
+        [switch][bool] $ifNotExists,
+       [switch][bool] $merge
     ) 
 
     if ($object.$name -ne $null) {
-        if ($ifNotExists) { return }
-        throw "property '$name' already exists with value '$value'"
+        if ($merge -and $object.$name -is [System.Collections.IDictionary] -and $value -is [System.Collections.IDictionary]) {
+            $r = add-properties $object.$name $value -ifNotExists:$ifNotExists -merge:$merge 
+            return $object
+        }
+        elseif ($ifNotExists) { return }
+        else {
+            throw "property '$name' already exists with value '$value'"
+        }
     }
     if ($object -is [System.Collections.IDictionary]) {
         $object.add($name, $value)
@@ -34,6 +50,8 @@ function add-property {
     else {
         $object | add-member -name $name -membertype noteproperty -value $value
     }
+
+    return $object
 }
 
 

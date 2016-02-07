@@ -61,8 +61,9 @@ function import-genericgroup($group,
     $keys = get-propertynames $group
     $level = $fullpath.split('.').length
     
-    $group | add-property -name _level -value $level
-    $group | add-property -name _fullpath -value $fullpath.trim('.')
+    
+    $null = $group | add-property -name _level -value $level
+    $null = $group | add-property -name _fullpath -value $fullpath.trim('.')
     
     $result = {}
     
@@ -71,11 +72,17 @@ function import-genericgroup($group,
         inherit-globalsettings $group $settings $stripsettingswrapper
     }
 
+    $onelevelsettingsinheritance = $true
+
     #get settings for children
-    if ($map.$settingskey -ne $null) {
-        $settings = $map.$settingskey
+    if ($group.$settingskey -ne $null) {
+        $settings = $group.$settingskey
         if ($settings._strip -ne $null) {
             $stripsettingswrapper = $settings._strip
+        }
+    } else {
+        if ($onelevelsettingsinheritance) {
+            $settings = $null
         }
     }
     
@@ -89,7 +96,7 @@ function import-genericgroup($group,
                 continue
             }
             $path = "$fullpath.$projk"            
-            $r = import-genericgroup $subgroup $path -settings $settings -settingskey $settingskey -stripsettingswrapper $stripsettingswrapper -specialkeys = $specialkeys
+            $r = import-genericgroup $subgroup $path -settings $settings -settingskey $settingskey -stripsettingswrapper $stripsettingswrapper -specialkeys $specialkeys
     }
 
     return $map
@@ -105,8 +112,8 @@ function import-mapgroup(
     $globalProffiles = $publishmapgroup.global_profiles
     $keys = get-propertynames $publishmapgroup
     
-    add-property $publishmapgroup "level" 1
-    add-property $publishmapgroup -name fullpath -value "$groupk"
+    $null = add-property $publishmapgroup "level" 1
+    $null = add-property $publishmapgroup -name fullpath -value "$groupk"
     
     $group = $publishmapgroup
     $result = {}
@@ -118,8 +125,8 @@ function import-mapgroup(
             $proj = $group.$projk            
             $r = import-mapproject $proj $projk $level
             
-            add-property $proj "level" 2
-            add-property $proj -name fullpath  -value "$groupk.$projk"
+            $null = add-property $proj "level" 2
+            $null = add-property $proj -name fullpath  -value "$groupk.$projk"
                        
         }
 
@@ -127,12 +134,13 @@ function import-mapgroup(
 }
 
 function inherit-globalsettings($proj, $settings, $stripsettingswrapper) {
+    write-verbose "inheriting global settings to $($proj._fullpath). strip=$stripsettingswrapper"
     if ($settings -ne $null) {
                 if ($stripsettingswrapper) {
-                    add-properties $proj $settings -ifNotExists
+                    $null = add-properties $proj $settings -ifNotExists -merge
                 }
                 else {
-                    add-property $proj "settings" $settings -ifNotExists
+                    $null = add-property $proj "settings" $settings -ifNotExists -merge
                 }
             }
 }
@@ -156,7 +164,7 @@ function import-mapproject($proj) {
                   check-profileName $proj $profk            
                   $prof = $proj.profiles.$profk
                   import-mapprofile $prof -parent $proj     
-                  add-property $proj -name $profk -value $prof
+                  $null = add-property $proj -name $profk -value $prof
             }
 }
 
@@ -178,12 +186,12 @@ function import-mapprofile($prof, $parent) {
                     # inherit generic settings
                     inherit-properties -from $settings -to $prof                   
                 }
-                add-property $prof "_level" 3
+                $null = add-property $prof "_level" 3
 
                 #fill meta properties
-                add-property $prof -name _parent -value $parent
+                $null = add-property $prof -name _parent -value $parent
                 #add-property $prof -name fullpath  -value "$groupk.$projk.$profk"
-                add-property $prof -name _name -value "$profk"               
+                $null = add-property $prof -name _name -value "$profk"               
                 
 }
 <#
@@ -244,9 +252,9 @@ function check-profileName($proj, $profk) {
                     if ($proj.inherit -ne $false) {
                         $prof = @{}
                         if ($proj.profiles -eq $null) {
-                            add-property $proj -name "profiles" -value @{}
+                            $null = add-property $proj -name "profiles" -value @{}
                         }
-                        add-property $proj.profiles -name $profk -value $prof
+                        $null = add-property $proj.profiles -name $profk -value $prof
                     }
                     else {
                         continue

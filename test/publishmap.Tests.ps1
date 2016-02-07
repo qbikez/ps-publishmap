@@ -4,16 +4,20 @@ Describe "parse map object" {
 
   Context "when map looks like this" {
       $m = @{
-          test =@{
-              global_profiles = @{
-                  dev = @{                      
+          test = @{
+              settings = @{
+                abc = "inherited"
+                profiles = @{
+                      dev = @{  what = "dev"                    
+                      }
+                      qa = @{   what = "qa"                   
+                      }
                   }
-                  qa = @{                      
-                  }
+                  _strip = $true
               }
               additional = @{
                   profiles = @{
-                      prod = @{                          
+                      prod = @{  what = "prod"                        
                       }
                   }
               }
@@ -21,7 +25,15 @@ Describe "parse map object" {
       }
       
       $map = import-mapobject $m
-      
+      It "profiles should be merged" {
+        $p = $map.test.additional
+        $p.profiles.prod | Should Not BeNullOrEmpty  
+        $p.profiles.prod.what | Should be "prod"    
+        $p.profiles.dev | Should Not BeNullOrEmpty         
+        $p.profiles.dev.what | Should be "dev"
+        $p.profiles.qa | Should Not BeNullOrEmpty         
+        
+      }
       It "merged profiles should be exposed at project level" {
         $p = $map.test.additional
         $p.prod | Should Not BeNullOrEmpty         
