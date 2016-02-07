@@ -1,4 +1,7 @@
-function get-entry($key, $map, $excludeProperties = @()){
+function get-entry(
+    [Parameter(mandatory=$true)] $key,
+    [Parameter(mandatory=$true)] $map,
+    $excludeProperties = @()) {
    $entry = $null
    if ($map[$key] -ne $null) { return $map[$key] }     
    foreach($kvp in $map.GetEnumerator()) {

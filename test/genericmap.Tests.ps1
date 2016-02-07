@@ -1,6 +1,6 @@
 . "$PSScriptRoot\includes.ps1"
 
-Describe "parse generic map" {
+Describe "parse simple map" {
       $m = @{
         settings = @{
             Port = 22
@@ -11,7 +11,7 @@ Describe "parse generic map" {
       }
       $map = import-mapobject $m -verbose
       
-      Context "when generic map is imported" {
+      Context "when map is imported" {
       
           It "Should return a valid map" {
               $map | should Not BeNullOrEmpty
@@ -21,5 +21,18 @@ Describe "parse generic map" {
               $map.abc.port | should be $map.settings.port
           }
         
+      }
+      
+      Context "when map contains generic keys" {
+        $p = get-entry machine13 $map
+        It "Should retrieve a valid profile" {
+            $p | Should Not BeNullOrEmpty
+            # should _fullpath be replaced or not?
+            $p._fullpath | Should Be "machine_N_"           
+        }
+        It "Should replace variable placeholders" {
+            $p.computername | Should Be "machine13.cloudapp.net"
+            $p.Port | Should Be 13985
+        }
       }
 }
