@@ -17,3 +17,18 @@ function inherit-properties($from, $to, $exclude = @(), [switch][bool] $valuesOn
     }
     
 }
+
+
+function inherit-globalsettings($proj, $settings) {
+    
+    if ($settings -ne $null) {
+        write-verbose "inheriting global settings to $($proj._fullpath). strip=$stripsettingswrapper"
+        $stripsettingswrapper = $settings._strip
+                if ($stripsettingswrapper -ne $null -and $stripsettingswrapper) {
+                    $null = add-properties $proj $settings -ifNotExists -merge
+                }
+                else {
+                    $null = add-property $proj "settings" $settings -ifNotExists -merge
+                }
+            }
+}

@@ -6,25 +6,29 @@ Describe "parse map object" {
       $m = @{
           test = @{
               settings = @{
-                abc = "inherited"
-                profiles = @{
+                abc = "inherited"               
+              }
+              global_profiles = @{
                       dev = @{  what = "dev"                    
                       }
                       qa = @{   what = "qa"                   
                       }
                   }
-                  _strip = $true
-              }
               additional = @{
                   profiles = @{
                       prod = @{  what = "prod"                        
                       }
                   }
               }
+              default = @{
+                  profiles = @{
+                      }
+                  }
+              }
           }
-      }
       
-      $map = import-mapobject $m
+      
+      $map = import-publishmapobject $m -verbose
       It "profiles should be merged" {
         $p = $map.test.additional
         $p.profiles.prod | Should Not BeNullOrEmpty  
@@ -43,7 +47,7 @@ Describe "parse map object" {
   }
 }
 Describe "parse publish map" {
-  $map = import-mapfile -maps "$PSScriptRoot\publishmap.test.config.ps1"    
+  $map = import-publishmapfile -maps "$PSScriptRoot\publishmap.test.config.ps1" -Verbose 
 
   Context "When map is parsed" {
       It "Should return a map" {
@@ -58,9 +62,9 @@ Describe "parse publish map" {
         $p | Should Not BeNullOrEmpty        
         $map.test.override_default_profiles.dev | Should Be $map.test.override_default_profiles.profiles.dev
       }
-      It "profiles should have _fullpath property" {
+      It "profiles should have fullpath property" {
             $p = $map.test.override_default_profiles.dev         
-          $p._fullpath | ShouldBe "test.override_default_profiles.dev"
+          $p.fullpath | Should Be "test.override_default_profiles.dev"
       }
       
   }
@@ -126,7 +130,7 @@ Describe "parse publish map" {
 #Invoke-Pester -Script .
 
 Describe "Get publishmap entry" {
-    $map = import-mapfile -maps "$PSScriptRoot\publishmap.test.config.ps1"    
+    $map = import-publishmapfile -maps "$PSScriptRoot\publishmap.test.config.ps1"    
     Context "When get-profile is called" {
         It "proper profile is retireved" {
             $p = get-profile test.use_default_profiles.dev
@@ -140,7 +144,7 @@ Describe "Get publishmap entry" {
         $p = get-profile test.generic.prod3
         It "Should retrieve a valid profile" {
             $p | Should Not BeNullOrEmpty
-            $p.fullpath | ShouldBe "test.generic.prod3"           
+            $p.fullpath | Should Be "test.generic.prod3"           
         }
         It "Should replace variable placeholders" {
             $p.profile.computername | Should Be "prod3.cloudapp.net"
