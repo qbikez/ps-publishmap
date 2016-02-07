@@ -53,7 +53,6 @@ function import-genericgroup($group,
     $fullpath, 
     $settings = $null,
     $settingskey = "settings",
-    $stripsettingswrapper = $false,
     $specialkeys = @("settings", "global_profiles")
 ) {
     Write-Verbose "processing map path $fullpath"
@@ -62,27 +61,19 @@ function import-genericgroup($group,
     $level = $fullpath.split('.').length
     
     
-    $null = $group | add-property -name _level -value $level
-    $null = $group | add-property -name _fullpath -value $fullpath.trim('.')
-    
+   
     $result = {}
-    
-    
-    if ($settings -ne $null) {
-        inherit-globalsettings $group $settings $stripsettingswrapper
-    }
+        
 
     $onelevelsettingsinheritance = $true
 
+    $childsettings = $null 
     #get settings for children
     if ($group.$settingskey -ne $null) {
-        $settings = $group.$settingskey
-        if ($settings._strip -ne $null) {
-            $stripsettingswrapper = $settings._strip
-        }
+        $childsettings = $group.$settingskey
     } else {
-        if ($onelevelsettingsinheritance) {
-            $settings = $null
+        if (!$onelevelsettingsinheritance) {
+            $childsettings = $settings
         }
     }
     
@@ -96,8 +87,22 @@ function import-genericgroup($group,
                 continue
             }
             $path = "$fullpath.$projk"            
-            $r = import-genericgroup $subgroup $path -settings $settings -settingskey $settingskey -stripsettingswrapper $stripsettingswrapper -specialkeys $specialkeys
+
+
+            inherit-properties -from $group -to $subgroup -valuesonly
+                    
+            $r = import-genericgroup $subgroup $path -settings $childsettings -settingskey $settingskey -specialkeys $specialkeys
+
     }
+
+    $null = $group | add-property -name _level -value $level
+    $null = $group | add-property -name _fullpath -value $fullpath.trim('.')
+
+    if ($settings -ne $null) {
+        inherit-globalsettings $group $settings 
+    }
+    
+    
 
     return $map
 }
@@ -133,10 +138,12 @@ function import-mapgroup(
     return $publishmapgroup
 }
 
-function inherit-globalsettings($proj, $settings, $stripsettingswrapper) {
-    write-verbose "inheriting global settings to $($proj._fullpath). strip=$stripsettingswrapper"
+function inherit-globalsettings($proj, $settings) {
+    
     if ($settings -ne $null) {
-                if ($stripsettingswrapper) {
+        write-verbose "inheriting global settings to $($proj._fullpath). strip=$stripsettingswrapper"
+        $stripsettingswrapper = $settings._strip
+                if ($stripsettingswrapper -ne $null -and $stripsettingswrapper) {
                     $null = add-properties $proj $settings -ifNotExists -merge
                 }
                 else {

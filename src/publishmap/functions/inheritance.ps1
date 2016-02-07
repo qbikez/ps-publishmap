@@ -1,17 +1,19 @@
 
-function inherit-properties($from, $to, $exclude = @()) {
+function inherit-properties($from, $to, $exclude = @(), [switch][bool] $valuesOnly) {
     if ($from -is [System.Collections.IDictionary]) {
-        foreach($key in $from.keys) {
-            if ($to.($key) -eq $null -and $key -notin $exclude) {
-                add-property $to -name $key -value $from[$key]
-            }
-        }
     }
     else {
-        foreach($prop in $from.psobject.properties) {
-            if ($to.($prop.name) -eq $null -and $prop.Name -notin $exclude) {
-                add-property $to -name $prop.name -value $prop.value
-            }
+        $from = $from.psobject.properties | % { $d = @{} } { $d[$_.name] = $_.value } { $d }
+    }
+    foreach($key in $from.keys) {
+            $shouldExclude = $false 
+        if ($key -in $exclude) { $shouldExclude = $true }
+        if (@($exclude | ? { $key -match "^$_$" }).Count -gt 0) { $shouldExclude = $true }
+        if ($from[$key] -is [System.Collections.IDictionary] -and $valuesOnly) { $shouldExclude = $true }
+
+        if (!$shouldExclude) {
+            add-property $to -name $key -value $from[$key] 
         }
     }
+    
 }

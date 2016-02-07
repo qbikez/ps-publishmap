@@ -64,10 +64,8 @@ Describe "parse simple map" {
 }
 
 
-Describe "parse multilevel map" {
-      Context "map with one level nesting" {
-        
-            $m = @{
+Describe "parse map with one level nesting" {      
+        $m = @{
             test = @{
                 settings = @{
                     Port = 22
@@ -80,14 +78,18 @@ Describe "parse multilevel map" {
 
           $map = import-mapobject $m 
 
+      
+      Context "when there are global settings" {
+        
           It "Global settings should be inherited as properties in subgroup" {
               $map.test.abc.port | should Not BeNullOrEmpty
               $map.test.abc.port | should be $map.test.settings.port
           }
       }
-      Context "map with one level nesting" {
-      
-            $m = @{
+}
+
+Describe "parse map with two level nesting" { 
+      $m = @{
                 test = @{
                     settings = @{
                         Port = 22
@@ -101,6 +103,7 @@ Describe "parse multilevel map" {
                    project1 = @{
                         sln = "abc.sln"
                         profiles = @{
+                            str = "abc"
                             prod = @{
                                 port = "prod"
                             }
@@ -111,7 +114,8 @@ Describe "parse multilevel map" {
 
           $map = import-mapobject $m 
 
-
+    
+      Context "when there are global settings" {
           It "local profiles should be retained" {
               $map.test.project1 | should Not BeNullOrEmpty
               $map.test.project1.profiles | should Not Benullorempty
@@ -125,5 +129,16 @@ Describe "parse multilevel map" {
               $map.test.project1.profiles.dev | should Not Benullorempty
               $map.test.project1.profiles.dev.port | should be "dev"
           }
+    }
+    
+    Context "when there is local inheritance" {
+        It "children should inherit from parents" {
+            $map.test.project1.profiles.prod.str | should Not BeNullOrEmpty
+            $map.test.project1.profiles.prod.str | should Be $map.test.project1.profiles.str 
+        }
+        It "children should inherit from grandparents" {
+            $map.test.project1.profiles.prod.sln | should Not BeNullOrEmpty
+            $map.test.project1.profiles.prod.sln | should Be $map.test.project1.sln         
+        }
     }
   }
