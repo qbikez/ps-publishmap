@@ -44,6 +44,15 @@ Describe "parse map object" {
         $p.dev | Should Not BeNullOrEmpty         
         $p.qa | Should Not BeNullOrEmpty         
      }
+     It "fullpath should be set" {
+        $p = $map.test.additional
+        $p.prod.fullpath | Should Be "test.additional.prod"
+        $p.dev.fullpath | Should Be "test.additional.dev"
+        $p = $map.test.default
+        $p.dev.fullpath | Should Be "test.default.dev"
+        $p.qa.fullpath | Should Be "test.default.qa"
+     }
+     
   }
 }
 Describe "parse publish map" {

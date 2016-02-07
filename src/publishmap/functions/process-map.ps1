@@ -34,6 +34,7 @@ param($map)
    $pmap = @{}
     
    $pmap = import-genericgroup $map ""   
+   $pmap = add-metaproperties $pmap ""
    return $pmap
 }
 
@@ -58,7 +59,6 @@ function import-genericgroup($group,
     Write-Verbose "processing map path $fullpath"
    
     $keys = get-propertynames $group
-    $level = $fullpath.split('.').length
     
     
    
@@ -95,8 +95,6 @@ function import-genericgroup($group,
 
     }
 
-    $null = $group | add-property -name _level -value $level
-    $null = $group | add-property -name _fullpath -value $fullpath.trim('.')
 
     if ($settings -ne $null) {
         inherit-globalsettings $group $settings 
@@ -105,6 +103,31 @@ function import-genericgroup($group,
     
 
     return $map
+}
+
+function add-metaproperties($group, $fullpath, $specialkeys = @("settings", "global_profiles")
+) {
+    if ($group -isnot [System.Collections.IDictionary]) {
+        return
+    }
+    $level = $fullpath.split('.').length
+    
+    $null = $group | add-property -name _level -value $level
+    $null = $group | add-property -name _fullpath -value $fullpath.trim('.')
+
+      $keys = get-propertynames $group
+
+        
+    foreach($projk in $keys) {
+     #do not process special global settings
+        if ($projk -in $specialkeys) {
+                continue
+        }
+        $path = "$fullpath.$projk"
+        $null = add-metaproperties $group.$projk $path -specialkeys $specialkeys
+    }
+  
+    return $group
 }
 
 function import-mapgroup(

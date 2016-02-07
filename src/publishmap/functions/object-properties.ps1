@@ -76,3 +76,17 @@ function ConvertTo-Object([hashtable]$hashtable) {
     }
     return New-Object -TypeName PSCustomObject -Property $copy 
 }
+
+
+function copy-hashtable($hash) {
+    $new = @{}
+    foreach($key in get-propertynames $hash) {
+        if ($hash.$key -is [System.Collections.IDictionary]) {
+            $new.$key = copy-hashtable $hash.$key
+        } else {
+            $new.$key = $hash.$key
+        }   
+    }
+
+    return $new
+}

@@ -33,20 +33,23 @@ Describe "parse simple map" {
             _strip = $true
         }
         machine_N_ = @{ computername = "machine{N}.cloudapp.net"; Port = "{N}985" }
-        abc = @{ ComputerName = "pegaz.legimi.com"; }    
+        abc = @{ ComputerName = "pegaz.legimi.com";  }    
       }
-      $map = import-mapobject $m 
+      $map = import-mapobject $m -verbose
       
       Context "when map is imported" {
       
           It "Should return a valid map" {
               $map | should Not BeNullOrEmpty
+              $map.gettype().fullname | should be "System.Collections.Hashtable"
           }
           It "Global settings should be inherited as properties" {
               $map.abc.port | should Not BeNullOrEmpty
               $map.abc.port | should be $map.settings.port
           }
-        
+          It "_fullpath should be set" {
+            $map.abc._fullpath | should be "abc"
+          }
       }
       
       Context "when map contains generic keys" {
@@ -78,6 +81,19 @@ Describe "parse map with one level nesting" {
 
           $map = import-mapobject $m 
 
+     Context "when map is imported" {
+      
+          It "Should return a valid map" {
+              $map | should Not BeNullOrEmpty
+          }
+          It "Global settings should be inherited as properties" {
+              $map.test.abc.port | should Not BeNullOrEmpty
+              $map.test.abc.port | should be $map.test.settings.port
+          }
+          It "_fullpath should be set" {
+            $map.test.abc._fullpath | should be "test.abc"
+          }
+      }
       
       Context "when there are global settings" {
         
@@ -109,12 +125,35 @@ Describe "parse map with two level nesting" {
                             }
                         }
                    }
+                   project2 = @{
+                        sln = "abc.sln"
+                        profiles = @{
+                            str = "abc"
+                            prod = @{
+                                port = "prod"
+                            }
+                        }
+                   }
                 }
             }
 
           $map = import-mapobject $m 
 
-    
+     Context "when map is imported" {
+      
+          It "Should return a valid map" {
+              $map | should Not BeNullOrEmpty
+          }
+          It "_fullpath should be set on local dictionaries" {
+            $map.test.project1._fullpath | should be "test.project1"
+            $map.test.project1.profiles.prod._fullpath | should be "test.project1.profiles.prod"
+          }
+          It "_fullpath should be set on inherited dictionaries" {
+            $map.test.project1.profiles.dev._fullpath | should be "test.project1.profiles.dev"
+            $map.test.project2.profiles.dev._fullpath | should be "test.project2.profiles.dev"
+        }
+      }
+
       Context "when there are global settings" {
           It "local profiles should be retained" {
               $map.test.project1 | should Not BeNullOrEmpty

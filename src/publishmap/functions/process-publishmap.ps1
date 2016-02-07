@@ -65,11 +65,19 @@ function process-publishmap($pmap) {
                 $null = add-properties $proj $proj.profiles -merge -ifNotExists
                 foreach($profk in get-propertynames $proj.profiles) {
                     if ($proj.$profk -is [System.Collections.IDictionary]) {
-                        $null = add-property $proj.$profk -name _fullpath -value "$grouk.$projk.$profk" -overwrite
+                        $null = add-property $proj.$profk -name _fullpath -value "$groupk.$projk.$profk" -overwrite
+                        $null = add-property $proj.$profk -name fullpath -value $proj.$profk._fullpath -overwrite
                     }
                 }
             }
+            if ($proj._fullpath) {
+                $null = add-property $proj -name fullpath -value $proj._fullpath -overwrite
+            }
         }
+        if ($group._fullpath) {
+            $null = add-property $group -name fullpath -value $group._fullpath -overwrite
+        }
+
     }
     return $pmap
 }

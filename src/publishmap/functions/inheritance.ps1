@@ -5,17 +5,49 @@ function inherit-properties($from, $to, $exclude = @(), [switch][bool] $valuesOn
     else {
         $from = $from.psobject.properties | % { $d = @{} } { $d[$_.name] = $_.value } { $d }
     }
-    foreach($key in $from.keys) {
-            $shouldExclude = $false 
+    $from = $from.getenumerator() | % { $h = @{} }{
+        $key = $_.key
+        $value = $_.value
+        $shouldExclude = $false 
         if ($key -in $exclude) { $shouldExclude = $true }
         if (@($exclude | ? { $key -match "^$_$" }).Count -gt 0) { $shouldExclude = $true }
-        if ($from[$key] -is [System.Collections.IDictionary] -and $valuesOnly) { $shouldExclude = $true }
+          
+        if ($value -is [System.Collections.IDictionary]) {
+            if ($valuesOnly) {
+                $shouldExclude = $true 
+            }
+            else {
+                $newvalue = copy-hashtable $value
+                $value = $newvalue
+            }
+        }
+        if (!$shouldExclude) {
+            $h[$key] = $value    
+        }
+    } { $h } 
+    
+    if ($from -ne $null) {
+        $null = add-properties -object $to -props $from -merge -ifNotExists
+        
+    }
+   <# foreach($key in $from.keys) {
+
+        $value = $from[$key] 
+
+        if ($value -is [System.Collections.IDictionary]) {
+            if ($valuesOnly) {
+                $shouldExclude = $true 
+            }
+            else {
+                $value = $value.Clone()
+            }
+         }
 
         if (!$shouldExclude) {
-            add-property $to -name $key -value $from[$key] 
+            add-property $to -name $key -value $value
         }
     }
-    
+    #>
 }
 
 
@@ -25,7 +57,7 @@ function inherit-globalsettings($proj, $settings) {
         write-verbose "inheriting global settings to $($proj._fullpath). strip=$stripsettingswrapper"
         $stripsettingswrapper = $settings._strip
                 if ($stripsettingswrapper -ne $null -and $stripsettingswrapper) {
-                    $null = add-properties $proj $settings -ifNotExists -merge
+                    $null = inherit-properties -from $settings -to $proj -ifNotExists -merge
                 }
                 else {
                     $null = add-property $proj "settings" $settings -ifNotExists -merge
