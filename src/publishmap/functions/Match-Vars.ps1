@@ -1,4 +1,7 @@
-function get-entry($key, $map, $excludeProperties = @()){
+function get-entry(
+    [Parameter(mandatory=$true)] $key,
+    [Parameter(mandatory=$true)] $map,
+    $excludeProperties = @()) {
    $entry = $null
    if ($map[$key] -ne $null) { return $map[$key] }     
    foreach($kvp in $map.GetEnumerator()) {
@@ -47,6 +50,10 @@ function replace-var ($text, $vars = @{}) {
 
         if ($text -match "\{$name\}") {
             $r = $r -replace "\{$name\}",$val
+        }
+        # support also same placeholder as in template match
+        elseif ($text -match "_$($name)_") {
+            $r = $r -replace "_$($name)_",$val
         }
     }
 
