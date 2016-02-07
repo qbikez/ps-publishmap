@@ -62,18 +62,28 @@ function process-publishmap($pmap) {
         foreach($projk in get-propertynames $group) {
             $proj = $group.$projk
             if ($proj.profiles -ne $null) {
-                $null = add-properties $proj $proj.profiles -merge -ifNotExists
                 foreach($profk in get-propertynames $proj.profiles) {
-                    if ($proj.$profk -is [System.Collections.IDictionary]) {
-                        $null = add-property $proj.$profk -name _fullpath -value "$groupk.$projk.$profk" -overwrite
-                        $null = add-property $proj.$profk -name fullpath -value $proj.$profk._fullpath -overwrite
+         
+                    if ($proj.profiles.$profk -is [System.Collections.IDictionary]) {
+                        # set full path as if profiles were created at project level
+                        $null = add-property $proj.profiles.$profk -name _fullpath -value "$groupk.$projk.$profk" -overwrite
+                         #use fullpath for backward compatibility       
+                        $null = add-property $proj.profiles.$profk -name fullpath -value $proj.profiles.$profk._fullpath -overwrite
+                    } else {
+                        #remove every property that isn't a real profile
+                        $proj.profiles.Remove($profk)
                     }
                 }
+                # expose profiles at project level
+                $null = add-properties $proj $proj.profiles -merge -ifNotExists
             }
+            # use fullpath for backward compatibility
             if ($proj._fullpath) {
                 $null = add-property $proj -name fullpath -value $proj._fullpath -overwrite
             }
         }
+
+        # use fullpath for backward compatibility
         if ($group._fullpath) {
             $null = add-property $group -name fullpath -value $group._fullpath -overwrite
         }

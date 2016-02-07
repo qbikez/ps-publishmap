@@ -51,6 +51,10 @@ function replace-var ($text, $vars = @{}) {
         if ($text -match "\{$name\}") {
             $r = $r -replace "\{$name\}",$val
         }
+        # support also same placeholder as in template match
+        elseif ($text -match "_$($name)_") {
+            $r = $r -replace "_$($name)_",$val
+        }
     }
 
     return $r    

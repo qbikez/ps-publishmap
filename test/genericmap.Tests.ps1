@@ -56,8 +56,7 @@ Describe "parse simple map" {
         $p = get-entry machine13 $map
         It "Should retrieve a valid profile" {
             $p | Should Not BeNullOrEmpty
-            # should _fullpath be replaced or not?
-            $p._fullpath | Should Be "machine_N_"           
+            $p._fullpath | Should Be "machine13"           
         }
         It "Should replace variable placeholders" {
             $p.computername | Should Be "machine13.cloudapp.net"
