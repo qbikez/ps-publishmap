@@ -7,6 +7,11 @@ function get-propertynames($obj) {
     return $obj.psobject.Properties | select -ExpandProperty name
 }
 
+function add-properties($object, $props, [switch][bool] $ifNotExists) {
+    foreach($prop in get-propertynames $props) {
+        add-property $object -name $prop -value $props.$prop -ifnotexists:$ifnotexists
+    }
+}
 function add-property($object, $name, $value, [switch][bool] $ifNotExists) {
     if ($object.$name -ne $null) {
         if ($ifNotExists) { return }

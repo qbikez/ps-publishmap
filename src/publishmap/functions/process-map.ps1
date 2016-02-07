@@ -40,40 +40,72 @@ function import-singlemapfile($file) {
 
 function import-mapobject($map) {
     $pmap = @{}
-   # foreach($a in $publishmap) {
-        foreach($groupk in $map.keys) {
-            # group = ne, legimi, hds, etc
-            #$group = $a[$groupk]
-            $r = import-mapgroup $map $groupk
-            $pmap += $r
-        }
-   # }
+    $settingskey = "settings"
+    $settings = $map.$settingskey
+    $stripsettingswrapper = $false
+    if ($settings.strip -ne $null) {
+        $stripsettingswrapper = $settings.strip
+    }
+    foreach($groupk in $map.keys) {
+        # group = ne, legimi, hds, etc
+        #$group = $a[$groupk]
+         if ($groupk -in "settings","global_profiles") {
+                continue
+        }           
+        $r = import-mapgroup $map.$groupk $groupk -setting $settings -stripsettingswrapper $stripsettingswrapper
+        $pmap += @{ $groupk = $r }
+    }
    
    return $pmap
 }
 
-function import-mapgroup($publishmap, $groupk) {
+
+function import-mapgroup(
+    $publishmapgroup, $groupk,     
+    $settings = $null,
+    $stripsettingswrapper = $false
+) {
     Write-Verbose "processing map $groupk"
-    $settings = $publishmap.$groupk.settings
-    $globalProffiles = $publishmap.$groupk.global_profiles
-    $keys = get-propertynames $publishmap.$groupk
-    add-property $publishmap.$groupk "level" 1
-    add-property $publishmap.$groupk -name fullpath  -value "$groupk"
+   
+    $globalProffiles = $publishmapgroup.global_profiles
+    $keys = get-propertynames $publishmapgroup
+    
+    add-property $publishmapgroup "level" 1
+    add-property $publishmapgroup -name fullpath -value "$groupk"
+    
+    $group = $publishmapgroup
+    $result = {}
     foreach($projk in $keys) {
-            #do not process special global settings
+     #do not process special global settings
             if ($projk -in "settings","global_profiles") {
                 continue
             }
-            #proj = viewer,website,drmserver,vfs, etc.
-            #$proj = $group[$projk]
-                   $proj = $publishmap.$groupk.$projk
-     if ($settings -ne $null) {
-                 add-property $proj "settings" $settings
-                 #$proj | add-member -name settings -membertype noteproperty -value $settings
-            }
-
+            $proj = $group.$projk            
+            $r = import-mapproject $proj $projk $level
+            
             add-property $proj "level" 2
             add-property $proj -name fullpath  -value "$groupk.$projk"
+                       
+        }
+
+    return $publishmapgroup
+}
+
+function inherit-globalsettings($proj, $settings, $stripsettingswrapper) {
+    if ($settings -ne $null) {
+                if ($stripsettingswrapper) {
+                    add-properties $proj $settings
+                }
+                else {
+                    add-property $proj "settings" $settings
+                }
+            }
+}
+function import-mapproject($proj) {
+            #proj = viewer,website,drmserver,vfs, etc.
+            #$proj = $group[$projk]
+            
+            inherit-globalsettings $proj $settings $stripsettingswrapper
             
             $profiles = @()
             if ($proj.profiles -ne $null) {
@@ -86,16 +118,21 @@ function import-mapgroup($publishmap, $groupk) {
             #write-host "$groupk.$projk"
                 
             foreach($profk in $profiles) {
-                # make sure all profiles exist
-                check-profileName $proj $profk
-                $prof = $proj.profiles.$profk
+                  check-profileName $proj $profk            
+                  $prof = $proj.profiles.$profk
+                  import-mapprofile $prof -parent $proj     
+                  add-property $proj -name $profk -value $prof
+            }
+}
+
+function import-mapprofile($prof, $parent) {
+   # make sure all profiles exist
                 
                 #inherit settings from project
-                inherit-properties -from $proj -to $prof -exclude (@("profiles") + $profiles + @("level","fullpath"))
-                
-                
+                inherit-properties -from $parent -to $prof -exclude (@("profiles") + $profiles + @("level","fullpath"))
+
                 #inherit global profile settings
-                if ($globalProffiles -ne $null -and $globalProffiles.$profk -ne $null -and $prof.inherit -ne $false -and $proj.inherit -ne $false) {
+                if ($globalProffiles -ne $null -and $globalProffiles.$profk -ne $null -and $prof.inherit -ne $false -and $parent.inherit -ne $false) {
                     # inherit project-specific settings 
                     #foreach($prop in $globalProffiles.$profk.psobject.properties | ? { $_.name -eq $projk }) {
                     #    if ($prop.name -eq $projk) {
@@ -106,21 +143,14 @@ function import-mapgroup($publishmap, $groupk) {
                     # inherit generic settings
                     inherit-properties -from $settings -to $prof                   
                 }
-                add-property $prof "level" 3
+                add-property $prof "_level" 3
 
                 #fill meta properties
-                add-property $prof -name project -value $proj
-                add-property $prof -name fullpath  -value "$groupk.$projk.$profk"
-                add-property $prof -name name -value "$profk" -ifnotexists               
+                add-property $prof -name _parent -value $parent
+                #add-property $prof -name fullpath  -value "$groupk.$projk.$profk"
+                add-property $prof -name _name -value "$profk"               
                 
-                add-property $publishmap.$groupk.$projk -name $profk -value $prof              
-            }
-        }
-
-    return $publishmap
 }
-
-
 <#
 
 #>

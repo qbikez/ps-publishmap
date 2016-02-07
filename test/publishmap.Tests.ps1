@@ -42,8 +42,13 @@ Describe "parse publish map" {
         $global:pamp
       }
       It "Profiles should be exposed at project level" {
-        $p = $map.test.override_default_profiles.dev | Should Not BeNullOrEmpty        
+        $p = $map.test.override_default_profiles.dev 
+        $p | Should Not BeNullOrEmpty        
         $map.test.override_default_profiles.dev | Should Be $map.test.override_default_profiles.profiles.dev
+      }
+      It "profiles should have _fullpath property" {
+            $p = $map.test.override_default_profiles.dev         
+          $p._fullpath | ShouldBe "test.override_default_profiles.dev"
       }
       
   }
@@ -123,7 +128,7 @@ Describe "Get publishmap entry" {
         $p = get-profile test.generic.prod3
         It "Should retrieve a valid profile" {
             $p | Should Not BeNullOrEmpty
-            #$p.fullpath | ShouldBe "test.generic.prod3"           
+            $p.fullpath | ShouldBe "test.generic.prod3"           
         }
         It "Should replace variable placeholders" {
             $p.profile.computername | Should Be "prod3.cloudapp.net"
