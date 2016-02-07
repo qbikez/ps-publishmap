@@ -5,7 +5,7 @@
             "name": "PowerShell",
             "type": "PowerShell",
             "request": "launch",
-            "program": "test/publishmap.Tests.ps1"
+            "program": "test/genericmap.Tests.ps1"
         }
     ]
 }

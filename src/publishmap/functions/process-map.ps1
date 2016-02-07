@@ -27,6 +27,16 @@ function import-mapfile {
     return $publishmap
 }
 
+
+function import-mapobject { 
+[cmdletbinding()]
+param($map) 
+   $pmap = @{}
+    
+   $pmap = import-genericgroup $map ""   
+   return $pmap
+}
+
 function import-singlemapfile($file) {
     $fullname = $file
     if ($fullname.FullName -ne $null) { $Fullname =$Fullname.FullName }
@@ -38,27 +48,52 @@ function import-singlemapfile($file) {
    return $pmap
 }
 
-function import-mapobject($map) {
-    $pmap = @{}
-    $settingskey = "settings"
-    $settings = $map.$settingskey
-    $stripsettingswrapper = $false
-    if ($settings.strip -ne $null) {
-        $stripsettingswrapper = $settings.strip
-    }
-    foreach($groupk in $map.keys) {
-        # group = ne, legimi, hds, etc
-        #$group = $a[$groupk]
-         if ($groupk -in "settings","global_profiles") {
-                continue
-        }           
-        $r = import-mapgroup $map.$groupk $groupk -setting $settings -stripsettingswrapper $stripsettingswrapper
-        $pmap += @{ $groupk = $r }
-    }
-   
-   return $pmap
-}
 
+function import-genericgroup($group,
+    $fullpath, 
+    $settings = $null,
+    $settingskey = "settings",
+    $stripsettingswrapper = $false,
+    $specialkeys = @("settings", "global_profiles")
+) {
+    Write-Verbose "processing map path $fullpath"
+   
+    $keys = get-propertynames $group
+    $level = $fullpath.split('.').length
+    
+    $group | add-property -name _level -value $level
+    $group | add-property -name _fullpath -value $fullpath.trim('.')
+    
+    $result = {}
+    
+    
+    if ($settings -ne $null) {
+        inherit-globalsettings $group $settings $stripsettingswrapper
+    }
+
+    #get settings for children
+    if ($map.$settingskey -ne $null) {
+        $settings = $map.$settingskey
+        if ($settings._strip -ne $null) {
+            $stripsettingswrapper = $settings._strip
+        }
+    }
+    
+    foreach($projk in $keys) {
+     #do not process special global settings
+            if ($projk -in $specialkeys) {
+                continue
+            }
+            $subgroup = $group.$projk
+            if (!($subgroup -is [System.Collections.IDictionary])) {
+                continue
+            }
+            $path = "$fullpath.$projk"            
+            $r = import-genericgroup $subgroup $path -settings $settings -settingskey $settingskey -stripsettingswrapper $stripsettingswrapper -specialkeys = $specialkeys
+    }
+
+    return $map
+}
 
 function import-mapgroup(
     $publishmapgroup, $groupk,     
@@ -94,10 +129,10 @@ function import-mapgroup(
 function inherit-globalsettings($proj, $settings, $stripsettingswrapper) {
     if ($settings -ne $null) {
                 if ($stripsettingswrapper) {
-                    add-properties $proj $settings
+                    add-properties $proj $settings -ifNotExists
                 }
                 else {
-                    add-property $proj "settings" $settings
+                    add-property $proj "settings" $settings -ifNotExists
                 }
             }
 }

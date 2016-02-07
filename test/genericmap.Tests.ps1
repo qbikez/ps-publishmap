@@ -4,12 +4,12 @@ Describe "parse generic map" {
       $m = @{
         settings = @{
             Port = 22
-            strip = $true
+            _strip = $true
         }
         machine_N_ = @{ computername = "machine{N}.cloudapp.net"; Port = "{N}985" }
         abc = @{ ComputerName = "pegaz.legimi.com"; }    
       }
-      $map = import-mapobject $m
+      $map = import-mapobject $m -verbose
       
       Context "when generic map is imported" {
       
@@ -18,7 +18,7 @@ Describe "parse generic map" {
           }
           It "Global settings should be inherited as properties" {
               $map.abc.port | should Not BeNullOrEmpty
-              $map.abc.por | should be $map.settings.port
+              $map.abc.port | should be $map.settings.port
           }
         
       }
