@@ -1,6 +1,6 @@
 function import-publishmap {
     [cmdletbinding()]
-    param([Parameter(Mandatory=$true)] $maps)
+    param([Parameter(Mandatory=$false)] $maps = $null)
     
     if ($maps -is [System.Collections.IDictionary] ) {
         return import-publishmapobject $maps

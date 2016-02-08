@@ -4,6 +4,7 @@
 
 Export-ModuleMember -Function `
     Import-Map, Get-Entry, `
-    Import-PublishMap, Get-Profile
+    Import-PublishMap, Get-Profile, `
+    Get-PropertyNames
     
     

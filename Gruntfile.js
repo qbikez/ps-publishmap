@@ -16,5 +16,5 @@ module.exports = function (grunt) {
     grunt.loadNpmTasks('grunt-shell');
     
     grunt.registerTask('test', ['shell:test']);
-    grunt.registerTask('push', ['shell:push']);
+    grunt.registerTask('push', ['shell:test', 'shell:push']);
 }
