@@ -1,10 +1,8 @@
 function import-mapfile {
     [cmdletbinding()]
-    param($maps = $null)
+    param([Parameter(Mandatory=$true)] $maps)
 
     write-verbose "processing publishmap..."
-
-    $global:publishmap = $null
 
     if ($maps -ne $null) {
         $maps = @($maps)
@@ -19,9 +17,6 @@ function import-mapfile {
         $publishmap += import-singlemapfile $m
     }
 
-    $global:publishmap = $publishmap
-    $global:pmap = $global:publishmap 
-
     write-verbose "processing publishmap... DONE"
 
     return $publishmap
@@ -30,7 +25,7 @@ function import-mapfile {
 
 function import-mapobject { 
 [cmdletbinding()]
-param($map) 
+param([Parameter(Mandatory=$true)] $map) 
    $pmap = @{}
     
    $pmap = import-genericgroup $map ""   
