@@ -9,9 +9,14 @@ function import-publishmap {
         return import-publishmapfile $maps
     }
 }
+if ($global:cache -eq $null) {
+    $global:cache = @{}
+}
+
+
 
 function import-publishmapfile {
-        [cmdletbinding()]
+    [cmdletbinding()]
     param($maps)
      write-verbose "processing publishmap..."
 
@@ -30,10 +35,18 @@ function import-publishmapfile {
         try {
             $fullname = $file
             if ($fullname.FullName -ne $null) { $Fullname =$Fullname.FullName }
-            $map = & "$FullName"
+            $cached = get-cachedobject $fullname
+            if ($cached -ne $null) {
+                write-verbose "loading publishmap '$fullname' from cache"
+                $pmap = $cached.value
+            }
+            else {
+                $map = & "$FullName"
         
-            #$publishmap_obj = ConvertTo-Object $publishmap
-            $pmap = import-publishmapobject $map
+                #$publishmap_obj = ConvertTo-Object $publishmap
+                $pmap = import-publishmapobject $map
+                add-cachedobject $fullname $pmap
+            }
             $publishmap += $pmap
         } catch {
             write-error "failed to import map file '$file'"
