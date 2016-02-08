@@ -24,7 +24,7 @@ function Set-ModuleVersion(
         write-host "replacing version $($Matches[1]) with $version in $psd"
     }
     $c = $c -replace "ModuleVersion\s=\s'.+'","ModuleVersion = '$version'" 
-    $c | Out-File $psd
+    $c | Out-File $psd -encoding utf8
 }
 
 function Get-ModuleVersion(

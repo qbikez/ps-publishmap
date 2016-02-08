@@ -6,8 +6,6 @@ if (test-path "$envscript") {
     . $envscript
 }
 
-rmo powershellget; ipmo powershellget;
-
 $repo = "$env:PS_PUBLISH_REPO"
 $key = "$env:PS_PUBLISH_REPO_KEY"
 
@@ -16,11 +14,14 @@ $key = "$env:PS_PUBLISH_REPO_KEY"
 
 $modulepath = "$psscriptroot\..\src\publishmap"
 
+$ver = get-moduleversion $modulepath
 if ($newversion) {
-    $ver = get-moduleversion $modulepath
     $newver = Incremet-Version $ver
-    set-moduleversion $modulepath -version $newver
+} else {
+    $newver = $ver
 }
+set-moduleversion $modulepath -version $newver
+
 
 Publish-Module -Path $modulepath -Repository $repo -Verbose -NuGetApiKey $key
 
