@@ -9,9 +9,14 @@ function import-publishmap {
         return import-publishmapfile $maps
     }
 }
+if ($global:cache -eq $null) {
+    $global:cache = @{}
+}
+
+
 
 function import-publishmapfile {
-        [cmdletbinding()]
+    [cmdletbinding()]
     param($maps)
      write-verbose "processing publishmap..."
 
@@ -30,10 +35,18 @@ function import-publishmapfile {
         try {
             $fullname = $file
             if ($fullname.FullName -ne $null) { $Fullname =$Fullname.FullName }
-            $map = & "$FullName"
+            $cached = get-cachedobject $fullname
+            if ($cached -ne $null) {
+                write-verbose "loading publishmap '$fullname' from cache"
+                $pmap = $cached.value
+            }
+            else {
+                $map = & "$FullName"
         
-            #$publishmap_obj = ConvertTo-Object $publishmap
-            $pmap = import-publishmapobject $map
+                #$publishmap_obj = ConvertTo-Object $publishmap
+                $pmap = import-publishmapobject $map
+                add-cachedobject $fullname $pmap
+            }
             $publishmap += $pmap
         } catch {
             write-error "failed to import map file '$file'"
@@ -85,12 +98,14 @@ function process-publishmap($map) {
             $proj = $group.$projk
             if ($proj.profiles -ne $null) {
                 foreach($profk in get-propertynames $proj.profiles) {
-         
-                    if ($proj.profiles.$profk -is [System.Collections.IDictionary]) {
+                    $prof = $proj.profiles.$profk
+                    if ($prof -is [System.Collections.IDictionary]) {
                         # set full path as if profiles were created at project level
-                        $null = add-property $proj.profiles.$profk -name _fullpath -value "$groupk.$projk.$profk" -overwrite
-                         #use fullpath for backward compatibility       
-                        $null = add-property $proj.profiles.$profk -name fullpath -value $proj.profiles.$profk._fullpath -overwrite
+                        $null = add-property $prof -name _fullpath -value "$groupk.$projk.$profk" -overwrite
+                        # use fullpath for backward compatibility       
+                        $null = add-property $prof -name fullpath -value $prof._fullpath -overwrite
+                        # expose project at profile level
+                        $null = add-property $prof -name project -value $proj
                     } else {
                         #remove every property that isn't a real profile
                         $proj.profiles.Remove($profk)
@@ -98,6 +113,8 @@ function process-publishmap($map) {
                 }
                 # expose profiles at project level
                 $null = add-properties $proj $proj.profiles -merge -ifNotExists
+
+                
             }
             # use fullpath for backward compatibility
             if ($proj._fullpath) {
