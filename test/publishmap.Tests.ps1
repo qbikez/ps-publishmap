@@ -55,3 +55,24 @@ Describe "parse map object" {
      
   }
 }
+
+
+Describe "parse multiple map objects" {
+      $m1 = @{
+          test1 = @{
+          }
+      }   
+      $m2 = @{
+          test2 = @{
+          }
+      }
+      
+      Context "when maps are imported" {
+          $map1 = import-publishmap $m1
+          $map2 = import-publishmap $m2
+          
+          It "they can be merged" {
+              $merged = $map1 + $map2
+          } 
+      }
+}

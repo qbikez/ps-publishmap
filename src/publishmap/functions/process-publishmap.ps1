@@ -27,13 +27,18 @@ function import-publishmapfile {
     $publishmap = @{}
 
     foreach($file in $maps) {
-        $fullname = $file
-        if ($fullname.FullName -ne $null) { $Fullname =$Fullname.FullName }
-        $map = & "$FullName"
-    
-        #$publishmap_obj = ConvertTo-Object $publishmap
-        $pmap = import-publishmapobject $map
-        $publishmap += $pmap
+        try {
+            $fullname = $file
+            if ($fullname.FullName -ne $null) { $Fullname =$Fullname.FullName }
+            $map = & "$FullName"
+        
+            #$publishmap_obj = ConvertTo-Object $publishmap
+            $pmap = import-publishmapobject $map
+            $publishmap += $pmap
+        } catch {
+            write-error "failed to import map file '$file'"
+            throw
+        }
     }
 
     $global:publishmap = $publishmap
@@ -68,8 +73,13 @@ function prepare-publishmap($map) {
     return $map
 }
 
-function process-publishmap($pmap) {
+function process-publishmap($map) {    
     foreach($groupk in get-propertynames $map) {
+        # remove generated properties from top-level
+        if ($groupk.startswith("_")) {
+            $map.Remove($groupk)
+            continue
+        }
         $group = $map.$groupk
         foreach($projk in get-propertynames $group) {
             $proj = $group.$projk
@@ -99,7 +109,7 @@ function process-publishmap($pmap) {
         if ($group._fullpath) {
             $null = add-property $group -name fullpath -value $group._fullpath -overwrite
         }
-
+        
     }
     return $pmap
 }
