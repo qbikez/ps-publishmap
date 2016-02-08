@@ -35,7 +35,7 @@ Describe "parse simple map" {
         machine_N_ = @{ computername = "machine{N}.cloudapp.net"; Port = "{N}985" }
         abc = @{ ComputerName = "pegaz.legimi.com";  }    
       }
-      $map = import-mapobject $m -verbose
+      $map = import-map $m 
       
       Context "when map is imported" {
       
@@ -78,7 +78,7 @@ Describe "parse map with one level nesting" {
             }
           }
 
-          $map = import-mapobject $m 
+          $map = import-map $m 
 
      Context "when map is imported" {
       
@@ -136,7 +136,7 @@ Describe "parse map with two level nesting" {
                 }
             }
 
-          $map = import-mapobject $m 
+          $map = import-map $m 
 
      Context "when map is imported" {
       

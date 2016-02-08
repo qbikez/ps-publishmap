@@ -28,7 +28,7 @@ Describe "parse map object" {
           }
       
       
-      $map = import-publishmapobject $m 
+      $map = import-publishmap $m 
       It "profiles should be merged" {
         $p = $map.test.additional
         $p.profiles.prod | Should Not BeNullOrEmpty  
@@ -56,7 +56,7 @@ Describe "parse map object" {
   }
 }
 Describe "parse publish map" {
-  $map = import-publishmapfile -maps "$PSScriptRoot\publishmap.test.config.ps1"  
+  $map = import-publishmap -maps "$PSScriptRoot\publishmap.test.config.ps1"  
 
   Context "When map is parsed" {
       It "Should return a map" {
@@ -144,7 +144,7 @@ Describe "parse publish map" {
 #Invoke-Pester -Script .
 
 Describe "Get publishmap entry" {
-    $map = import-publishmapfile -maps "$PSScriptRoot\publishmap.test.config.ps1"    
+    $map = import-publishmap -maps "$PSScriptRoot\publishmap.test.config.ps1"    
     Context "When get-profile is called" {
         It "proper profile is retireved" {
             $p = get-profile test.use_default_profiles.dev -map $map

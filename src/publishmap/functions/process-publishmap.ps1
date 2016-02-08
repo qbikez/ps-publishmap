@@ -1,3 +1,15 @@
+function import-publishmap {
+    [cmdletbinding()]
+    param([Parameter(Mandatory=$true)] $maps)
+    
+    if ($maps -is [System.Collections.IDictionary] ) {
+        return import-publishmapobject $maps
+    }    
+    else {
+        return import-publishmapfile $maps
+    }
+}
+
 function import-publishmapfile {
         [cmdletbinding()]
     param($maps)

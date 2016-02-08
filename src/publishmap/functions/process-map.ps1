@@ -1,3 +1,15 @@
+function import-map {
+    [cmdletbinding()]
+    param([Parameter(Mandatory=$true)] $maps)
+    
+    if ($maps -is [System.Collections.IDictionary] ) {
+        return import-mapobject $maps
+    }    
+    else {
+        return import-mapfile $maps
+    }
+}
+
 function import-mapfile {
     [cmdletbinding()]
     param([Parameter(Mandatory=$true)] $maps)
@@ -7,10 +19,7 @@ function import-mapfile {
     if ($maps -ne $null) {
         $maps = @($maps)
     }
-    else {
-        $maps = gci . -filter "publishmap.*.config.ps1"
-    }
-
+        
     $publishmap = @{}
 
     foreach($m in $maps) {

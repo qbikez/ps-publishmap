@@ -3,7 +3,7 @@
 . "$helpersPath\imports.ps1"
 
 Export-ModuleMember -Function `
-    Import-MapFile, Import-MapObject, Get-Entry, `
-    Import-PublishMapFile, Import-PublishMapObject, Get-Profile
+    Import-Map, Get-Entry, `
+    Import-PublishMap, Get-Profile
     
     
