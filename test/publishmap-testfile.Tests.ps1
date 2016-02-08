@@ -15,6 +15,10 @@ Describe "parse publish map" {
         $p | Should Not BeNullOrEmpty        
         $map.test.override_default_profiles.dev | Should Be $map.test.override_default_profiles.profiles.dev
       }
+      It "projects should be exposed at profile level" {
+        $map.test.override_default_profiles.dev.project | Should Not BeNullOrEmpty        
+        $map.test.override_default_profiles.dev.project | Should Be $map.test.override_default_profiles
+      }
       It "profiles should have fullpath property" {
             $p = $map.test.override_default_profiles.dev         
           $p.fullpath | Should Be "test.override_default_profiles.dev"
