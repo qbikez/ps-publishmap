@@ -4,6 +4,8 @@ $pesterPath = "$psscriptroot\..\paket-files\pester\pester\pester.psm1"
 $publishmapPath = "$psscriptroot\..\src\publishmap"
 import-module $pesterPath
 
+$inputDir = "$psscriptroot\input"
+
 if ($internal) {    
     .  "$publishmapPath\imports.ps1"
 } else {
