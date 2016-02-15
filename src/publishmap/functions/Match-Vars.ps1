@@ -1,5 +1,4 @@
 function get-entry($key, $map){
-   $entry = $null
    if ($map[$key] -ne $null) { return $map[$key] }     
    foreach($kvp in $map.GetEnumerator()) {
        $pattern = $kvp.key
@@ -37,7 +36,8 @@ function replace-properties($obj, $vars = @{}, [switch][bool]$strict) {
     return $obj
 }
 
-function replace-var ($text, $vars = @{}) {
+#TODO: support multiple matches per line
+function _replace-varline ($text, $vars = @{}) {
     $r = $text
     foreach($kvp in $vars.GetEnumerator()) {
         $name = $kvp.key
@@ -46,9 +46,31 @@ function replace-var ($text, $vars = @{}) {
         if ($text -match "\{$name\}") {
             $r = $r -replace "\{$name\}",$val
         }
-    }
-
+    }    
     return $r    
+}
+
+#TODO: support multiple matches per line
+function _replace-varauto($text)  {
+    if ($text -match "\{([a-zA-Z0-9_:]+?)\}") {
+        $name = $Matches[1]
+        $varpath = $name
+        if (!$varpath -match ":") { $varpath = "variable:" + $varpath }
+        if (test-path "$varpath") {
+            $val = (get-item $varpath).Value
+            $text = $text -replace "\{$name\}",$val
+        }
+    }
+    return $text
+}
+
+function replace-var ($text, $vars = @{}, [switch][bool]$noauto = $false) {
+    $text = @($text) | % { _replace-varline $_ $vars }
+    
+    if (!$noauto) {
+        $text = @($text) | % { _replace-varauto $_ }
+    }
+    return $text
 }
 
 function get-vardef ($text) {
