@@ -1,6 +1,10 @@
 . $psscriptroot\includes.ps1 -internal
 
 Describe "object cache" {
+    function New-TemporaryFile () {
+        $f = New-item -type file "testdrive:\$([Guid]::NewGuid().ToString())"
+        return $f
+    }
     Context "When getting object from cache for non-existing file" {
         It "Should throw" {
              { get-cachedobject "non-existing-file" } | should Throw
