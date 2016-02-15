@@ -6,6 +6,8 @@
     "scripts": {
         "init": "powershell scripts\\init.ps1", 
         "restore": "powershell scripts\\restore.ps1",
-        "test": "powershell scripts\\test.ps1"
+        "test": "powershell scripts\\test.ps1",
+        "push": "powershell scripts\\push.ps1 -newversion", 
+        "install": "powershell scripts\\instapp.ps1"
     }
 }

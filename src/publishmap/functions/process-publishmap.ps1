@@ -45,7 +45,7 @@ function import-publishmapfile {
         
                 #$publishmap_obj = ConvertTo-Object $publishmap
                 $pmap = import-publishmapobject $map
-                add-cachedobject $fullname $pmap
+                set-cachedobject $fullname $pmap
             }
             $publishmap += $pmap
         } catch {
