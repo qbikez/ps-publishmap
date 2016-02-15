@@ -2,9 +2,6 @@
 
 . "$helpersPath\imports.ps1"
 
-Export-ModuleMember -Function `
-    Import-Map, Get-Entry, `
-    Import-PublishMap, Get-Profile, `
-    Get-PropertyNames
+Export-ModuleMember -Function Get-Entry, Import-PublishMap, Get-Profile, Get-PropertyNames, replace-vars
     
     

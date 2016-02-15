@@ -23,7 +23,7 @@ function get-entry(
 
 function replace-properties($obj, $vars = @{}, [switch][bool]$strict, $exclude = @()) {
     if ($obj -is [string]) {
-        return replace-var $obj $vars
+        return replace-vars $obj $vars
     }
     elseif ($obj -is [System.Collections.IDictionary]) {
         $keys = $obj.keys.Clone()
@@ -73,7 +73,7 @@ function _replace-varauto($text)  {
     return $text
 }
 
-function replace-var ($text, $vars = @{}, [switch][bool]$noauto = $false) {
+function replace-vars ($text, $vars = @{}, [switch][bool]$noauto = $false) {
     $text = @($text) | % { _replace-varline $_ $vars }
     
     if (!$noauto) {

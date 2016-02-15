@@ -1,7 +1,9 @@
-[CmdletBinding(SupportsShouldProcess=$true)]
+
 param() 
 
-function install-modulelink($modulename) {
+function install-modulelink { 
+    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
+    param($modulename) 
     $path = "C:\Program Files\WindowsPowershell\Modules\$modulename"
     $target = "$PSScriptRoot\..\src\$modulename"
     $target = (get-item $target).FullName
