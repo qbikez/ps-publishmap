@@ -1,7 +1,12 @@
+<<<<<<< HEAD
+function get-entry($key, $map){
+=======
 function get-entry(
     [Parameter(mandatory=$true)] $key,
     [Parameter(mandatory=$true)] $map,
     $excludeProperties = @()) {
+   $entry = $null
+>>>>>>> origin/dev
    if ($map[$key] -ne $null) { return $map[$key] }     
    foreach($kvp in $map.GetEnumerator()) {
        $pattern = $kvp.key
@@ -51,10 +56,7 @@ function _replace-varline ($text, $vars = @{}) {
         if ($text -match "\{$name\}") {
             $r = $r -replace "\{$name\}",$val
         }
-        # support also same placeholder as in template match
-        elseif ($text -match "_$($name)_") {
-            $r = $r -replace "_$($name)_",$val
-        }
+<<<<<<< HEAD
     }    
     return $r    
 }
@@ -68,6 +70,11 @@ function _replace-varauto($text)  {
         if (test-path "$varpath") {
             $val = (get-item $varpath).Value
             $text = $text -replace "\{$name\}",$val
+=======
+        # support also same placeholder as in template match
+        elseif ($text -match "_$($name)_") {
+            $r = $r -replace "_$($name)_",$val
+>>>>>>> origin/dev
         }
     }
     return $text
