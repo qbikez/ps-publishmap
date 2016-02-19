@@ -1,8 +1,7 @@
 param([switch][bool]$internal = $false)
 
-$pesterPath = "$psscriptroot\..\paket-files\pester\pester\pester.psm1"
 $publishmapPath = "$psscriptroot\..\src\publishmap"
-import-module $pesterPath
+import-module Pester
 
 $inputDir = "$psscriptroot\input"
 
