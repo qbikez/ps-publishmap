@@ -15,7 +15,7 @@ function get-entry(
    if ($entry -ne $null) {
      $entry = $entry.Clone()
      $entry = replace-properties $entry $m -exclude $excludeProperties
-     $entry.vars = $m  
+     $entry._vars = $m  
    }
 
    return $entry
