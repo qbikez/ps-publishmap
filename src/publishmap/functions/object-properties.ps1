@@ -62,6 +62,23 @@ function add-property {
     }
 }
 
+function ConvertTo-Hashtable($object, [switch][bool]$recurse) {
+	if ($recurse) {
+		throw "recursive conversion is not supported yet"
+	}
+	if ($object -is [System.Collections.IDictionary]) {
+		return $object
+	}
+	
+	$h = @{}
+	$props = get-propertynames $object
+	foreach ($p in $props) {
+		$h[$p] = $object.$p
+	}
+	
+	return $h
+}
+
 
 function ConvertTo-Object([hashtable]$hashtable) {
     $copy = @{}
