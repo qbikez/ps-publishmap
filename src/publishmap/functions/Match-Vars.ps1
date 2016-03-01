@@ -73,7 +73,7 @@ function _replace-varauto($text)  {
     return $text
 }
 
-function replace-vars ($text, $vars = @{}, [switch][bool]$noauto = $false) {
+function convert-vars ($text, $vars = @{}, [switch][bool]$noauto = $false) {
     $text = @($text) | % { _replace-varline $_ $vars }
     
     if (!$noauto) {
@@ -113,3 +113,5 @@ function match-varpattern ($text, $pattern) {
 
     return $result
 }
+
+new-alias Replace-Vars Convert-Vars
