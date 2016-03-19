@@ -151,7 +151,6 @@ function import-mapgroup(
 ) {
     Write-Verbose "processing map $groupk"
    
-    $globalProffiles = $publishmapgroup.global_profiles
     $keys = get-propertynames $publishmapgroup
     
     $null = add-property $publishmapgroup "level" 1

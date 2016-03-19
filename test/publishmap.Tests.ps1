@@ -14,6 +14,11 @@ Describe "parse map object" {
                       qa = @{   what = "qa"                   
                       }
                   }
+              default = @{
+                  project_property = "project_level"
+                  profiles = @{
+                  }                 
+              }
               additional = @{
                   project_property = "project_level"
                   profiles = @{
@@ -21,14 +26,9 @@ Describe "parse map object" {
                       }
                   }
               }
-              default = @{
-                  project_property = "project_level"
-                  profiles = @{
-                      prod = @{}
-                  }                 
-                  }
-              }
-          }
+              
+            }
+        }
       
       
       $map = import-publishmap $m 
@@ -64,7 +64,7 @@ Describe "parse map object" {
         $p = $map.test.additional
         $p.profiles.dev.project_property | Should be $p.project_property                 
         $p = $map.test.default
-        $p.profiles.prod.project_property | Should be $p.project_property
+        $p.profiles.qa.project_property | Should be $p.project_property
         $p.profiles.dev.project_property | Should be $p.project_property
      }
      
