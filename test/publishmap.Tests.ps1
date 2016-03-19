@@ -15,14 +15,17 @@ Describe "parse map object" {
                       }
                   }
               additional = @{
+                  project_property = "project_level"
                   profiles = @{
                       prod = @{  what = "prod"                        
                       }
                   }
               }
               default = @{
+                  project_property = "project_level"
                   profiles = @{
-                      }
+                      prod = @{}
+                  }                 
                   }
               }
           }
@@ -51,6 +54,18 @@ Describe "parse map object" {
         $p = $map.test.default
         $p.dev.fullpath | Should Be "test.default.dev"
         $p.qa.fullpath | Should Be "test.default.qa"
+     }
+     
+     It "project properties should be inherited in manual profiles" {
+          $p = $map.test.additional
+        $p.profiles.prod.project_property | Should be $p.project_property
+     }
+     It "project properties should be inherited in profiles from global" {
+        $p = $map.test.additional
+        $p.profiles.dev.project_property | Should be $p.project_property                 
+        $p = $map.test.default
+        $p.profiles.prod.project_property | Should be $p.project_property
+        $p.profiles.dev.project_property | Should be $p.project_property
      }
      
   }
