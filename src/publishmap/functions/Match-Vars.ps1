@@ -1,7 +1,9 @@
 function get-entry(
     [Parameter(mandatory=$true)] $key,
     [Parameter(mandatory=$true)] $map,
-    $excludeProperties = @()) {
+    $excludeProperties = @()) 
+{
+   $entry = $null
    if ($map[$key] -ne $null) { return $map[$key] }     
    foreach($kvp in $map.GetEnumerator()) {
        $pattern = $kvp.key
@@ -14,7 +16,7 @@ function get-entry(
 
    if ($entry -ne $null) {
      $entry = $entry.Clone()
-     $entry = replace-properties $entry $m -exclude $excludeProperties
+     $entry = replace-properties $entry -vars $m -exclude $excludeProperties
      $entry._vars = $m  
    }
 
@@ -22,6 +24,7 @@ function get-entry(
 }
 
 function replace-properties($obj, $vars = @{}, [switch][bool]$strict, $exclude = @()) {
+    if ($vars -eq $null) { throw "vars == NULL"}
     if ($obj -is [string]) {
         return replace-vars $obj $vars
     }
@@ -42,8 +45,9 @@ function replace-properties($obj, $vars = @{}, [switch][bool]$strict, $exclude =
 }
 
 #TODO: support multiple matches per line
-function _replace-varline ($text, $vars = @{}) {
+function _replace-varline ([Parameter(Mandatory=$true)]$text, $vars = @{}) {
     $r = $text
+    if ($vars -eq $null) { throw "vars == NULL"}
     foreach($kvp in $vars.GetEnumerator()) {
         $name = $kvp.key
         $val = $kvp.value
@@ -60,7 +64,7 @@ function _replace-varline ($text, $vars = @{}) {
 }
 
 #TODO: support multiple matches per line
-function _replace-varauto($text)  {
+function _replace-varauto([Parameter(Mandatory=$true)]$text)  {
     if ($text -match "\{([a-zA-Z0-9_:]+?)\}") {
         $name = $Matches[1]
         $varpath = $name
@@ -73,7 +77,7 @@ function _replace-varauto($text)  {
     return $text
 }
 
-function convert-vars ($text, $vars = @{}, [switch][bool]$noauto = $false) {
+function convert-vars ([Parameter(Mandatory=$true)]$text, $vars = @{}, [switch][bool]$noauto = $false) {
     $text = @($text) | % { _replace-varline $_ $vars }
     
     if (!$noauto) {
@@ -96,7 +100,7 @@ function get-vardef ($text) {
 
 function match-varpattern ($text, $pattern) {
     $result = $null
-    $vars = get-vardef $pattern
+    $vars = @(get-vardef $pattern)
     if ($vars -eq $null) { return $null }
     $regex = $pattern -replace "_[a-zA-Z]+_","([a-zA-Z0-9]*)"    
     $m = [System.Text.RegularExpressions.Regex]::Matches($text, $regex);
