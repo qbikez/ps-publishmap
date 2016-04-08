@@ -14,6 +14,9 @@ Describe "parse map object" {
               }
               global_profiles = @{
                       parent_property = "this_is_from_parent"
+                      prod_XX_ = @{
+                          name = "prod{XX}"
+                      }
                       prod = @{  
                           what = "something"
                           test = "v{what}v"   
@@ -22,17 +25,15 @@ Describe "parse map object" {
                   }
               default_with_stub = @{             
                   profiles = @{
-                      prod = @{
-                          
+                      prod_XX_ = @{
+                          url2 = "http://test:{XX}443/something"
+                          url1 = "http://test:{vars.XX}443/something"                                                    
                       }
                   }                       
               }
               override_parent_with_stub = @{
                   parent_property = "overriden"         
                   profiles = @{
-                      prod = @{
-                          
-                      }
                   }          
               }
               default = @{     
@@ -45,6 +46,12 @@ Describe "parse map object" {
         }
         
         $map = import-publishmap $m
+        It "Should replace generic profile" {
+            $e = get-entry "prod13" $map.test1.default_with_stub
+            $e.name | Should Be "prod13"
+            $e.url1 | Should Be "http://test:13443/something"
+            $e.url2 | Should Be "http://test:13443/something"
+        }
         
         It "Should get standard properties  with stubs" {
             $e = get-entry "prod" $map.test1.default_with_stub

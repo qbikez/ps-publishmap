@@ -21,8 +21,8 @@ function get-entry(
 
    if ($entry -ne $null) {
      $entry = $entry.Clone()
-     $entry = replace-properties $entry -vars $vars -exclude $excludeProperties
      $entry._vars = $vars
+     $entry = replace-properties $entry -vars $vars -exclude $excludeProperties     
    }
 
    return $entry
@@ -82,17 +82,28 @@ function _replace-varline ([Parameter(Mandatory=$true)]$text, $vars = @{}) {
 
 #TODO: support multiple matches per line
 function _replace-varauto([Parameter(Mandatory=$true)]$text)  {
-    if ($text -match "\{([a-zA-Z0-9_:]+?)\}") {
+    if ($text -match "\{([a-zA-Z0-9_.:]+?)\}") {
         $name = $Matches[1]
         $varpath = $name
-        if (!($varpath -match ":")) { $varpath = "variable:" + $varpath }
+        $splits = $name.split(".")
+        if (!($varpath -match ":")) { 
+            $varpath = "variable:" + $splits[0]                 
+        }
         if (test-path "$varpath") {
             $val = (get-item $varpath).Value
+            for($i = 1; $i -lt $splits.length; $i++) {
+                $s = $splits[$i] 
+                $val = $val.$s
+            }  
             $text = $text -replace "\{$name\}",$val
         }
         elseif (test-path "variable:self") {
             $selftmp = (get-item "variable:self").Value
-            $val = $selftmp.$name
+            $val = $selftmp
+            foreach($s in $splits) {
+                $val = $val.$s
+            }            
+            
             $text = $text -replace "\{$name\}",$val
         }
     }
