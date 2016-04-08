@@ -55,6 +55,7 @@ function replace-properties($obj, $vars = @{}, [switch][bool]$strict, $exclude =
         return $obj
     }
     elseif ($obj -is [Array]) {
+        $obj = $obj.Clone()
          for($i = 0; $i -lt $obj.length; $i++) {
             if ($obj[$i] -in $exclude) {
                 continue
@@ -102,13 +103,13 @@ function _replace-varauto([Parameter(Mandatory=$true)]$text)  {
         if (!($varpath -match ":")) { 
             $varpath = "variable:" + $splits[0]                 
         }
+        $val = $null
         if (test-path "$varpath") {
             $val = (get-item $varpath).Value
             for($i = 1; $i -lt $splits.length; $i++) {
                 $s = $splits[$i] 
                 $val = $val.$s
             }  
-            $text = $text -replace "\{$name\}",$val
         }
         elseif (test-path "variable:self") {
             $selftmp = (get-item "variable:self").Value
@@ -116,8 +117,9 @@ function _replace-varauto([Parameter(Mandatory=$true)]$text)  {
             foreach($s in $splits) {
                 $val = $val.$s
             }            
-            
-            $text = $text -replace "\{$name\}",$val
+        }
+        if ($val -ne $null) {
+                $text = $text -replace "\{$name\}",$val
         }
     }
     return $text

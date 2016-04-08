@@ -144,9 +144,15 @@ function get-profile($name, $map = $null) {
             $entry = $null
             $parent = $null
             $isGroup = $false
-            foreach($split in $splits) {
+            for($i = 0; $i -lt $splits.length; $i++) {
+                $split = $splits[$i]
                 $parent = $entry
-                $entry = get-entry $split $map -excludeProperties @("project")             
+                if ($i -eq $splits.length-1) {
+                    $entry = get-entry $split $map -excludeProperties @("project")             
+                }
+                else {
+                    $entry = $map.$split
+                }
                 if ($entry -eq $null) {
                     break
                 }

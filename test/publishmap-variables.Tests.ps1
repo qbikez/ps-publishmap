@@ -56,7 +56,23 @@ Describe "parse map object" {
             $e.url1 | Should Be "http://test:13443/something"
             $e.url2 | Should Be "http://test:13443/something"
             $e.urls[0] | Should Be "http://test:13443/something"
+            $e.urls[1] | Should Be "http://test:13443/something"           
+        }
+        
+          It "replace Should not leave artifacts in source map" {
+            $e = get-entry "prod13" $map.test1.default_with_stub
+            $e.name | Should Be "prod13"
+            $e.url1 | Should Be "http://test:13443/something"
+            $e.url2 | Should Be "http://test:13443/something"
+            $e.urls[0] | Should Be "http://test:13443/something"
             $e.urls[1] | Should Be "http://test:13443/something"
+            
+            $e = get-entry "prod14" $map.test1.default_with_stub
+            $e.name | Should Be "prod14"
+            $e.url1 | Should Be "http://test:14443/something"
+            $e.url2 | Should Be "http://test:14443/something"
+            $e.urls[0] | Should Be "http://test:14443/something"
+            $e.urls[1] | Should Be "http://test:14443/something"
         }
         
         It "Should get standard properties  with stubs" {
