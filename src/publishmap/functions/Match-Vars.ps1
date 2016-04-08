@@ -4,20 +4,25 @@ function get-entry(
     $excludeProperties = @()) 
 {
    $entry = $null
-   if ($map[$key] -ne $null) { return $map[$key] }     
-   foreach($kvp in $map.GetEnumerator()) {
-       $pattern = $kvp.key
-       $m = match-varpattern $key $pattern
-       if ($m -ne $null) {
-            $entry = $kvp.value   
-            break;
-       }
+   if ($map[$key] -ne $null) { 
+       $entry = $map[$key] 
+       $vars = @()
+   }
+   else {     
+    foreach($kvp in $map.GetEnumerator()) {
+        $pattern = $kvp.key
+        $vars = match-varpattern $key $pattern
+        if ($vars -ne $null) {
+                $entry = $kvp.value   
+                break
+        }
+    }
    }
 
    if ($entry -ne $null) {
      $entry = $entry.Clone()
-     $entry = replace-properties $entry -vars $m -exclude $excludeProperties
-     $entry._vars = $m  
+     $entry = replace-properties $entry -vars $vars -exclude $excludeProperties
+     $entry._vars = $vars
    }
 
    return $entry
@@ -27,7 +32,8 @@ function replace-properties($obj, $vars = @{}, [switch][bool]$strict, $exclude =
     $exclude = @($exclude)
     if ($vars -eq $null) { throw "vars == NULL"}
     if ($obj -is [string]) {
-        return replace-vars $obj $vars
+        $replaced = replace-vars -text $obj -vars $vars
+        return $replaced
     }
     elseif ($obj -is [System.Collections.IDictionary]) {
         $keys = $obj.keys.Clone()
@@ -36,7 +42,14 @@ function replace-properties($obj, $vars = @{}, [switch][bool]$strict, $exclude =
                 if ($obj[$key] -in $exclude) {
                     continue
                 }
-                $obj[$key] = replace-properties $obj[$key] $vars -exclude ($exclude + @($obj))
+                $self = $obj
+                try {
+                    $obj[$key] = replace-properties $obj[$key] $vars -exclude ($exclude + @($obj))
+                }
+                finally {
+                    $self = $null
+                }
+                
             }
         }
         return $obj
@@ -72,9 +85,14 @@ function _replace-varauto([Parameter(Mandatory=$true)]$text)  {
     if ($text -match "\{([a-zA-Z0-9_:]+?)\}") {
         $name = $Matches[1]
         $varpath = $name
-        if (!$varpath -match ":") { $varpath = "variable:" + $varpath }
+        if (!($varpath -match ":")) { $varpath = "variable:" + $varpath }
         if (test-path "$varpath") {
             $val = (get-item $varpath).Value
+            $text = $text -replace "\{$name\}",$val
+        }
+        elseif (test-path "variable:self") {
+            $selftmp = (get-item "variable:self").Value
+            $val = $selftmp.$name
             $text = $text -replace "\{$name\}",$val
         }
     }
