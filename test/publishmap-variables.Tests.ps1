@@ -27,7 +27,11 @@ Describe "parse map object" {
                   profiles = @{
                       prod_XX_ = @{
                           url2 = "http://test:{XX}443/something"
-                          url1 = "http://test:{vars.XX}443/something"                                                    
+                          url1 = "http://test:{vars.XX}443/something"    
+                          urls = @(
+                              "http://test:{XX}443/something"
+                              "http://test:{vars.XX}443/something"  
+                          )                                               
                       }
                   }                       
               }
@@ -51,6 +55,8 @@ Describe "parse map object" {
             $e.name | Should Be "prod13"
             $e.url1 | Should Be "http://test:13443/something"
             $e.url2 | Should Be "http://test:13443/something"
+            $e.urls[0] | Should Be "http://test:13443/something"
+            $e.urls[1] | Should Be "http://test:13443/something"
         }
         
         It "Should get standard properties  with stubs" {

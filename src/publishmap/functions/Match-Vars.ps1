@@ -54,8 +54,21 @@ function replace-properties($obj, $vars = @{}, [switch][bool]$strict, $exclude =
         }
         return $obj
     }
+    elseif ($obj -is [Array]) {
+         for($i = 0; $i -lt $obj.length; $i++) {
+            if ($obj[$i] -in $exclude) {
+                continue
+            }
+            try {
+                $obj[$i] = replace-properties $obj[$i] $vars -exclude ($exclude + @($obj))
+            }
+            finally {
+            }
+        }
+    }    
     elseif ($strict) {
         throw "unsupported object"
+       
     }
 
     return $obj
