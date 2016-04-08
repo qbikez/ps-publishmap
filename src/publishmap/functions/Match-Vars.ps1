@@ -24,6 +24,7 @@ function get-entry(
 }
 
 function replace-properties($obj, $vars = @{}, [switch][bool]$strict, $exclude = @()) {
+    $exclude = @($exclude)
     if ($vars -eq $null) { throw "vars == NULL"}
     if ($obj -is [string]) {
         return replace-vars $obj $vars
@@ -32,7 +33,10 @@ function replace-properties($obj, $vars = @{}, [switch][bool]$strict, $exclude =
         $keys = $obj.keys.Clone()
         foreach($key in $keys) {
             if ($key -notin $exclude) {
-                $obj[$key] = replace-properties $obj[$key] $vars -exclude $exclude
+                if ($obj[$key] -in $exclude) {
+                    continue
+                }
+                $obj[$key] = replace-properties $obj[$key] $vars -exclude ($exclude + @($obj))
             }
         }
         return $obj
