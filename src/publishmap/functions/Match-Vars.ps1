@@ -20,6 +20,7 @@ function get-entry(
    }
 
    if ($entry -ne $null) {
+    #TODO: should we use a deep clone
      $entry = $entry.Clone()
      $entry._vars = $vars
      $entry = replace-properties $entry -vars $vars -exclude $excludeProperties     
@@ -37,6 +38,7 @@ function replace-properties($obj, $vars = @{}, [switch][bool]$strict, $exclude =
     }
     elseif ($obj -is [System.Collections.IDictionary]) {
         $keys = $obj.keys.Clone()
+        $keys = $keys | sort
         foreach($key in $keys) {
             if ($key -notin $exclude) {
                 if ($obj[$key] -in $exclude) {
