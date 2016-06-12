@@ -9,6 +9,7 @@ Describe "parse map object" {
                 abc = "inherited"               
               }
               global_profiles = @{
+                      global_property ="im sooo global"
                       dev = @{  what = "dev"                    
                       }
                       qa = @{   what = "qa"                   
@@ -19,10 +20,14 @@ Describe "parse map object" {
                   profiles = @{
                   }                 
               }
+              default_no_stubs = @{
+                  project_property = "project_level"
+              }
               additional = @{
                   project_property = "project_level"
                   profiles = @{
-                      prod = @{  what = "prod"                        
+                      prod = @{  
+                        what = "prod"                        
                       }
                   }
               }
@@ -67,6 +72,30 @@ Describe "parse map object" {
         $p.profiles.qa.project_property | Should be $p.project_property
         $p.profiles.dev.project_property | Should be $p.project_property
      }
+
+     It "global properties should be inherited in profiles" {
+        $p = $map.test.additional
+        $p.profiles.dev.global_property | Should Not BeNullOrEmpty
+        $p.profiles.prod.global_property | Should Not BeNullOrEmpty
+     }
+     It "global properties should be inherited in profiles from global" {
+        $p = $map.test.default
+        $p.profiles.dev.global_property | Should Not BeNullOrEmpty
+     }
+     It "global properties should be inherited in profiles from global without stubs" {
+        $p = $map.test.default_no_stubs
+        Set-TestInconclusive "this is a feature request"
+            <#        
+        $p.profiles.dev.global_property | Should Not BeNullOrEmpty
+        #>
+     }
+     
+     <# this is not really required:
+     It "global properties should be inherited in projects" {
+        $p = $map.test.additional        
+        $p.global_property | Should Not BeNullOrEmpty
+     }
+     #>
      
   }
 }
