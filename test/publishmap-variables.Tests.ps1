@@ -3,7 +3,7 @@
 import-module Pester
 #import-module PublishMap
 
-Describe "parse map object" {
+Describe "parse map object with variables" {
   
   
      Context "when map references properties" {
@@ -50,29 +50,33 @@ Describe "parse map object" {
         }
         
         $map = import-publishmap $m
+
         It "Should replace generic profile" {
-            $e = get-entry "prod13" $map.test1.default_with_stub
-            $e.name | Should Be "prod13"
-            $e.url1 | Should Be "http://test:13443/something"
-            $e.url2 | Should Be "http://test:13443/something"
-            $e.urls[0] | Should Be "http://test:13443/something"
-            $e.urls[1] | Should Be "http://test:13443/something"           
+            $id = 11
+            $e = get-entry "prod$id" $map.test1.default_with_stub
+            $e.name | Should Be "prod$id"
+            $e.url1 | Should Be "http://test:$($id)443/something"
+            $e.url2 | Should Be "http://test:$($id)443/something"
+            $e.urls[0] | Should Be "http://test:$($id)443/something"
+            $e.urls[1] | Should Be "http://test:$($id)443/something"           
         }
         
           It "replace Should not leave artifacts in source map" {
-            $e = get-entry "prod13" $map.test1.default_with_stub
-            $e.name | Should Be "prod13"
-            $e.url1 | Should Be "http://test:13443/something"
-            $e.url2 | Should Be "http://test:13443/something"
-            $e.urls[0] | Should Be "http://test:13443/something"
-            $e.urls[1] | Should Be "http://test:13443/something"
-            
-            $e = get-entry "prod14" $map.test1.default_with_stub
-            $e.name | Should Be "prod14"
-            $e.url1 | Should Be "http://test:14443/something"
-            $e.url2 | Should Be "http://test:14443/something"
-            $e.urls[0] | Should Be "http://test:14443/something"
-            $e.urls[1] | Should Be "http://test:14443/something"
+            $id = 13
+            $e = get-entry "prod$id" $map.test1.default_with_stub
+            $e.name | Should Be "prod$id"
+            $e.url1 | Should Be "http://test:$($id)443/something"
+            $e.url2 | Should Be "http://test:$($id)443/something"
+            $e.urls[0] | Should Be "http://test:$($id)443/something"
+            $e.urls[1] | Should Be "http://test:$($id)443/something"   
+
+            $id = 14
+            $e = get-entry "prod$id" $map.test1.default_with_stub
+            $e.name | Should Be "prod$id"
+            $e.url1 | Should Be "http://test:$($id)443/something"
+            $e.url2 | Should Be "http://test:$($id)443/something"
+            $e.urls[0] | Should Be "http://test:$($id)443/something"
+            $e.urls[1] | Should Be "http://test:$($id)443/something"   
         }
         
         It "Should get standard properties  with stubs" {
@@ -97,7 +101,7 @@ Describe "parse map object" {
             $e.from_parent | Should Be "voverridenv"
         }
         
-           It "Should get standard properties without stubs" {
+        It "Should get standard properties without stubs" {
             $e = get-entry "prod" $map.test1.default
             $e | Should Not BeNullOrEmpty
             $e.what | Should Be "something"
@@ -107,6 +111,11 @@ Describe "parse map object" {
             $e = get-entry "prod" $map.test1.default
             $e | Should Not BeNullOrEmpty
             $e.test | Should Be "v$($e.what)v"
+        }
+        
+        It "Should replace parent property variables without stubs" {
+            $e = get-entry "prod" $map.test1.default
+            $e | Should Not BeNullOrEmpty
             #$e.from_parent | Should Be "v$($map.test1.global_profiles.parent_property)v"
             $e.from_parent | Should Be "vthis_is_from_parentv"
         }
@@ -175,6 +184,10 @@ Describe "parse map object" {
             $e = get-entry "prod13" $map.test.default
             $e | Should Not BeNullOrEmpty
             $e.what | Should Be "what-prod13"
+        }
+        It "Should Replace parent property variables without stub" {
+            $e = get-entry "prod13" $map.test.default
+            $e | Should Not BeNullOrEmpty
             $e.parent_property | Should Be "parent_property"
         }
         It "Should override parent variables without stub" {
