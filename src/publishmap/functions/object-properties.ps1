@@ -27,9 +27,9 @@ function add-properties(
 function add-property {
     [CmdletBinding()]
     param(
-        [Parameter(ValueFromPipeline = $true)] $object, 
-        [Parameter(Mandatory=$true)] $name, 
-        [Parameter(Mandatory=$true)] $value, 
+        [Parameter(ValueFromPipeline = $true, Position=1)] $object, 
+        [Parameter(Mandatory=$true,Position=2)] $name, 
+        [Parameter(Mandatory=$true,Position=3)] $value, 
         [switch][bool] $ifNotExists,
         [switch][bool] $overwrite,
        [switch][bool] $merge
@@ -62,36 +62,65 @@ function add-property {
     }
 }
 
-function ConvertTo-Hashtable($object, [switch][bool]$recurse) {
-	if ($recurse) {
-		throw "recursive conversion is not supported yet"
-	}
-	if ($object -is [System.Collections.IDictionary]) {
+function ConvertTo-Hashtable([Parameter(ValueFromPipeline=$true)]$obj, [switch][bool]$recurse) {
+    $object =$obj
+	if (!$recurse -and ($object -is [System.Collections.IDictionary] -or $object -is [array])) {
 		return $object
 	}
+ 
+    if ($object -is [System.Collections.IDictionary] -or  $object -is [System.Management.Automation.PSCustomObject]) {
+	    $h = @{}
+	    $props = get-propertynames $object
+	    foreach ($p in $props) {
+            if ($recurse) {
+                $h[$p] = ConvertTo-Hashtable $object.$p -recurse:$recurse
+            } else {
+		        $h[$p] = $object.$p
+            }
+	    }
+        return $h
+    } elseif($object -is [array]) {
+        if ($recurse) {
+            for($i = 0; $i -lt $object.Length; $i++) {
+                $object[$i] = ConvertTo-Hashtable $object[$i] -recurse:$recurse
+            }
+        }
+        return $object
+    } else {
+        return $object
+    }
 	
-	$h = @{}
-	$props = get-propertynames $object
-	foreach ($p in $props) {
-		$h[$p] = $object.$p
-	}
 	
-	return $h
 }
 
 
-function ConvertTo-Object([hashtable]$hashtable) {
-    $copy = @{}
-    $copy += $hashtable
-    foreach($key in $hashtable.Keys) {
-        $val = $hashtable[$key]
-        if ($val -is [hashtable]) {
-            $obj = ConvertTo-Object $val
-            $copy[$key] = $obj
+function ConvertTo-Object([Parameter(ValueFromPipeline=$true)]$hashtable, $recurse) {    
+    if ($hashtable -is [hashtable]) {
+        $copy = @{}
+        $copy += $hashtable
+        foreach($key in = get-propertynames $hashtable) {
+            $val = $hashtable[$key]
+            $obj = ConvertTo-Object $val -recurse $recurse
+            $copy[$key] = $obj            
         }
-
+        return New-Object -TypeName PSCustomObject -Property $copy 
+    } 
+    elseif ($hashtable -is [System.Management.Automation.PSCustomObject]) {
+        $copy = @{}
+        foreach($key in get-propertynames $hashtable) {
+            $val = $hashtable.$key
+            $obj = ConvertTo-Object $val -recurse $recurse
+            $copy[$key] = $obj            
+        }
+        return New-Object -TypeName PSCustomObject -Property $copy 
+    } 
+    elseif ($hashtable -is [Array]) {        
+        return $hashtable
     }
-    return New-Object -TypeName PSCustomObject -Property $copy 
+    else {
+        return $hashtable
+    }
+    
 }
 
 
