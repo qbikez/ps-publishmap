@@ -11,7 +11,7 @@ function get-entry(
    else {     
     foreach($kvp in $map.GetEnumerator()) {
         $pattern = $kvp.key
-        $vars = match-varpattern $key $pattern
+        $vars = match-varpattern $key "$pattern"
         if ($vars -ne $null) {
                 $entry = $kvp.value   
                 break
@@ -89,6 +89,9 @@ function _replace-varline ([Parameter(Mandatory=$true)]$text, $vars = @{}) {
             $r = $r -replace "\{$name\}",$val
         }
         # support also same placeholder as in template match
+        elseif ($text -match "__$($name)__") {
+            $r = $r -replace "__$($name)__",$val
+        }
         elseif ($text -match "_$($name)_") {
             $r = $r -replace "_$($name)_",$val
         }
@@ -138,22 +141,32 @@ function convert-vars ([Parameter(Mandatory=$true)]$text, $vars = @{}, [switch][
 
 function get-vardef ($text) {
     $result = $null
-    $m = [System.Text.RegularExpressions.Regex]::Matches($text, "_([a-zA-Z]+)");
+    $m = [System.Text.RegularExpressions.Regex]::Matches($text, "__([a-zA-Z]+)__");
     if ($m -ne $null) {
         $result = $m | % {
             $_.Groups[1].Value
         }
+        return $result
     }
 
-    return $result
+    $m = [System.Text.RegularExpressions.Regex]::Matches($text, "_([a-zA-Z]+)_");
+    if ($m -ne $null) {
+        $result = $m | % {
+            $_.Groups[1].Value
+        }
+        return $result
+    }
+
+    return $null
 }
 
 function match-varpattern ($text, $pattern) {
     $result = $null
     $vars = @(get-vardef $pattern)
     if ($vars -eq $null) { return $null }
-    $regex = $pattern -replace "_[a-zA-Z]+_","([a-zA-Z0-9]*)"    
-    $m = [System.Text.RegularExpressions.Regex]::Matches($text, $regex);
+    $regex = $pattern -replace "__[a-zA-Z]+__","([a-zA-Z0-9]*)"    
+    $regex = $regex -replace "_[a-zA-Z]+_","([a-zA-Z0-9]*)"    
+    $m = [System.Text.RegularExpressions.Regex]::Matches($text, "^$regex`$");
     
     if ($m -ne $null) {
         $result = $m | % {
