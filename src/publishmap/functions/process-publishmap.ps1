@@ -102,6 +102,7 @@ function process-publishmap($map) {
                     if ($prof -is [System.Collections.IDictionary]) {
                         # set full path as if profiles were created at project level
                         $null = add-property $prof -name _fullpath -value "$groupk.$projk.$profk" -overwrite
+                        $null = add-property $prof -name _name -value "$profk" -overwrite
                         # use fullpath for backward compatibility       
                         $null = add-property $prof -name fullpath -value $prof._fullpath -overwrite
                         # expose project at profile level
