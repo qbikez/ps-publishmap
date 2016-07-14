@@ -76,6 +76,12 @@ function import-genericgroup($group,
         }
     }
     
+    <#
+    if ($settings -ne $null) {
+        inherit-globalsettings $group $settings
+    }
+    #>
+
     $keys = get-propertynames $group
     foreach($projk in $keys) {
         #do not process special global settings
@@ -90,11 +96,14 @@ function import-genericgroup($group,
 
 
         inherit-properties -from $group -to $subgroup -valuesonly
+        # this should be run only once per group, right? 
+        # why is this needed here?
         if ($settings -ne $null) {
                 inherit-globalsettings $group $settings
         }
         $r = import-genericgroup $subgroup $path -settings $childsettings -settingskey $settingskey -specialkeys $specialkeys
     }
+        
 
 
     if ($settings -ne $null) {

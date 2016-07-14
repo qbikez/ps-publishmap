@@ -1,7 +1,7 @@
 function get-entry(
     [Parameter(mandatory=$true)] $key,
     [Parameter(mandatory=$true)] $map,
-    $excludeProperties = @()) 
+    $excludeProperties = @("project")) 
 {
    $entry = $null
    if ($map[$key] -ne $null) { 
@@ -21,9 +21,10 @@ function get-entry(
 
    if ($entry -ne $null) {
     #TODO: should we use a deep clone
-     $entry = $entry.Clone()
-     $entry._vars = $vars
-     $entry = replace-properties $entry -vars $vars -exclude $excludeProperties     
+     $entry2 = $entry.Clone()
+     $entry2._vars = $vars
+     $entry2 = replace-properties $entry2 -vars $vars -exclude $excludeProperties     
+     return $entry2
    }
 
    return $entry

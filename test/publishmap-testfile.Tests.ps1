@@ -104,6 +104,10 @@ Describe "Get publishmap entry" {
             foreach($kvp in $p.Profile.GetEnumerator()) {
                 $kvp.Value | Should Be $map.test.use_default_profiles.dev[$kvp.Key]
             }
+            #Set-TestInconclusive 
+            <# the profile will be cloned, should check for object equality
+            $p.Profile | Should Be $map.test.use_default_profiles.dev
+            #>
         }
     }
     
