@@ -1,3 +1,4 @@
+. $PSScriptRoot\includes.ps1
 
 Describe "parse publish map" {
   $map = import-publishmap -maps "$PSScriptRoot\input\publishmap.test.config.ps1"  
@@ -98,7 +99,11 @@ Describe "Get publishmap entry" {
             $p = get-profile test.use_default_profiles.dev -map $map
             $p | Should Not BeNullOrEmpty
             $p.Profile | Should Not BeNullOrEmpty
-            $p.Profile | Should Be $map.test.use_default_profiles.dev
+            # this will be a clone!
+            $p.Profile.Keys.Count | Should BeGreaterThan $map.test.use_default_profiles.dev.Keys.Count
+            foreach($kvp in $p.Profile.GetEnumerator()) {
+                $kvp.Value | Should Be $map.test.use_default_profiles.dev[$kvp.Key]
+            }
         }
     }
     
