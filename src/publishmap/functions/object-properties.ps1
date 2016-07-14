@@ -68,7 +68,15 @@ function ConvertTo-Hashtable([Parameter(ValueFromPipeline=$true)]$obj, [switch][
 		return $object
 	}
  
-    if ($object -is [System.Collections.IDictionary] -or  $object -is [System.Management.Automation.PSCustomObject]) {
+    if($object -is [array]) {
+        if ($recurse) {
+            for($i = 0; $i -lt $object.Length; $i++) {
+                $object[$i] = ConvertTo-Hashtable $object[$i] -recurse:$recurse
+            }
+        }
+        return $object
+    } 
+    elseif ($object -is [System.Collections.IDictionary] -or  $object -is [System.Management.Automation.PSCustomObject] -or $true) {
 	    $h = @{}
 	    $props = get-propertynames $object
 	    foreach ($p in $props) {
@@ -79,15 +87,9 @@ function ConvertTo-Hashtable([Parameter(ValueFromPipeline=$true)]$obj, [switch][
             }
 	    }
         return $h
-    } elseif($object -is [array]) {
-        if ($recurse) {
-            for($i = 0; $i -lt $object.Length; $i++) {
-                $object[$i] = ConvertTo-Hashtable $object[$i] -recurse:$recurse
-            }
-        }
-        return $object
     } else {
-        return $object
+        throw "could not convert object to hashtable"
+        #return $object
     }
 	
 	
