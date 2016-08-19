@@ -9,14 +9,14 @@
 @{
 
 # Script module or binary module file associated with this manifest.
-RootModule = 'PublishMap.psm1'
+RootModule = 'publishmap.psm1'
 
 
 # Script module or binary module file associated with this manifest.
 # RootModule = ''
 
 # Version number of this module.
-ModuleVersion = '1.2.1'
+ModuleVersion = '1.2.1.86'
 
 # ID used to uniquely identify this module
 GUID = '32fffc21-70fe-4290-b4ca-1cf3ade430f0'
@@ -121,6 +121,9 @@ PrivateData = @{
 # DefaultCommandPrefix = ''
 
 }
+
+
+
 
 
 
