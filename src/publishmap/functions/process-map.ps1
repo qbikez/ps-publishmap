@@ -133,10 +133,14 @@ function add-metaproperties($group, $fullpath, $specialkeys = @("settings", "glo
     if ($group -isnot [System.Collections.IDictionary]) {
         return
     }
-    $level = $fullpath.split('.').length - 1
+    $splits = $fullpath.split('.')
+    $level = $splits.length - 1
     
     $null = $group | add-property -name _level -value $level
     $null = $group | add-property -name _fullpath -value $fullpath.trim('.')
+    if ($splits.length -gt 0) {
+        $null = $group | add-property -name _name -value $splits[$splits.length - 1]
+    }
 
       $keys = get-propertynames $group
 
