@@ -141,7 +141,11 @@ function postprocess-publishmap($map) {
                         $proj.profiles.Remove($profk)
                     }
                     if ($prof._inherit_from -ne $null) {
-                        inherit-properties -from $proj.profiles.$($prof._inherit_from) -to $prof -valuesonly
+                        if ($proj.profiles.$($prof._inherit_from) -eq $null) {
+                            write-warning "cannot find inheritance base '$($prof._inherit_from)' for profile '$($prof._fullpath)'"
+                        } else { 
+                            inherit-properties -from $proj.profiles.$($prof._inherit_from) -to $prof -valuesonly
+                        }
                     }
                 }
                 # expose profiles at project level
