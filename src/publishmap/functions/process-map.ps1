@@ -64,6 +64,7 @@ function import-genericgroup($group,
    
     $result = {}        
 
+    # only direct children inherit settings
     $onelevelsettingsinheritance = $true
 
     $childsettings = $null 
