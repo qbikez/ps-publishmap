@@ -20,7 +20,7 @@ function get-entry(
    }
 
    if ($entry -ne $null) {
-    #TODO: should we use a deep clone
+     #TODO: should we use a deep clone
      $entry2 = $entry.Clone()
      $entry2._vars = $vars
      $entry2 = replace-properties $entry2 -vars $vars -exclude $excludeProperties     

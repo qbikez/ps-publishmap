@@ -157,6 +157,7 @@ function add-metaproperties($group, $fullpath, $specialkeys = @("settings", "glo
     return $group
 }
 
+<# 
 function import-mapgroup(
     $publishmapgroup, $groupk,     
     $settings = $null,
@@ -172,7 +173,7 @@ function import-mapgroup(
     $group = $publishmapgroup
     $result = {}
     foreach($projk in $keys) {
-     #do not process special global settings
+            #do not process special global settings
             if ($projk -in "settings","global_profiles") {
                 continue
             }
@@ -187,7 +188,7 @@ function import-mapgroup(
     return $publishmapgroup
 }
 
-
+#>
 <#
 
 #>

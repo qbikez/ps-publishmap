@@ -1,4 +1,9 @@
+<#
 
+.PARAMETER valuesOnly
+Inherit only value types, do not inherit dictionaries (helps prevent infinite inheritance loop)
+
+#>
 function inherit-properties($from, $to, $exclude = @(), [switch][bool] $valuesOnly) {
     if ($from -is [System.Collections.IDictionary]) {
     }

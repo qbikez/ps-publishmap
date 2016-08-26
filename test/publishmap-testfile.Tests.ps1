@@ -44,7 +44,13 @@ Describe "parse publish map" {
      It "profiles should be merged" {
         $p = $map.test.additional
         $p.profiles.prod | Should Not BeNullOrEmpty
-        $p.profiles.Count | Should Be 3         
+        $basicprofiles = @()
+        foreach($_ in $p.profiles.GetEnumerator()) {
+            if ($_.key -notmatch "_staging" -and $_.key -notmatch "swap_") {
+                $basicprofiles += $_
+            }
+        }  
+        $basicprofiles.Count | Should Be 3         
      }
      It "merged profiles should be exposed at project level" {
         $p = $map.test.additional
