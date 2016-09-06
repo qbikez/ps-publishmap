@@ -79,6 +79,11 @@ function import-publishmapobject {
     return $pmap           
 }
 
+<#
+.Synopsis 
+ * inherits properties from global `settings` node
+ * generates `_staging` and `swap_` profiles
+#>
 function preporcess-publishmap($map) {
     $globalprofilesname = "global_profiles"
     foreach($groupk in get-propertynames $map) {
@@ -115,6 +120,11 @@ function preporcess-publishmap($map) {
     return $map
 }
 
+<#
+.Synopsis
+* adds profile links at project level
+* processes inheritance basing on `_inherit_from` properties  
+#>
 function postprocess-publishmap($map) {    
     foreach($groupk in get-propertynames $map) {
         # remove generated properties from top-level
