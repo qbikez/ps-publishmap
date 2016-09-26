@@ -1,33 +1,55 @@
 function get-entry(
-    [Parameter(mandatory=$true)] $key,
-    [Parameter(mandatory=$true)] $map,
+    [Parameter(mandatory=$true,Position=1)] $key,
+    [Parameter(mandatory=$true,ValueFromPipeline=$true,Position=2)] $map,
     $excludeProperties = @("project")) 
 {
-   $entry = $null
-   if ($map[$key] -ne $null) { 
-       $entry = $map[$key] 
-       $vars = @()
-   }
-   else {     
-    foreach($kvp in $map.GetEnumerator()) {
-        $pattern = $kvp.key
-        $vars = match-varpattern $key "$pattern"
-        if ($vars -ne $null) {
-                $entry = $kvp.value   
-                break
+    $parent = $null
+    $entry = $null
+    $splits=$key.split(".")
+    for($i = 0; $i -lt $splits.length; $i++) {
+        $split = $splits[$i]
+        $parent = $entry
+        if ($i -eq $splits.length-1) {
+            $key = $split
+            if ($map[$key] -ne $null) { 
+               $entry = $map[$key] 
+               $vars = @()
+           }
+           else {     
+            foreach($kvp in $map.GetEnumerator()) {
+                $pattern = $kvp.key
+                $vars = match-varpattern $key "$pattern"
+                if ($vars -ne $null) {
+                        $entry = $kvp.value   
+                        break
+                }
+            }
+           }
+
+           if ($entry -ne $null) {
+             #TODO: should we use a deep clone
+             $entry2 = $entry.Clone()
+             $entry2._vars = $vars
+             $entry2 = replace-properties $entry2 -vars $vars -exclude $excludeProperties     
+             return $entry2
+           }
+
+           return $entry
         }
-    }
-   }
+        else {
+            $entry = $map.$split
+        }
+        if ($entry -eq $null) {
+            break
+        }
+        if ($entry -ne $null -and $entry.group -ne $null) {
+            $isGroup = $true
+            break
+        }
+        $map = $entry
+    }    
 
-   if ($entry -ne $null) {
-     #TODO: should we use a deep clone
-     $entry2 = $entry.Clone()
-     $entry2._vars = $vars
-     $entry2 = replace-properties $entry2 -vars $vars -exclude $excludeProperties     
-     return $entry2
-   }
-
-   return $entry
+   
 }
 
 function replace-properties($obj, $vars = @{}, [switch][bool]$strict, $exclude = @()) {
@@ -102,30 +124,33 @@ function _replace-varline ([Parameter(Mandatory=$true)]$text, $vars = @{}) {
 
 #TODO: support multiple matches per line
 function _replace-varauto([Parameter(Mandatory=$true)]$text)  {
-    if ($text -match "\{([a-zA-Z0-9_.:]+?)\}") {
-        $name = $Matches[1]
-        $varpath = $name
-        $splits = $name.split(".")
-        if (!($varpath -match ":")) { 
-            $varpath = "variable:" + $splits[0]                 
-        }
-        $val = $null
-        if (test-path "$varpath") {
-            $val = (get-item $varpath).Value
-            for($i = 1; $i -lt $splits.length; $i++) {
-                $s = $splits[$i] 
-                $val = $val.$s
-            }  
-        }
-        elseif (test-path "variable:self") {
-            $selftmp = (get-item "variable:self").Value
-            $val = $selftmp
-            foreach($s in $splits) {
-                $val = $val.$s
-            }            
-        }
-        if ($val -ne $null) {
-                $text = $text -replace "\{$name\}",$val
+    $matches = [System.Text.RegularExpressions.Regex]::Matches($text, "\{([a-zA-Z0-9_.:]+?)\}")
+    foreach($match in $matches) {
+        if ($match.Success) {
+            $name = $Match.Groups[1].Value
+            $varpath = $name
+            $splits = $name.split(".")
+            if (!($varpath -match ":")) { 
+                $varpath = "variable:" + $splits[0]                 
+            }
+            $val = $null
+            if (test-path "$varpath") {
+                $val = (get-item $varpath).Value
+                for($i = 1; $i -lt $splits.length; $i++) {
+                    $s = $splits[$i] 
+                    $val = $val.$s
+                }  
+            }
+            elseif (test-path "variable:self") {
+                $selftmp = (get-item "variable:self").Value
+                $val = $selftmp
+                foreach($s in $splits) {
+                    $val = $val.$s
+                }            
+            }
+            if ($val -ne $null) {
+                    $text = $text -replace "\{$name\}",$val
+            }
         }
     }
     return $text
