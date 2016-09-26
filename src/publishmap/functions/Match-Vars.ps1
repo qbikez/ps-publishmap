@@ -124,11 +124,17 @@ function _replace-varline ([Parameter(Mandatory=$true)]$text, $vars = @{}) {
 
 #TODO: support multiple matches per line
 function _replace-varauto([Parameter(Mandatory=$true)]$text)  {
-    $matches = [System.Text.RegularExpressions.Regex]::Matches($text, "\{([a-zA-Z0-9_.:]+?)\}")
+    $matches = [System.Text.RegularExpressions.Regex]::Matches($text, "\{(\?{0,1}[a-zA-Z0-9_.:]+?)\}")
     foreach($match in $matches) {
         if ($match.Success) {
             $name = $Match.Groups[1].Value
-            $varpath = $name
+            $orgname = $name
+            $defaultifnull = $false
+            if ($name.startswith("?")) {
+                $name= $name.substring(1)
+                $defaultifnull = $true
+            }
+            $varpath = $name 
             $splits = $name.split(".")
             if (!($varpath -match ":")) { 
                 $varpath = "variable:" + $splits[0]                 
@@ -149,7 +155,10 @@ function _replace-varauto([Parameter(Mandatory=$true)]$text)  {
                 }            
             }
             if ($val -ne $null) {
-                    $text = $text -replace "\{$name\}",$val
+                    $text = $text -replace "\{$([System.Text.RegularExpressions.Regex]::Escape($orgname))\}",$val
+            } 
+            elseif ($defaultifnull) {
+                $text = $text -replace "\{$([System.Text.RegularExpressions.Regex]::Escape($orgname))\}",""
             }
         }
     }
