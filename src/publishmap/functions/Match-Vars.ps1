@@ -216,4 +216,4 @@ function match-varpattern ($text, $pattern) {
     return $result
 }
 
-new-alias Replace-Vars Convert-Vars
+new-alias Replace-Vars Convert-Vars -force

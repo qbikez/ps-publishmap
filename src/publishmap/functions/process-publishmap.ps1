@@ -155,7 +155,20 @@ function postprocess-publishmap($map) {
                         if ($proj.profiles.$($prof._inherit_from) -eq $null) {
                             write-warning "cannot find inheritance base '$($prof._inherit_from)' for profile '$($prof._fullpath)'"
                         } else { 
-                            inherit-properties -from $proj.profiles.$($prof._inherit_from) -to $prof -valuesonly
+                            $cur = $prof
+                            $hierarchy = @()
+                            while($cur._inherit_from -ne $null -and $cur._inherited_from -eq $null) {                                
+                                $hierarchy += $cur
+                                $base = $proj.profiles.$($cur._inherit_from)
+                                $cur = $base
+                            }
+                            for($i = ($hierarchy.length - 1); $i -ge 0; $i--) {
+                                $cur = @($hierarchy)[$i]
+                                $base = $proj.profiles.$($cur._inherit_from)
+                                inherit-properties -from $base -to $cur -valuesonly -exclude @("_inherit_from","_inherited_from")
+                                $null = add-property $cur -name _inherited_from  -value $($cur._inherit_from)
+                            }
+                            
                         }
                     }
                 }
