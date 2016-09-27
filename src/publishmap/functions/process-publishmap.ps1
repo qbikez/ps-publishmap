@@ -98,7 +98,7 @@ function preporcess-publishmap($map) {
     foreach($groupk in get-propertynames $map) {
         foreach($projk in get-propertynames $map.$groupk) { 
             foreach($profk in get-propertynames $map.$groupk.$projk.profiles) { 
-                $shouldcreatestaging = $profk -notmatch "_staging" -and $profk -notmatch "swap_" 
+                $shouldcreatestaging = ($profk -notmatch "_staging") -and ($profk -notmatch "swap_") -and ($map.$groupk.$projk.profiles.$profk -is [System.Collections.IDictionary])
                 
                 if ($shouldcreatestaging) {
                     $stagingkey = "$($profk)_staging"    

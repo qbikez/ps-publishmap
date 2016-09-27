@@ -35,6 +35,9 @@ Describe "parse map object with variables" {
                       }
                   }                       
               }
+              override_parent = @{
+                  parent_property = "voverridenv"
+              }
               override_parent_with_stub = @{
                   parent_property = "overriden"         
                   profiles = @{
