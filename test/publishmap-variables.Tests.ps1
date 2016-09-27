@@ -175,6 +175,14 @@ Describe "parse map object with variables" {
               override_parent = @{
                   parent_property = "overriden"
               }
+              vars_from_pros = @{
+                  path1 = "svc"
+                  path2 = "test"
+                  url_single_var = "http://{path1}"
+                  url_multi_var = "http://{path1}/{path2}"
+                  url_default_val = "http://{path1}/{?path2}/{?path_optional}"
+                  url_missing_val = "http://{path1}/{path2}/{path_required}"
+              }
               
             }
         }
@@ -214,6 +222,23 @@ Describe "parse map object with variables" {
             $e.what | Should Be "what-prod13"
             $e.parent_property | Should Be "overriden"
             #>
+        }
+
+         It "Should replace single variable with property" {
+            $e = get-entry "vars_from_pros" $map.test
+            $e.url_single_var | Should Be "http://svc"
+         }
+         It "Should replace multiple variables with properties" {
+            $e = get-entry "vars_from_pros" $map.test
+            $e.url_multi_var | Should Be "http://svc/test"
+         }
+         It "Should leave unresolved variables" {
+            $e = get-entry "vars_from_pros" $map.test
+            $e.url_missing_val | Should Be "http://svc/test/{path_required}"
+         }
+         It "Should remove optional variables" {
+            $e = get-entry "vars_from_pros" $map.test
+            $e.url_default_val | Should Be "http://svc/test/"
         }
     }
   
