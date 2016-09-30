@@ -32,7 +32,11 @@ function inherit-properties($from, $to, $exclude = @(), [switch][bool] $valuesOn
     } { $h } 
     
     if ($from -ne $null) {
+        try {
         $null = add-properties -object $to -props $from -merge -ifNotExists
+        } catch {
+            throw "failed to inherit properties:$($_.Exception.Message)`r`nfrom:`r`n$($from | format-table | out-string)`r`nto:`r`n$($to | format-table | out-string)"
+        }
         
     }
    <# foreach($key in $from.keys) {
@@ -62,7 +66,7 @@ function inherit-globalsettings($proj, $settings) {
         write-verbose "inheriting global settings to $($proj._fullpath). strip=$stripsettingswrapper"
         $stripsettingswrapper = $settings._strip
                 if ($stripsettingswrapper -ne $null -and $stripsettingswrapper) {
-                    $null = inherit-properties -from $settings -to $proj -ifNotExists -merge
+                    $null = inherit-properties -from $settings -to $proj -ifNotExists -merge -exclude "_strip"
                 }
                 else {
                     $null = add-property $proj "settings" $settings -ifNotExists -merge

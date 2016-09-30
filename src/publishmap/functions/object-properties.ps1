@@ -18,7 +18,11 @@ function add-properties(
  ) {
     foreach($prop in get-propertynames $props) {
         if ($prop -notin $exclude) {
-            $r = add-property $object -name $prop -value $props.$prop -ifnotexists:$ifnotexists -merge:$merge
+            try {
+                $r = add-property $object -name $prop -value $props.$prop -ifnotexists:$ifnotexists -merge:$merge
+            } catch {
+                throw "failed to add property '$prop' with value '$props.$prop': $($_.Exception.Message)"
+            }
         }
     }
     return $object
