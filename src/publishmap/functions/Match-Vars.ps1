@@ -119,6 +119,7 @@ function _replace-varline ([Parameter(Mandatory=$true)]$text, $vars = @{}) {
             $r = $r -replace "_$($name)_",$val
         }
     }    
+
     return $r    
 }
 
@@ -136,13 +137,14 @@ function _replace-varauto([Parameter(Mandatory=$true)]$text)  {
             }
             $varpath = $name 
             $splits = $name.split(".")
-            if (!($varpath -match ":")) { 
-                $varpath = "variable:" + $splits[0]                 
+            $splitstart = 1
+            if (!($varpath -match ":")) {
+                    $varpath = "variable:" + $splits[0]                 
             }
             $val = $null
             if (test-path "$varpath") {
                 $val = (get-item $varpath).Value
-                for($i = 1; $i -lt $splits.length; $i++) {
+                for($i = $splitstart; $i -lt $splits.length; $i++) {
                     $s = $splits[$i] 
                     $val = $val.$s
                 }  
@@ -167,9 +169,17 @@ function _replace-varauto([Parameter(Mandatory=$true)]$text)  {
 
 function convert-vars ([Parameter(Mandatory=$true)]$text, $vars = @{}, [switch][bool]$noauto = $false) {
     $text = @($text) | % { _replace-varline $_ $vars }
-    
+    if ($self -eq $null) {
+        $self = $vars
+    }
     if (!$noauto) {
         $text = @($text) | % { _replace-varauto $_ }
+    }
+
+    
+    $m = [System.Text.RegularExpressions.Regex]::Matches($text, "\{(\?{0,1}[a-zA-Z0-9_.:]+?)\}")
+    if ($m.count -gt 0) {
+        write-warning "missing variable '$($m[0].Groups[1].Value)'"
     }
     return $text
 }
