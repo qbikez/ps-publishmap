@@ -32,7 +32,7 @@ function import-publishmapfile {
         $maps = @($maps)
     }
     else {
-        $maps = gci . -filter "publishmap.*.config.ps1"
+        $maps = get-childitem . -filter "publishmap.*.config.ps1"
     }
 
     $publishmap = @{}

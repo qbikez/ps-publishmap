@@ -44,10 +44,12 @@ function get-entry(
              if ($entry2 -is [Hashtable]) {
                 $entry2._vars = $vars
              }             
-             $entry2 = replace-properties $entry2 -vars $vars -exclude $excludeProperties     
+             $warnaction = "SilentlyContinue"
+             if ($simpleMode) { $warnaction = "Continue" }
+             $entry2 = replace-properties $entry2 -vars $vars -exclude $excludeProperties -WarningAction $warnaction
              if (!$simpleMode) {
                  # replace properties based on self values
-                 $entry2 = replace-properties $entry2 -vars $map -exclude $excludeProperties  
+                 $entry2 = replace-properties $entry2 -vars $map -exclude $excludeProperties -WarningAction "SilentlyContinue"
                  # replace properties based on root values
                  $entry2 = replace-properties $entry2 -vars $root -exclude $excludeProperties  
              }
@@ -72,7 +74,10 @@ function get-entry(
    
 }
 
-function replace-properties($obj, $vars = @{}, [switch][bool]$strict, $exclude = @()) {
+function replace-properties { 
+[CmdletBinding()]
+param($obj, $vars = @{}, [switch][bool]$strict, $exclude = @()) 
+
     $exclude = @($exclude)
     if ($vars -eq $null) { throw "vars == NULL"}
     if ($obj -is [string]) {
@@ -174,7 +179,11 @@ function _replace-varauto([Parameter(Mandatory=$true)]$__text)  {
             $__splits = $__name.split(".")
             $__splitstart = 1
             if (!($__varpath -match ":")) {
-                    $__varpath = "variable:" + $__splits[0]                 
+                    if ($__varpath.startswith("vars.")) {
+                        $__varpath = "variable:" + $__splits[0]                 
+                    } else {
+                        $__varpath = "cannot-reference-local-script-or-global-vars-without-namespace-prefix"
+                    }
             }
             $__val = $null
             # this is a fragile thing. the module itself may define local vars that collide with map vars
@@ -211,21 +220,35 @@ function convert-vars([Parameter(Mandatory=$true)]$text, $vars = @{}, [switch][b
     $text = @($text) | % { _replace-varline $_ $vars }
 
     $originalself = $self
-
+    try {
     # is this necessary if we're doing replace-properties twice? 
-    if ($originalself -eq $null) {
-        $self = $vars
-    }
     if (!$noauto) {
+        # _replace-varauto uses $self global variable
+        # if it is not set, use $vars as $self
+        if ($originalself -eq $null) {
+            $self = $vars
+        }
         $text = @($text) | % { _replace-varauto $_ }
+        
+        # also use $vars as $self if $self was passed
+        if ($originalself -ne $null -and $vars -ne $originalself) {
+            $self = $vars
+            $text = @($text) | % { _replace-varauto $_ }
+        }        
     }
 
     
     $m = [System.Text.RegularExpressions.Regex]::Matches($text, "\{(\?{0,1}[a-zA-Z0-9_.:]+?)\}")
     if ($m.count -gt 0) {
         write-warning "missing variable '$($m[0].Groups[1].Value)'"
+        if ($WarningPreference -ne "SilentlyContinue") {
+            $a = 0
+        }
     }
     return $text
+    } finally { 
+        $self = $originalself
+    }
 }
 
 function get-vardef ($text) {
