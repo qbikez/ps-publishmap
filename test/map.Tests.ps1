@@ -43,10 +43,15 @@ Describe "parse map with variables" {
           }
       }
 
-      Context "when entry is retrieved" {
+      Context "when entry is retrieved" {       
           It "variables should be substituted" {
             $url = $map | get-entry "base_url" 
             $url | should be "https://some-name.com"
+          }
+          It "should return root entry for /" {
+            $m = $map | get-entry "/" 
+            $m | should not benullorempty
+            $m.base_url | should be "https://some-name.com"
           }
          
           It "variables should be substituted in nested objects" {

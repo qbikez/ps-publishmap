@@ -22,16 +22,20 @@ function get-entry(
             if ($map[$key] -ne $null) { 
                $entry = $map[$key] 
                $vars = @()
-           }
-           else {     
-            foreach($kvp in $map.GetEnumerator()) {
-                $pattern = $kvp.key
-                $vars = match-varpattern $key "$pattern"
-                if ($vars -ne $null) {
-                        $entry = $kvp.value   
-                        break
-                }
             }
+            elseif ($key -eq "/" -or $key -eq "\") {
+                $entry = $map
+                $vars = @()
+            } 
+            else {     
+                foreach($kvp in $map.GetEnumerator()) {
+                    $pattern = $kvp.key
+                    $vars = match-varpattern $key "$pattern"
+                    if ($vars -ne $null) {
+                            $entry = $kvp.value   
+                            break
+                    }
+                }
            }
 
            if ($entry -ne $null) {
