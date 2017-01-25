@@ -1,8 +1,16 @@
+<#
+    .PARAMETER simpleMode 
+    for better performance. do not perform variable substitution based on self and root
+    should still work for simpler scenarios
+
+#>
 function get-entry(
     [Parameter(mandatory=$true,Position=1)] $key,
     [Parameter(mandatory=$true,ValueFromPipeline=$true,Position=2)] $map,
-    $excludeProperties = @("project")) 
+    $excludeProperties = @("project"),
+    [switch][bool] $simpleMode = $false) 
 {
+    $root = $map
     $parent = $null
     $entry = $null
     $splits=$key.split(".")
@@ -29,8 +37,16 @@ function get-entry(
            if ($entry -ne $null) {
              #TODO: should we use a deep clone
              $entry2 = $entry.Clone()
-             $entry2._vars = $vars
+             if ($entry2 -is [Hashtable]) {
+                $entry2._vars = $vars
+             }             
              $entry2 = replace-properties $entry2 -vars $vars -exclude $excludeProperties     
+             if (!$simpleMode) {
+                 # replace properties based on self values
+                 $entry2 = replace-properties $entry2 -vars $map -exclude $excludeProperties  
+                 # replace properties based on root values
+                 $entry2 = replace-properties $entry2 -vars $root -exclude $excludeProperties  
+             }
              return $entry2
            }
 
@@ -104,72 +120,96 @@ function replace-properties($obj, $vars = @{}, [switch][bool]$strict, $exclude =
 function _replace-varline ([Parameter(Mandatory=$true)]$text, $vars = @{}) {
     $r = $text
     if ($vars -eq $null) { throw "vars == NULL"}
-    foreach($kvp in $vars.GetEnumerator()) {
-        $name = $kvp.key
-        $val = $kvp.value
 
-        if ($text -match "\{$name\}") {
-            $r = $r -replace "\{$name\}",$val
-        }
-        # support also same placeholder as in template match
-        elseif ($text -match "__$($name)__") {
-            $r = $r -replace "__$($name)__",$val
-        }
-        elseif ($text -match "_$($name)_") {
-            $r = $r -replace "_$($name)_",$val
-        }
-    }    
+    do {
+        #each replace may insert a new variable reference in the string, so we need to iterate again
+        $replaced = $false
+        foreach($kvp in $vars.GetEnumerator()) {
+            $name = $kvp.key
+            $val = $kvp.value
+
+            if ($r -match "\{$name\}") {
+                $r = $r -replace "\{$name\}",$val
+                $replaced = $true
+                break
+            }
+            # support also same placeholder as in template match
+            elseif ($r -match "__$($name)__") {
+                $r = $r -replace "__$($name)__",$val
+                $replaced = $true
+                break
+            }
+            elseif ($r -match "_$($name)_") {
+                $r = $r -replace "_$($name)_",$val
+                $replaced = $true
+                break
+            }
+        }    
+    } while ($replaced)
 
     return $r    
 }
 
 #TODO: support multiple matches per line
-function _replace-varauto([Parameter(Mandatory=$true)]$text)  {
-    $matches = [System.Text.RegularExpressions.Regex]::Matches($text, "\{(\?{0,1}[a-zA-Z0-9_.:]+?)\}")
-    foreach($match in $matches) {
-        if ($match.Success) {
-            $name = $Match.Groups[1].Value
-            $orgname = $name
-            $defaultifnull = $false
-            if ($name.startswith("?")) {
-                $name= $name.substring(1)
-                $defaultifnull = $true
+function _replace-varauto([Parameter(Mandatory=$true)]$__text)  {
+    
+    do {
+    #each replace may insert a new variable reference in the string, so we need to iterate again
+    $__replaced = $false
+    $__matches = [System.Text.RegularExpressions.Regex]::Matches($__text, "\{(\?{0,1}[a-zA-Z0-9_.:]+?)\}")
+    foreach($__match in $__matches) {
+        if ($__match.Success) {
+            $__name = $__Match.Groups[1].Value
+            $__orgname = $__name
+            $__defaultifnull = $false
+            if ($__name.startswith("?")) {
+                $__name= $__name.substring(1)
+                $__defaultifnull = $true
             }
-            $varpath = $name 
-            $splits = $name.split(".")
-            $splitstart = 1
-            if (!($varpath -match ":")) {
-                    $varpath = "variable:" + $splits[0]                 
+            $__varpath = $__name 
+            $__splits = $__name.split(".")
+            $__splitstart = 1
+            if (!($__varpath -match ":")) {
+                    $__varpath = "variable:" + $__splits[0]                 
             }
-            $val = $null
-            if (test-path "$varpath") {
-                $val = (get-item $varpath).Value
-                for($i = $splitstart; $i -lt $splits.length; $i++) {
-                    $s = $splits[$i] 
-                    $val = $val.$s
+            $__val = $null
+            # this is a fragile thing. the module itself may define local vars that collide with map vars
+            if (test-path "$__varpath") {
+                $__val = (get-item $__varpath).Value
+                for($__i = $__splitstart; $__i -lt $__splits.length; $__i++) {
+                    $__s = $__splits[$__i] 
+                    $__val = $__val.$__s
                 }  
             }
             elseif (test-path "variable:self") {
-                $selftmp = (get-item "variable:self").Value
-                $val = $selftmp
-                foreach($s in $splits) {
-                    $val = $val.$s
+                $__selftmp = (get-item "variable:self").Value
+                $__val = $__selftmp
+                foreach($__s in $__splits) {
+                    $__val = $__val.$__s
                 }            
             }
-            if ($val -ne $null) {
-                    $text = $text -replace "\{$([System.Text.RegularExpressions.Regex]::Escape($orgname))\}",$val
+            if ($__val -ne $null) {
+                    $__text = $__text -replace "\{$([System.Text.RegularExpressions.Regex]::Escape($__orgname))\}",$__val
+                    $__replaced = $true
             } 
-            elseif ($defaultifnull) {
-                $text = $text -replace "\{$([System.Text.RegularExpressions.Regex]::Escape($orgname))\}",""
+            elseif ($__defaultifnull) {
+                $__text = $__text -replace "\{$([System.Text.RegularExpressions.Regex]::Escape($__orgname))\}",""
+                $__replaced = $true                
             }
         }
     }
-    return $text
+    }
+    while ($__replaced)
+    return $__text
 }
 
-function convert-vars ([Parameter(Mandatory=$true)]$text, $vars = @{}, [switch][bool]$noauto = $false) {
+function convert-vars([Parameter(Mandatory=$true)]$text, $vars = @{}, [switch][bool]$noauto = $false) {
     $text = @($text) | % { _replace-varline $_ $vars }
-    if ($self -eq $null) {
+
+    $originalself = $self
+
+    # is this necessary if we're doing replace-properties twice? 
+    if ($originalself -eq $null) {
         $self = $vars
     }
     if (!$noauto) {
