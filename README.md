@@ -1,6 +1,6 @@
 # publishmap
 
-![Appveyor status](https://ci.appveyor.com/api/projects/status/github/qbikez/publishmap?svg=true)
+[![Build status](https://ci.appveyor.com/api/projects/status/ex5pl1am2t9ojny7?svg=true)](https://ci.appveyor.com/project/qbikez/publishmap)
 
 ## Overview
 
