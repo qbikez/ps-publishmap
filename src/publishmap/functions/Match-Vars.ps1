@@ -4,6 +4,21 @@
     should still work for simpler scenarios
 
 #>
+
+function _clone($obj) {
+    if ($obj -is [System.Collections.Specialized.OrderedDictionary]) {
+        $copy = [ordered]@{}
+        foreach($e in $obj.GetEnumerator()) {
+            $copy.Add($e.Key, $e.Value)
+        }
+
+        return $copy
+    }
+    else {
+        return $obj.Clone()
+    }
+}
+
 function get-entry(
     [Parameter(mandatory=$true,Position=1)] $key,
     [Parameter(mandatory=$true,ValueFromPipeline=$true,Position=2)] $map,
@@ -40,7 +55,7 @@ function get-entry(
 
            if ($entry -ne $null) {
              #TODO: should we use a deep clone
-             $entry2 = $entry.Clone()
+             $entry2 = _clone $entry
              if ($entry2 -is [Hashtable]) {
                 $entry2._vars = $vars
              }             
@@ -85,7 +100,7 @@ param($obj, $vars = @{}, [switch][bool]$strict, $exclude = @())
         return $replaced
     }
     elseif ($obj -is [System.Collections.IDictionary]) {
-        $keys = $obj.keys.Clone()
+        $keys = _clone $obj.keys
         $keys = $keys | sort
         foreach($key in $keys) {
             if ($key -notin $exclude) {
@@ -105,7 +120,7 @@ param($obj, $vars = @{}, [switch][bool]$strict, $exclude = @())
         return $obj
     }
     elseif ($obj -is [Array]) {
-        $obj = $obj.Clone()
+        $obj = _clone $obj
          for($i = 0; $i -lt $obj.length; $i++) {
             if ($obj[$i] -in $exclude) {
                 continue
