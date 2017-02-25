@@ -34,7 +34,7 @@ function get-entry(
         $parent = $entry
         if ($i -eq $splits.length-1) {
             $key = $split
-            if ($map[$key] -ne $null) { 
+            if ($null -ne $map[$key]) { 
                $entry = $map[$key] 
                $vars = @()
             }
@@ -46,14 +46,14 @@ function get-entry(
                 foreach($kvp in $map.GetEnumerator()) {
                     $pattern = $kvp.key
                     $vars = _MatchVarPattern $key "$pattern"
-                    if ($vars -ne $null) {
+                    if ($null -ne $vars) {
                             $entry = $kvp.value   
                             break
                     }
                 }
            }
 
-           if ($entry -ne $null) {
+           if ($null -ne $entry) {
              #TODO: should we use a deep clone
              $entry2 = _clone $entry
              if ($entry2 -is [Hashtable]) {
@@ -76,10 +76,10 @@ function get-entry(
         else {
             $entry = $map.$split
         }
-        if ($entry -eq $null) {
+        if ($null -eq $entry) {
             break
         }
-        if ($entry -ne $null -and $entry.group -ne $null) {
+        if ($null -ne $entry -and $null -ne $entry.group) {
             $isGroup = $true
             break
         }
@@ -94,7 +94,7 @@ function Convert-PropertiesFromVars {
 param($obj, $vars = @{}, [switch][bool]$strict, $exclude = @()) 
 
     $exclude = @($exclude)
-    if ($vars -eq $null) { throw "vars == NULL"}
+    if ($null -eq $vars) { throw "vars == NULL"}
     if ($obj -is [string]) {
         $replaced = replace-vars -text $obj -vars $vars
         return $replaced
@@ -143,7 +143,7 @@ param($obj, $vars = @{}, [switch][bool]$strict, $exclude = @())
 #TODO: support multiple matches per line
 function _replaceVarline ([Parameter(Mandatory=$true)]$text, $vars = @{}) {
     $r = $text
-    if ($vars -eq $null) { throw "vars == NULL"}
+    if ($null -eq $vars) { throw "vars == NULL"}
 
     do {
         #each replace may insert a new variable reference in the string, so we need to iterate again
@@ -216,7 +216,7 @@ function _ReplaceVarsAuto([Parameter(Mandatory=$true)]$__text)  {
                     $__val = $__val.$__s
                 }            
             }
-            if ($__val -ne $null) {
+            if ($null -ne $__val) {
                     $__text = $__text -replace "\{$([System.Text.RegularExpressions.Regex]::Escape($__orgname))\}",$__val
                     $__replaced = $true
             } 
@@ -240,13 +240,13 @@ function convert-vars([Parameter(Mandatory=$true)]$text, $vars = @{}, [switch][b
     if (!$noauto) {
         # _ReplaceVarsAuto uses $self global variable
         # if it is not set, use $vars as $self
-        if ($originalself -eq $null) {
+        if ($null -eq $originalself) {
             $self = $vars
         }
         $text = @($text) | ForEach-Object{ _ReplaceVarsAuto $_ }
         
         # also use $vars as $self if $self was passed
-        if ($originalself -ne $null -and $vars -ne $originalself) {
+        if ($null -ne $originalself -and $vars -ne $originalself) {
             $self = $vars
             $text = @($text) | ForEach-Object{ _ReplaceVarsAuto $_ }
         }        
@@ -269,7 +269,7 @@ function convert-vars([Parameter(Mandatory=$true)]$text, $vars = @{}, [switch][b
 function get-vardef ($text) {
     $result = $null
     $m = [System.Text.RegularExpressions.Regex]::Matches($text, "__([a-zA-Z]+)__");
-    if ($m -ne $null) {
+    if ($null -ne $m) {
         $result = $m | ForEach-Object{
             $_.Groups[1].Value
         }
@@ -277,7 +277,7 @@ function get-vardef ($text) {
     }
 
     $m = [System.Text.RegularExpressions.Regex]::Matches($text, "_([a-zA-Z]+)_");
-    if ($m -ne $null) {
+    if ($null -ne $m) {
         $result = $m | ForEach-Object{
             $_.Groups[1].Value
         }
@@ -290,12 +290,12 @@ function get-vardef ($text) {
 function _MatchVarPattern ($text, $pattern) {
     $result = $null
     $vars = @(get-vardef $pattern)
-    if ($vars -eq $null) { return $null }
+    if ($null -eq $vars) { return $null }
     $regex = $pattern -replace "__[a-zA-Z]+__","([a-zA-Z0-9]*)"    
     $regex = $regex -replace "_[a-zA-Z]+_","([a-zA-Z0-9]*)"    
     $m = [System.Text.RegularExpressions.Regex]::Matches($text, "^$regex`$");
     
-    if ($m -ne $null) {
+    if ($null -ne $m) {
         $result = $m | ForEach-Object{
             for($i = 1; $i -lt $_.Groups.Count; $i++) {
                 $val = $_.Groups[$i].Value

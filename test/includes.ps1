@@ -9,7 +9,7 @@ if ($internal) {
     .  "$publishmapPath\imports.ps1"
 } else {
     
-    if ((get-module PublishMap) -ne $null) {
+    if ((get-module $null -ne PublishMap)) {
         write-host "reloading PublishMap module"
         remove-module PublishMap
     }

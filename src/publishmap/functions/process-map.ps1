@@ -16,7 +16,7 @@ function import-mapfile {
 
     write-verbose "processing publishmap..."
 
-    if ($maps -ne $null) {
+    if ($null -ne $maps) {
         $maps = @($maps)
     }
         
@@ -44,7 +44,7 @@ param([Parameter(Mandatory=$true)] $map)
 
 function import-singlemapfile($file) {
     $fullname = $file
-    if ($fullname.FullName -ne $null) { $Fullname =$Fullname.FullName }
+    if ($null -ne $fullname.FullName) { $Fullname =$Fullname.FullName }
     $map = & "$FullName"
     
     #$publishmap_obj = ConvertTo-Object $publishmap
@@ -69,7 +69,7 @@ function import-genericgroup($group,
 
     $childsettings = $null 
     #get settings for children
-    if ($group.$settingskey -ne $null) {
+    if ($null -ne $group.$settingskey) {
         $childsettings = $group.$settingskey
     } else {
         if (!$onelevelsettingsinheritance) {
@@ -78,7 +78,7 @@ function import-genericgroup($group,
     }
     
     <#
-    if ($settings -ne $null) {
+    if ($null -ne $settings) {
         inherit-globalsettings $group $settings
     }
     #>
@@ -99,7 +99,7 @@ function import-genericgroup($group,
         inherit-properties -from $group -to $subgroup -valuesonly
         # this should be run only once per group, right? 
         # why is this needed here?
-        if ($settings -ne $null) {
+        if ($null -ne $settings) {
                 inherit-globalsettings $group $settings
         }
         $r = import-genericgroup $subgroup $path -settings $childsettings -settingskey $settingskey -specialkeys $specialkeys
@@ -107,7 +107,7 @@ function import-genericgroup($group,
         
 
 
-    if ($settings -ne $null) {
+    if ($null -ne $settings) {
         inherit-globalsettings $group $settings
         
       <#  $keys = get-propertynames $group

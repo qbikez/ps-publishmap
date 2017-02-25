@@ -12,7 +12,7 @@ function flatten-by($p, $name, $level, $propname) {
     }
     #0..$level | ForEach { write-host " " -NoNewline }
     #write-host "checking $name" level $level
-    if ($p.$propname -ne $null) {
+    if ($null -ne $p.$propname) {
         #write-host "checking level of $name"
         $r += @(@{path = $p._fullpath; value = $p; level=$level } | convertto-object)
     }

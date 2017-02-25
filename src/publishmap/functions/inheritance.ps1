@@ -31,7 +31,7 @@ function Add-InheritedProperties($from, $to, $exclude = @(), [switch][bool] $val
         }
     } { $h } 
     
-    if ($from -ne $null) {
+    if ($null -ne $from) {
         try {
         $null = add-properties -object $to -props $from -merge -ifNotExists
         } catch {
@@ -62,10 +62,10 @@ function Add-InheritedProperties($from, $to, $exclude = @(), [switch][bool] $val
 
 function Add-GlobalSettings($proj, $settings) {
     
-    if ($settings -ne $null) {
+    if ($null -ne $settings) {
         write-verbose "inheriting global settings to $($proj._fullpath). strip=$stripsettingswrapper"
         $stripsettingswrapper = $settings._strip
-                if ($stripsettingswrapper -ne $null -and $stripsettingswrapper) {
+                if ($null -ne $stripsettingswrapper -and $stripsettingswrapper) {
                     $null = inherit-properties -from $settings -to $proj -ifNotExists -merge -exclude "_strip"
                 }
                 else {

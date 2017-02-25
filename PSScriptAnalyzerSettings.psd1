@@ -4,8 +4,13 @@
         'Error'
         'Warning'
     )
+    Rules = @{
+        'PSAvoidUsingCmdletAliases' = @{
+            'Whitelist' = @('cd','%','select','where','pushd','popd','gi','Increment-Version')
+        }
+    }
     ExcludeRules=@(
-        'PSAvoidGlobalAliases'
+     
     #    'PSAvoidUsingWriteHost'
     )
 }
