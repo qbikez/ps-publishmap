@@ -14,7 +14,7 @@ function Set-NuspecVersion([string] $version, $nuspec = $null) {
 		$nuspec = Get-ChildItem . -Filter *.nuspec | select -First 1
     }
     $content = Get-Content $nuspec
-    $content2 = $content | ForEach-Object{ 
+    $content2 = $content | % { 
         if ($_ -match "<version>(.*)</version>") {       
             $_.Replace( $matches[0], "<version>$version</version>")
         } else {
