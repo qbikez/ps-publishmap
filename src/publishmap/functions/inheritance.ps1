@@ -4,13 +4,13 @@
 Inherit only value types, do not inherit dictionaries (helps prevent infinite inheritance loop)
 
 #>
-function inherit-properties($from, $to, $exclude = @(), [switch][bool] $valuesOnly) {
+function Add-InheritedProperties($from, $to, $exclude = @(), [switch][bool] $valuesOnly) {
     if ($from -is [System.Collections.IDictionary]) {
     }
     else {
-        $from = $from.psobject.properties | % { $d = @{} } { $d[$_.name] = $_.value } { $d }
+        $from = $from.psobject.properties | ForEach { $d = @{} } { $d[$_.name] = $_.value } { $d }
     }
-    $from = $from.getenumerator() | % { $h = @{} }{
+    $from = $from.getenumerator() | ForEach { $h = @{} }{
         $key = $_.key
         $value = $_.value
         $shouldExclude = $false 
@@ -31,7 +31,7 @@ function inherit-properties($from, $to, $exclude = @(), [switch][bool] $valuesOn
         }
     } { $h } 
     
-    if ($from -ne $null) {
+    if ($null -ne $from) {
         try {
         $null = add-properties -object $to -props $from -merge -ifNotExists
         } catch {
@@ -60,12 +60,12 @@ function inherit-properties($from, $to, $exclude = @(), [switch][bool] $valuesOn
 }
 
 
-function inherit-globalsettings($proj, $settings) {
+function Add-GlobalSettings($proj, $settings) {
     
-    if ($settings -ne $null) {
+    if ($null -ne $settings) {
         write-verbose "inheriting global settings to $($proj._fullpath). strip=$stripsettingswrapper"
         $stripsettingswrapper = $settings._strip
-                if ($stripsettingswrapper -ne $null -and $stripsettingswrapper) {
+                if ($null -ne $stripsettingswrapper -and $stripsettingswrapper) {
                     $null = inherit-properties -from $settings -to $proj -ifNotExists -merge -exclude "_strip"
                 }
                 else {
@@ -73,3 +73,6 @@ function inherit-globalsettings($proj, $settings) {
                 }
             }
 }
+
+New-Alias -Name Inherit-Properties -Value Add-InheritedProperties -Force
+New-Alias -Name Inherit-GlobalSettings -Value Add-GlobalSettings -Force 

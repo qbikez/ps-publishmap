@@ -10,11 +10,11 @@ function Get-NuspecVersion($nuspec = $null) {
 }
 
 function Set-NuspecVersion([string] $version, $nuspec = $null) {
-	if ($nuspec -eq $null) {
+	if ($null -eq $nuspec) {
 		$nuspec = Get-ChildItem . -Filter *.nuspec | select -First 1
     }
     $content = Get-Content $nuspec
-    $content2 = $content | foreach { 
+    $content2 = $content | % { 
         if ($_ -match "<version>(.*)</version>") {       
             $_.Replace( $matches[0], "<version>$version</version>")
         } else {
@@ -25,7 +25,7 @@ function Set-NuspecVersion([string] $version, $nuspec = $null) {
 }
 
 function Incremet-NuspecVersion($nuspec = $null) {
-	if ($nuspec -eq $null) {
+	if ($null -eq $nuspec) {
 		$nuspec = Get-ChildItem . -Filter *.nuspec | select -First 1
     }
 

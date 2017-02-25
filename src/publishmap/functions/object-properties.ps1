@@ -39,7 +39,7 @@ function add-property {
        [switch][bool] $merge
     ) 
     try {
-    if ($object.$name -ne $null) {
+    if ($null -ne $object.$name) {
         if ($merge -and $object.$name -is [System.Collections.IDictionary] -and $value -is [System.Collections.IDictionary]) {
             $r = add-properties $object.$name $value -ifNotExists:$ifNotExists -merge:$merge 
             return $object

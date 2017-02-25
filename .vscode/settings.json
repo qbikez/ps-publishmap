@@ -1,10 +1,11 @@
 // Place your settings in this file to overwrite default and user settings.
 {
-        "files.exclude": {
+    "files.exclude": {
 		"**/.git": true,
         "paket":true,
         "paket-files": true,
         "node_modules": true,
         "packages": true
-	}
+	},
+    "powershell.scriptAnalysis.settingsPath": "./PSScriptAnalyzerSettings.psd1"
 }
