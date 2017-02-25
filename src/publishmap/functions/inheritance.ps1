@@ -8,9 +8,9 @@ function Add-InheritedProperties($from, $to, $exclude = @(), [switch][bool] $val
     if ($from -is [System.Collections.IDictionary]) {
     }
     else {
-        $from = $from.psobject.properties | % { $d = @{} } { $d[$_.name] = $_.value } { $d }
+        $from = $from.psobject.properties | ForEach { $d = @{} } { $d[$_.name] = $_.value } { $d }
     }
-    $from = $from.getenumerator() | % { $h = @{} }{
+    $from = $from.getenumerator() | ForEach { $h = @{} }{
         $key = $_.key
         $value = $_.value
         $shouldExclude = $false 

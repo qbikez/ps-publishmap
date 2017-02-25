@@ -45,7 +45,7 @@ function get-entry(
             else {     
                 foreach($kvp in $map.GetEnumerator()) {
                     $pattern = $kvp.key
-                    $vars = match-varpattern $key "$pattern"
+                    $vars = _MatchVarPattern $key "$pattern"
                     if ($vars -ne $null) {
                             $entry = $kvp.value   
                             break
@@ -101,7 +101,7 @@ param($obj, $vars = @{}, [switch][bool]$strict, $exclude = @())
     }
     elseif ($obj -is [System.Collections.IDictionary]) {
         $keys = _clone $obj.keys
-        $keys = $keys | sort
+        $keys = $keys | Sort-Object        
         foreach($key in $keys) {
             if ($key -notin $exclude) {
                 if ($obj[$key] -in $exclude) {
@@ -141,7 +141,7 @@ param($obj, $vars = @{}, [switch][bool]$strict, $exclude = @())
 }
 
 #TODO: support multiple matches per line
-function _replace-varline ([Parameter(Mandatory=$true)]$text, $vars = @{}) {
+function _replaceVarline ([Parameter(Mandatory=$true)]$text, $vars = @{}) {
     $r = $text
     if ($vars -eq $null) { throw "vars == NULL"}
 
@@ -175,7 +175,7 @@ function _replace-varline ([Parameter(Mandatory=$true)]$text, $vars = @{}) {
 }
 
 #TODO: support multiple matches per line
-function _replace-varauto([Parameter(Mandatory=$true)]$__text)  {
+function _ReplaceVarsAuto([Parameter(Mandatory=$true)]$__text)  {
     
     do {
     #each replace may insert a new variable reference in the string, so we need to iterate again
@@ -232,23 +232,23 @@ function _replace-varauto([Parameter(Mandatory=$true)]$__text)  {
 }
 
 function convert-vars([Parameter(Mandatory=$true)]$text, $vars = @{}, [switch][bool]$noauto = $false) {
-    $text = @($text) | % { _replace-varline $_ $vars }
+    $text = @($text) | ForEach { _replaceVarline $_ $vars }
 
     $originalself = $self
     try {
     # is this necessary if we're doing replace-properties twice? 
     if (!$noauto) {
-        # _replace-varauto uses $self global variable
+        # _ReplaceVarsAuto uses $self global variable
         # if it is not set, use $vars as $self
         if ($originalself -eq $null) {
             $self = $vars
         }
-        $text = @($text) | % { _replace-varauto $_ }
+        $text = @($text) | ForEach { _ReplaceVarsAuto $_ }
         
         # also use $vars as $self if $self was passed
         if ($originalself -ne $null -and $vars -ne $originalself) {
             $self = $vars
-            $text = @($text) | % { _replace-varauto $_ }
+            $text = @($text) | ForEach { _ReplaceVarsAuto $_ }
         }        
     }
 
@@ -270,7 +270,7 @@ function get-vardef ($text) {
     $result = $null
     $m = [System.Text.RegularExpressions.Regex]::Matches($text, "__([a-zA-Z]+)__");
     if ($m -ne $null) {
-        $result = $m | % {
+        $result = $m | ForEach {
             $_.Groups[1].Value
         }
         return $result
@@ -278,7 +278,7 @@ function get-vardef ($text) {
 
     $m = [System.Text.RegularExpressions.Regex]::Matches($text, "_([a-zA-Z]+)_");
     if ($m -ne $null) {
-        $result = $m | % {
+        $result = $m | ForEach {
             $_.Groups[1].Value
         }
         return $result
@@ -287,7 +287,7 @@ function get-vardef ($text) {
     return $null
 }
 
-function match-varpattern ($text, $pattern) {
+function _MatchVarPattern ($text, $pattern) {
     $result = $null
     $vars = @(get-vardef $pattern)
     if ($vars -eq $null) { return $null }
@@ -296,7 +296,7 @@ function match-varpattern ($text, $pattern) {
     $m = [System.Text.RegularExpressions.Regex]::Matches($text, "^$regex`$");
     
     if ($m -ne $null) {
-        $result = $m | % {
+        $result = $m | ForEach {
             for($i = 1; $i -lt $_.Groups.Count; $i++) {
                 $val = $_.Groups[$i].Value
                 $name = $vars[$i-1]

@@ -9,7 +9,7 @@ function get-envinfo($checkcommands) {
         $commands = $checkcommands
     }
         
-    $commands | % {
+    $commands | ForEach {
         $c = $_
         try {
             $cmd = get-command $c -ErrorAction SilentlyContinue
