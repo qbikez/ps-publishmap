@@ -232,7 +232,7 @@ function _ReplaceVarsAuto([Parameter(Mandatory=$true)]$__text)  {
 }
 
 function convert-vars([Parameter(Mandatory=$true)]$text, $vars = @{}, [switch][bool]$noauto = $false) {
-    $text = @($text) | ForEach { _replaceVarline $_ $vars }
+    $text = @($text) | ForEach-Object{ _replaceVarline $_ $vars }
 
     $originalself = $self
     try {
@@ -243,12 +243,12 @@ function convert-vars([Parameter(Mandatory=$true)]$text, $vars = @{}, [switch][b
         if ($originalself -eq $null) {
             $self = $vars
         }
-        $text = @($text) | ForEach { _ReplaceVarsAuto $_ }
+        $text = @($text) | ForEach-Object{ _ReplaceVarsAuto $_ }
         
         # also use $vars as $self if $self was passed
         if ($originalself -ne $null -and $vars -ne $originalself) {
             $self = $vars
-            $text = @($text) | ForEach { _ReplaceVarsAuto $_ }
+            $text = @($text) | ForEach-Object{ _ReplaceVarsAuto $_ }
         }        
     }
 
@@ -270,7 +270,7 @@ function get-vardef ($text) {
     $result = $null
     $m = [System.Text.RegularExpressions.Regex]::Matches($text, "__([a-zA-Z]+)__");
     if ($m -ne $null) {
-        $result = $m | ForEach {
+        $result = $m | ForEach-Object{
             $_.Groups[1].Value
         }
         return $result
@@ -278,7 +278,7 @@ function get-vardef ($text) {
 
     $m = [System.Text.RegularExpressions.Regex]::Matches($text, "_([a-zA-Z]+)_");
     if ($m -ne $null) {
-        $result = $m | ForEach {
+        $result = $m | ForEach-Object{
             $_.Groups[1].Value
         }
         return $result
@@ -296,7 +296,7 @@ function _MatchVarPattern ($text, $pattern) {
     $m = [System.Text.RegularExpressions.Regex]::Matches($text, "^$regex`$");
     
     if ($m -ne $null) {
-        $result = $m | ForEach {
+        $result = $m | ForEach-Object{
             for($i = 1; $i -lt $_.Groups.Count; $i++) {
                 $val = $_.Groups[$i].Value
                 $name = $vars[$i-1]
