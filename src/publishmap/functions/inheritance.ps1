@@ -4,7 +4,7 @@
 Inherit only value types, do not inherit dictionaries (helps prevent infinite inheritance loop)
 
 #>
-function inherit-properties($from, $to, $exclude = @(), [switch][bool] $valuesOnly) {
+function Add-InheritedProperties($from, $to, $exclude = @(), [switch][bool] $valuesOnly) {
     if ($from -is [System.Collections.IDictionary]) {
     }
     else {
@@ -60,7 +60,7 @@ function inherit-properties($from, $to, $exclude = @(), [switch][bool] $valuesOn
 }
 
 
-function inherit-globalsettings($proj, $settings) {
+function Add-GlobalSettings($proj, $settings) {
     
     if ($settings -ne $null) {
         write-verbose "inheriting global settings to $($proj._fullpath). strip=$stripsettingswrapper"
@@ -73,3 +73,6 @@ function inherit-globalsettings($proj, $settings) {
                 }
             }
 }
+
+New-Alias -Name Inherit-Properties -Value Add-InheritedProperties -Force
+New-Alias -Name Inherit-GlobalSettings -Value Add-GlobalSettings -Force 

@@ -89,7 +89,7 @@ function get-entry(
    
 }
 
-function replace-properties { 
+function Convert-PropertiesFromVars { 
 [CmdletBinding()]
 param($obj, $vars = @{}, [switch][bool]$strict, $exclude = @()) 
 
@@ -309,3 +309,4 @@ function match-varpattern ($text, $pattern) {
 }
 
 new-alias Replace-Vars Convert-Vars -force
+new-alias Replace-Properties Convert-PropertiesFromVars -force

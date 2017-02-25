@@ -7,8 +7,8 @@ Export-ModuleMember -Function `
         Import-PublishMap, Get-Profile, `
         Get-PropertyNames, Add-Property, Add-Properties, `
         Convert-Vars, ConvertTo-Hashtable, ConvertTo-Object, `
-	replace-properties, `
-        inherit-properties `
+	Convert-PropertiesFromVars, `
+        Add-InheritedProperties `
     -Alias *
     
     
