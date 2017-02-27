@@ -10,7 +10,7 @@ function flatten-by($p, $name, $level, $propname) {
     if (!($p -is [System.Collections.IDictionary])) {
         return $r;
     }
-    #0..$level | ForEach { write-host " " -NoNewline }
+    #0..$level| % { write-host " " -NoNewline }
     #write-host "checking $name" level $level
     if ($null -ne $p.$propname) {
         #write-host "checking level of $name"
@@ -30,7 +30,7 @@ function flatten-by($p, $name, $level, $propname) {
 
 
 Describe "parse publish map" {
-  $maps = @(gci "$PSScriptRoot\input" -filter "publishmap.*.config.ps1" | ForEach { 
+  $maps = @(gci "$PSScriptRoot\input" -filter "publishmap.*.config.ps1"| % { 
    @{ file=$_.name; item = $_ }
   })
 
@@ -40,7 +40,7 @@ Describe "parse publish map" {
             $map = import-map $f.item
             $flat = flatten-by $map "root" 0 "_level"
             $flat | Should Not BeNullOrEmpty    
-            $cases += $flat | ForEach { @{ 
+            $cases += $flat| % { @{ 
                 file = $f.file
                 item = $f.item
                 path = $_.path
@@ -66,7 +66,7 @@ Describe "parse publish map" {
 
 
 Describe "parse publish map 2" {
-  $maps = @(gci "$PSScriptRoot\input" -filter "publishmap.*.config.ps1" | ForEach { 
+  $maps = @(gci "$PSScriptRoot\input" -filter "publishmap.*.config.ps1"| % { 
    @{ file=$_.name; item = $_ }
   })
   Context "When map is parsed" {

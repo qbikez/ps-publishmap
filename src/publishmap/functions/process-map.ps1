@@ -13,44 +13,50 @@ function import-map {
 function import-mapfile {
     [cmdletbinding()]
     param([Parameter(Mandatory=$true)] $maps)
+    Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
-    write-verbose "processing publishmap..."
+        write-verbose "processing publishmap..."
 
-    if ($null -ne $maps) {
-        $maps = @($maps)
-    }
+        if ($null -ne $maps) {
+            $maps = @($maps)
+        }
         
-    $publishmap = @{}
+        $publishmap = @{}
 
-    foreach($m in $maps) {
-        $publishmap += import-singlemapfile $m
+        foreach($m in $maps) {
+            $publishmap += import-singlemapfile $m
+        }
+
+        write-verbose "processing publishmap... DONE"
+
+        return $publishmap
     }
-
-    write-verbose "processing publishmap... DONE"
-
-    return $publishmap
 }
 
 
 function import-mapobject { 
-[cmdletbinding()]
-param([Parameter(Mandatory=$true)] $map) 
-   $pmap = @{}
+    [cmdletbinding()]
+    param([Parameter(Mandatory=$true)] $map) 
+    $pmap = @{}
     
-   $pmap = import-genericgroup $map ""   
-   $pmap = add-metaproperties $pmap ""
-   return $pmap
+    $pmap = import-genericgroup $map ""   
+    Measure-function  "add-metaproperties" {
+        $pmap = add-metaproperties $pmap ""
+    }
+    return $pmap
 }
 
 function import-singlemapfile($file) {
     $fullname = $file
-    if ($null -ne $fullname.FullName) { $Fullname =$Fullname.FullName }
+    if ($null -ne $fullname.FullName) {
+        $Fullname =$Fullname.FullName 
+    }
     $map = & "$FullName"
     
     #$publishmap_obj = ConvertTo-Object $publishmap
     $pmap = import-mapobject $map
 
-   return $pmap
+    return $pmap
 }
 
 
@@ -60,57 +66,59 @@ function import-genericgroup($group,
     $settingskey = "settings",
     $specialkeys = @("settings", "global_profiles")
 ) {
-    Write-Verbose "processing map path $fullpath"
+    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+
+        Write-Verbose "processing map path $fullpath"
    
-    $result = {}        
+        $result = {}        
 
-    # only direct children inherit settings
-    $onelevelsettingsinheritance = $true
+        # only direct children inherit settings
+        $onelevelsettingsinheritance = $true
 
-    $childsettings = $null 
-    #get settings for children
-    if ($null -ne $group.$settingskey) {
-        $childsettings = $group.$settingskey
-    } else {
-        if (!$onelevelsettingsinheritance) {
-            $childsettings = $settings
+        $childsettings = $null 
+        #get settings for children
+        if ($null -ne $group.$settingskey) {
+            $childsettings = $group.$settingskey
+        } else {
+            if (!$onelevelsettingsinheritance) {
+                $childsettings = $settings
+            }
         }
-    }
     
-    <#
+        <#
     if ($null -ne $settings) {
         inherit-globalsettings $group $settings
     }
     #>
 
-    $keys = get-propertynames $group
-    foreach($projk in $keys) {
-        #do not process special global settings
-        if ($projk -in $specialkeys) {
-            continue
-        }
-        $subgroup = $group.$projk
-        if (!($subgroup -is [System.Collections.IDictionary])) {
-            continue
-        }
-        $path = "$fullpath.$projk"            
+        $keys = get-propertynames $group
+        foreach($projk in $keys) {
+            #do not process special global settings
+            if ($projk -in $specialkeys) {
+                continue
+            }
+            $subgroup = $group.$projk
+            if (!($subgroup -is [System.Collections.IDictionary])) {
+                continue
+            }
+            $path = "$fullpath.$projk"            
 
 
-        inherit-properties -from $group -to $subgroup -valuesonly
-        # this should be run only once per group, right? 
-        # why is this needed here?
-        if ($null -ne $settings) {
+            inherit-properties -from $group -to $subgroup -valuesonly
+            # this should be run only once per group, right? 
+            # why is this needed here?
+            if ($null -ne $settings) {
                 inherit-globalsettings $group $settings
+            }
+            $r = import-genericgroup $subgroup $path -settings $childsettings -settingskey $settingskey -specialkeys $specialkeys
         }
-        $r = import-genericgroup $subgroup $path -settings $childsettings -settingskey $settingskey -specialkeys $specialkeys
-    }
         
 
 
-    if ($null -ne $settings) {
-        inherit-globalsettings $group $settings
+        if ($null -ne $settings) {
+            inherit-globalsettings $group $settings
         
-      <#  $keys = get-propertynames $group
+            <#  $keys = get-propertynames $group
         foreach($projk in $keys) {
             $subgroup = $group.$projk
             if ($projk -in $specialkeys) {
@@ -122,40 +130,45 @@ function import-genericgroup($group,
             inherit-properties -from $group -to $subgroup -valuesonly
         }
         #>
-    }
+        }
     
     
 
-    return $map
+        return $map
+    }
 }
 
-function add-metaproperties($group, $fullpath, $specialkeys = @("settings", "global_profiles")
-) {
-    if ($group -isnot [System.Collections.IDictionary]) {
-        return
-    }
-    $splits = $fullpath.split('.')
-    $level = $splits.length - 1
-    
-    $null = $group | add-property -name _level -value $level
-    $null = $group | add-property -name _fullpath -value $fullpath.trim('.')
-    if ($splits.length -gt 0) {
-        $null = $group | add-property -name _name -value $splits[$splits.length - 1]
-    }
+function add-metaproperties
+ {
+    param($group, $fullpath, $specialkeys = @("settings", "global_profiles"))
 
-      $keys = get-propertynames $group
-
-        
-    foreach($projk in $keys) {
-     #do not process special global settings
-        if ($projk -in $specialkeys) {
-                continue
+        if ($group -isnot [System.Collections.IDictionary]) {
+            return
         }
-        $path = "$fullpath.$projk"
-        $null = add-metaproperties $group.$projk $path -specialkeys $specialkeys
-    }
+        write-verbose "adding meta properties to '$fullpath'"        
+        $splits = $fullpath.split('.')
+        $level = $splits.length - 1
+    
+        $null = $group | add-property -name _level -value $level
+        $null = $group | add-property -name _fullpath -value $fullpath.trim('.')
+        if ($splits.length -gt 0) {
+            $null = $group | add-property -name _name -value $splits[$splits.length - 1]
+        }
+        
+        #$keys = @{}
+        $keys = get-propertynames $group
+        
+        foreach($projk in $keys) {
+            #do not process special global settings
+            if ($projk -in $specialkeys) {
+                continue
+            }
+            $path = "$fullpath.$projk"
+           $null = add-metaproperties $group.$projk $path -specialkeys $specialkeys
+        }
   
-    return $group
+        return $group
+    
 }
 
 <# 

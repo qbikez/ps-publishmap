@@ -6,6 +6,8 @@
 #>
 
 function _clone($obj) {
+        Measure-function  "$($MyInvocation.MyCommand.Name)" {
+
     if ($obj -is [System.Collections.Specialized.OrderedDictionary]) {
         $copy = [ordered]@{}
         foreach($e in $obj.GetEnumerator()) {
@@ -17,6 +19,7 @@ function _clone($obj) {
     else {
         return $obj.Clone()
     }
+        }
 }
 
 function get-entry(
@@ -24,6 +27,8 @@ function get-entry(
     [Parameter(mandatory=$true,ValueFromPipeline=$true,Position=2)] $map,
     $excludeProperties = @("project"),
     [switch][bool] $simpleMode = $false) {
+            Measure-function  "$($MyInvocation.MyCommand.Name)" {
+
     $root = $map
     $parent = $null
     $entry = $null
@@ -87,12 +92,13 @@ function get-entry(
         $map = $entry
     }    
 
-   
+            }
 }
 
 function Convert-PropertiesFromVars { 
     [CmdletBinding()]
     param($obj, $vars = @{}, [switch][bool]$strict, $exclude = @()) 
+    Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
     $exclude = @($exclude)
     if ($null -eq $vars) {
@@ -141,10 +147,13 @@ function Convert-PropertiesFromVars {
     }
 
     return $obj
+    }
 }
 
 #TODO: support multiple matches per line
 function _replaceVarline ([Parameter(Mandatory=$true)]$text, $vars = @{}) {
+       Measure-function  "$($MyInvocation.MyCommand.Name)" {
+
     $r = $text
     if ($null -eq $vars) {
         throw "vars == NULL"
@@ -177,11 +186,13 @@ function _replaceVarline ([Parameter(Mandatory=$true)]$text, $vars = @{}) {
     } while ($replaced)
 
     return $r    
+       }
 }
 
 #TODO: support multiple matches per line
 function _ReplaceVarsAuto([Parameter(Mandatory=$true)]$__text)  {
-    
+        Measure-function  "$($MyInvocation.MyCommand.Name)" {
+
     do {
         #each replace may insert a new variable reference in the string, so we need to iterate again
         $__replaced = $false
@@ -234,9 +245,12 @@ function _ReplaceVarsAuto([Parameter(Mandatory=$true)]$__text)  {
     }
     while ($__replaced)
     return $__text
+        }
 }
 
 function convert-vars([Parameter(Mandatory=$true)]$text, $vars = @{}, [switch][bool]$noauto = $false) {
+        Measure-function  "$($MyInvocation.MyCommand.Name)" {
+
     $text = @($text) | % { _replaceVarline $_ $vars }
 
     $originalself = $self
@@ -270,9 +284,12 @@ function convert-vars([Parameter(Mandatory=$true)]$text, $vars = @{}, [switch][b
         $self = $originalself
     }
 }
+}
 
 function get-vardef ($text) {
-    $result = $null
+ 
+     Measure-function  "$($MyInvocation.MyCommand.Name)" {
+   $result = $null
     $m = [System.Text.RegularExpressions.Regex]::Matches($text, "__([a-zA-Z]+)__");
     if ($m.Count -gt 0) {
         $result = $m | % {
@@ -291,8 +308,11 @@ function get-vardef ($text) {
 
     return $null
 }
+}
 
 function _MatchVarPattern ($text, $pattern) {
+     Measure-function  "$($MyInvocation.MyCommand.Name)" {
+
     $result = $null
     $vars = get-vardef $pattern
     if ($null -eq $vars) {
@@ -324,6 +344,7 @@ function _MatchVarPattern ($text, $pattern) {
         }
     }
     return $result
+}
 }
 
 new-alias Replace-Vars Convert-Vars -force
