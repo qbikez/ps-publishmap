@@ -155,6 +155,7 @@ function postprocess-publishmap($map) {
                     foreach($profk in get-propertynames $proj.profiles) {
                         $prof = $proj.profiles.$profk
                         if ($prof -is [System.Collections.IDictionary]) {
+                            write-verbose "adding post-properties to '$groupk.$projk.$profk'" 
                             # set full path as if profiles were created at project level
                             $null = add-property $prof -name _fullpath -value "$groupk.$projk.$profk" -overwrite
                             $null = add-property $prof -name _name -value "$profk" -overwrite
@@ -163,49 +164,50 @@ function postprocess-publishmap($map) {
                             # expose project at profile level
                             $null = add-property $prof -name project -value $proj
                         } else {
+                            write-verbose "removing non-profile property '$groupk.$projk.$profk'"
                             #remove every property that isn't a real profile
                             $proj.profiles.Remove($profk)
                         }
                         if ($null -ne $prof._inherit_from) {
                             if ($proj.profiles.$($null -eq $prof._inherit_from)) {
-                            write-warning "cannot find inheritance base '$($prof._inherit_from)' for profile '$($prof._fullpath)'"
-                        } else { 
-                            $cur = $prof
-                            $hierarchy = @()
-                            while($null -ne $cur._inherit_from -and $null -eq $cur._inherited_from) {                                
-                                $hierarchy += $cur
-                                $base = $proj.profiles.$($cur._inherit_from)
-                            $cur = $base
+                                write-warning "cannot find inheritance base '$($prof._inherit_from)' for profile '$($prof._fullpath)'"
+                            } else { 
+                                $cur = $prof
+                                $hierarchy = @()
+                                while($null -ne $cur._inherit_from -and $null -eq $cur._inherited_from) {                                
+                                    $hierarchy += $cur
+                                    $base = $proj.profiles.$($cur._inherit_from)
+                                    $cur = $base
+                                }
+                                for($i = ($hierarchy.length - 1); $i -ge 0; $i--) {
+                                    $cur = @($hierarchy)[$i]
+                                    $base = $proj.profiles.$($cur._inherit_from)
+                                    write-verbose "inheriting properties from '$($cur._inherit_from)' to '$($cur._fullpath)'"
+                                    inherit-properties -from $base -to $cur -valuesonly -exclude @("_inherit_from","_inherited_from")
+                                    $null = add-property $cur -name _inherited_from  -value $($cur._inherit_from)
+                                }                            
+                            }
                         }
-                        for($i = ($hierarchy.length - 1); $i -ge 0; $i--) {
-                            $cur = @($hierarchy)[$i]
-                            $base = $proj.profiles.$($cur._inherit_from)
-                        inherit-properties -from $base -to $cur -valuesonly -exclude @("_inherit_from","_inherited_from")
-                        $null = add-property $cur -name _inherited_from  -value $($cur._inherit_from)
+                    }
+                    # expose profiles at project level
+                    $null = add-properties $proj $proj.profiles -merge -ifNotExists
+
+                                
                 }
-                            
+                # use fullpath for backward compatibility
+                if ($proj._fullpath) {
+                    $null = add-property $proj -name fullpath -value $proj._fullpath -overwrite
+                }
             }
+
+            # use fullpath for backward compatibility
+            if ($group._fullpath) {
+                $null = add-property $group -name fullpath -value $group._fullpath -overwrite
+            }
+                    
         }
+        return $pmap
     }
-    # expose profiles at project level
-    $null = add-properties $proj $proj.profiles -merge -ifNotExists
-
-                
-}
-# use fullpath for backward compatibility
-if ($proj._fullpath) {
-    $null = add-property $proj -name fullpath -value $proj._fullpath -overwrite
-}
-}
-
-# use fullpath for backward compatibility
-if ($group._fullpath) {
-    $null = add-property $group -name fullpath -value $group._fullpath -overwrite
-}
-        
-}
-return $pmap
-}
 }
 
 function get-profile($name, $map = $null) {

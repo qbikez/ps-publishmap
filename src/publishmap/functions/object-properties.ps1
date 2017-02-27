@@ -41,7 +41,7 @@ function add-property {
         [switch][bool] $overwrite,
         [switch][bool] $merge
     ) 
-    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+   # Measure-function  "$($MyInvocation.MyCommand.Name)" {
         try {
             if ($null -ne $object.$name) {
                 if ($merge -and $object.$name -is [System.Collections.IDictionary] -and $value -is [System.Collections.IDictionary]) {
@@ -62,7 +62,7 @@ function add-property {
                 $object[$name] = $value
             }
             else {
-                $object | add-member -name $name -membertype noteproperty -value $value
+                $null = $object | add-member -name $name -membertype noteproperty -value $value
                 #$object.$name = $value 
             }
 
@@ -70,7 +70,7 @@ function add-property {
         } catch {
             throw
         }
-    }
+#    }
 }
 
 function ConvertTo-Hashtable([Parameter(ValueFromPipeline=$true)]$obj, [switch][bool]$recurse) {
