@@ -98,6 +98,21 @@ function add-metaproperties
    # }
 }
 
+
+
+function copy-hashtable($hash) {
+    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+        return   [Publishmap.Utils.Inheritance.Inheritance]::CopyHashtable($hash)
+    }
+}
+
+function Add-InheritedProperties($from, $to, $exclude = @(), [switch][bool] $valuesOnly) {
+    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+       [Publishmap.Utils.Inheritance.Inheritance]::AddInheritedProperties($from, $to, @($exclude), $valuesOnly)
+ 
+    }
+}
+
 Export-ModuleMember -Function `
         Get-Entry, Import-Map, `
         Import-PublishMap, Get-Profile, `

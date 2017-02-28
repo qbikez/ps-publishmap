@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace Publishmap.Utils.Inheritance
 {
@@ -109,41 +110,99 @@ namespace Publishmap.Utils.Inheritance
 
 
         }
-        /*
-        function add-metaproperties
 
-{
-param($group, $fullpath, $specialkeys = @("settings", "global_prof1iles"))
-
-    if ($group -isnot [System.Collections.IDictionary]) {
-        return
-    }
-    write-verbose "adding meta properties to '$fullpath'"        
-    $splits = $fullpath.split('.')
-    $level = $splits.length - 1
-
-    $null = $group | add-property -name _level -value $level
-    $null = $group | add-property -name _fullpath -value $fullpath.trim('.')
-    if ($splits.length -gt 0) {
-        $null = $group | add-property -name _name -value $splits[$splits.length - 1]
-    }
-
-    #$keys = @{}
-    $keys = get-propertynames $group
-
-    foreach($projk in $keys) {
-        #do not process special global settings
-        if ($projk -in $specialkeys) {
-            continue
+        public static IDictionary CopyHashtable(IDictionary org)
+        {
+            var result = new Hashtable();
+            foreach (var key in org.Keys)
+            {
+                if (org[key] is IDictionary)
+                {
+                    result[key] = CopyHashtable((IDictionary)org[key]);
+                }
+                else
+                {
+                    result[key] = org[key];
+                }
+            }
+            return result;
         }
-        $path = "$fullpath.$projk"
-       $null = add-metaproperties $group.$projk $path -specialkeys $specialkeys
-    }
 
-    return $group
+        public static void AddInheritedProperties(
+            IDictionary from,
+            IDictionary to,
+            IEnumerable<object> exclude = null,
+            bool valuesOnly = false
+        )
+        {
+            if (exclude == null) exclude = new string[] { };
 
-}
+            var toProcess = new Dictionary<string, object>();
+            foreach (string key in from.Keys)
+            {
+                var value = from[key];
+                var shouldExclude = false;
+                if (exclude.Contains(key)) shouldExclude = true;
+                if (exclude.Any(e => Regex.IsMatch(key, $"^{e}$"))) shouldExclude = true;
 
-*/
+                if (value is System.Collections.IDictionary)
+                {
+                    if (valuesOnly)
+                    {
+                        shouldExclude = true;
+                    }
+                    else
+                    {
+                        var newvalue = CopyHashtable((IDictionary)value);
+                        value = newvalue;
+                    }
+                }
+                if (!shouldExclude)
+                {
+                    toProcess[key] = value;
+                }
+            }
+
+            if (toProcess.Any())
+            {
+                try
+                {
+                    AddProperties(to, toProcess, merge: true, ifNotExists: true);
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception($@"failed to inherit properties:{ex.Message}
+                        from:
+                        {from}
+                        to:
+                        {to}");
+                }
+            }
+
+
+            /* 
+                      <# foreach($key in $from.keys) {
+
+                      $value = $from[$key] 
+
+                      if ($value -is [System.Collections.IDictionary]) {
+                          if ($valuesOnly) {
+                              $shouldExclude = $true 
+                          }
+                          else {
+                              $value = $value.Clone()
+                          }
+                       }
+
+                      if (!$shouldExclude) {
+                          add-property $to -name $key -value $value
+                      }
+                  }
+                  #>
+                  }
+              }
+                         */
+        }
+
     }
 }

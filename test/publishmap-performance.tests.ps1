@@ -38,7 +38,12 @@ Describe "parse publish map performance" {
             param([string]$file, $item)
             $global:perfcounters = $null
             $r = Measure-command  {
-                $map = import-publishmap $item -Verbose
+                try {
+                    $map = import-publishmap $item -Verbose
+                } catch {
+                    write-error $_.scriptstacktrace
+                    throw $_
+                }
             }
             $arr = $global:perfcounters | convertto-array 
             $arr | sort elapsed | format-table -Wrap  | out-string | write-host

@@ -159,7 +159,10 @@ function postprocess-publishmap($map) {
                             # set full path as if profiles were created at project level
                             $null = add-property $prof -name _fullpath -value "$groupk.$projk.$profk" -overwrite
                             $null = add-property $prof -name _name -value "$profk" -overwrite
-                            # use fullpath for backward compatibility       
+                            # use fullpath for backward compatibility    
+                            if ($prof._fullpath -eq $null) {
+                                write-warning "no fullpath property!"
+                            }   
                             $null = add-property $prof -name fullpath -value $prof._fullpath -overwrite
                             # expose project at profile level
                             $null = add-property $prof -name project -value $proj
