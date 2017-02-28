@@ -40,10 +40,10 @@ Describe "parse publish map performance" {
             $r = Measure-command  {
                 $map = import-publishmap $item -Verbose
             }
-            $r.TotalSeconds | Should BeLessThan 6
-            
             $arr = $global:perfcounters | convertto-array 
             $arr | sort elapsed | format-table -Wrap  | out-string | write-host
+            
+            $r.TotalSeconds | Should BeLessThan 6
             
         }
     }

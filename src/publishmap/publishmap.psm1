@@ -3,12 +3,12 @@
 . "$helpersPath\imports.ps1"
 
 
-function loadLib($lib) {
+function loadLib($lib, [scriptblock] $init) {
     $libdir = split-path -parent $lib 
 
     $OnAssemblyResolve = [System.ResolveEventHandler] {
         param($sender, $e)
-
+        write-warning "resolving assembly '$($e.Name)' by $sender"
         foreach($a in [System.AppDomain]::CurrentDomain.GetAssemblies()) {
             if ($a.FullName -eq $e.Name) {
                 return $a
@@ -37,7 +37,11 @@ function loadLib($lib) {
   
         [System.AppDomain]::CurrentDomain.add_AssemblyResolve($OnAssemblyResolve)
         Add-Type -Path "$libdir\inheritance.dll"
-
+        if ($init -ne $null) {
+            Invoke-Command $init
+        }
+        write-host "lib $lib imported"
+       
     } catch {
         throw $_
     }
@@ -49,7 +53,9 @@ function loadLib($lib) {
 
 
 $lib = "$helpersPath\utils\inheritance\bin\Debug\netcoreapp1.1\win10-x64\publish\inheritance.dll"
-loadlib $lib
+loadlib $lib -init { 
+    [Publishmap.Utils.Inheritance.Inheritance]::Init()
+}
 
 
 function add-property {
@@ -62,8 +68,35 @@ function add-property {
         [switch][bool] $overwrite,
         [switch][bool] $merge
     )  
+    Measure-function  "$($MyInvocation.MyCommand.Name)" { 
         [Publishmap.Utils.Inheritance.Inheritance]::AddProperty($object, $name, $value, $ifNotExists, $overwrite, $merge)
+    } 
+}
+
+    
+function add-properties(
+    [Parameter(Mandatory=$true, ValueFromPipeline = $true)] 
+    $object,
+    [Parameter(Mandatory=$true)]
+    $props, 
+    [switch][bool] $ifNotExists, 
+    [switch][bool] $merge, 
+    $exclude = @()
+) {
+    Measure-function  "$($MyInvocation.MyCommand.Name)" { 
+        [Publishmap.Utils.Inheritance.Inheritance]::AddProperties($object, $props, $ifNotExists, $merge, $exclude)
+            
     }
+}
+
+
+function add-metaproperties
+{
+    param($group, $fullpath, $specialkeys = @("settings", "global_prof1iles"))
+   #Measure-function  "$($MyInvocation.MyCommand.Name)" { 
+        [Publishmap.Utils.Inheritance.Inheritance]::AddMetaProperties($group, $fullpath, $specialkeys)            
+   # }
+}
 
 Export-ModuleMember -Function `
         Get-Entry, Import-Map, `

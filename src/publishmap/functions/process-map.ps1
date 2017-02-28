@@ -139,35 +139,37 @@ function import-genericgroup($group,
 }
 
 function add-metaproperties
- {
-    param($group, $fullpath, $specialkeys = @("settings", "global_profiles"))
+{
+    param($group, $fullpath, $specialkeys = @("settings", "global_prof1iles"))
 
-        if ($group -isnot [System.Collections.IDictionary]) {
-            return
-        }
-        write-verbose "adding meta properties to '$fullpath'"        
-        $splits = $fullpath.split('.')
-        $level = $splits.length - 1
+    if ($group -isnot [System.Collections.IDictionary]) {
+        return
+    }
+    write-verbose "adding meta properties to '$fullpath'"        
+    $splits = $fullpath.split('.')
+    $level = $splits.length - 1
     
-        $null = $group | add-property -name _level -value $level
-        $null = $group | add-property -name _fullpath -value $fullpath.trim('.')
-        if ($splits.length -gt 0) {
-            $null = $group | add-property -name _name -value $splits[$splits.length - 1]
-        }
+    $null = $group | add-property -name _level -value $level
+    $null = $group | add-property -name _fullpath -value $fullpath.trim('.')
+    if ($splits.length -gt 0) {
+        $null = $group | add-property -name _name -value $splits[$splits.length - 1]
+    }
         
-        #$keys = @{}
-        $keys = get-propertynames $group
+    #$keys = @{}
+    $keys = get-propertynames $group
         
-        foreach($projk in $keys) {
-            #do not process special global settings
-            if ($projk -in $specialkeys) {
-                continue
-            }
-            $path = "$fullpath.$projk"
-           $null = add-metaproperties $group.$projk $path -specialkeys $specialkeys
+    foreach($projk in $keys) {
+        #do not process special global settings
+        if ($projk -in $specialkeys) {
+            continue
         }
+        if ($group.$projk -is [System.Collections.IDictionary]) {
+            $path = "$fullpath.$projk"            
+            $null = add-metaproperties $group.$projk $path -specialkeys $specialkeys
+        }
+    }
   
-        return $group
+    return $group
     
 }
 
