@@ -52,7 +52,7 @@ function loadLib($lib, [scriptblock] $init) {
 }
 
 
-$lib = "$helpersPath\utils\inheritance\bin\Debug\netcoreapp1.1\win10-x64\publish\inheritance.dll"
+$lib = "$helpersPath\utils\inheritance\bin\Debug\netcoreapp1.1\win81-x64\publish\inheritance.dll"
 loadlib $lib -init { 
     [Publishmap.Utils.Inheritance.Inheritance]::Init()
 }
