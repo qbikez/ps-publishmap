@@ -1,6 +1,5 @@
 . "$PSScriptRoot\includes.ps1"
 
-
 function convertto-array([Parameter(ValueFromPipeline=$true)] $enumerable, [switch][bool]$flatten = $true) {
     $a = @()
     if ($enumerable -is [hashtable]) {
@@ -38,7 +37,7 @@ Describe "parse publish map performance" {
         It "Should take reasonable time for file '<file>'" -TestCases $maps {
             param([string]$file, $item)
             $global:perfcounters = $null
-            $r = Measure-function "import-publishmap" {
+            $r = Measure-command  {
                 $map = import-publishmap $item -Verbose
             }
             $r.TotalSeconds | Should BeLessThan 6

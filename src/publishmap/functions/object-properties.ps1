@@ -55,13 +55,14 @@ function add-property {
                     $object.$name = $value 
                 }
                 else {
-                    throw "property '$name' already exists with value '$value'"
+                    throw "property '$name' already exists with value '$($obj.$name)'"
                 }
             }
             if ($object -is [System.Collections.IDictionary]) {
                 $object[$name] = $value
             }
             else {
+                throw "optimization - only support hashtabes"
                 $null = $object | add-member -name $name -membertype noteproperty -value $value
                 #$object.$name = $value 
             }

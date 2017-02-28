@@ -1,0 +1,31 @@
+{
+    "version": "0.1.0",
+    "command": "dotnet",
+    "isShellCommand": true,
+    "args": [],
+    "tasks": [
+        {
+            "taskName": "build",
+            "args": [
+                "${workspaceRoot}\\inheritance.test\\project.json"
+            ],
+            "isBuildCommand": true,
+            "problemMatcher": "$msCompile"
+        },
+         {
+            "taskName": "publish",
+            "args": [
+                "${workspaceRoot}\\inheritance\\project.json"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "taskName": "test",
+            "args": [
+                "${workspaceRoot}\\inheritance.test\\project.json"
+            ],
+            "isTestCommand": true,
+            "problemMatcher": "$msCompile"
+        }
+    ]
+}
