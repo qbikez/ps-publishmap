@@ -6,7 +6,7 @@
 #>
 
 function _clone($obj) {
-        Measure-function  "$($MyInvocation.MyCommand.Name)" {
+    #        Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
     if ($obj -is [System.Collections.Specialized.OrderedDictionary]) {
         $copy = [ordered]@{}
@@ -16,18 +16,18 @@ function _clone($obj) {
 
         return $copy
     }
-    if ($obj.gettype().name -eq "Hashtable" -and $obj -isnot [Hashtable]) {
+    if ($obj.gettype().name -eq "Hashtable" -or $obj -is [Hashtable]) {
+        # hashtable created in c# code will have case-sensitive keys. convert it back to PS-style case-insensitive
         $copy = @{}
         foreach($e in $obj.GetEnumerator()) {
             $copy.Add($e.Key, $e.Value)
         }
-
         return $copy
     }
     else {
         return $obj.Clone()
     }
-        }
+    #       }
 }
 
 function get-entry(
@@ -35,7 +35,7 @@ function get-entry(
     [Parameter(mandatory=$true,ValueFromPipeline=$true,Position=2)] $map,
     $excludeProperties = @("project"),
     [switch][bool] $simpleMode = $false) {
-            Measure-function  "$($MyInvocation.MyCommand.Name)" {
+    #        Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
     $root = $map
     $parent = $null
@@ -82,10 +82,12 @@ function get-entry(
                     # replace properties based on root values
                     $entry2 = replace-properties $entry2 -vars $root -exclude $excludeProperties  
                 }
+
                 return $entry2
             }
-
-            return $entry
+            else {
+                return $null
+            }
         }
         else {
             $entry = $map.$split
@@ -100,13 +102,13 @@ function get-entry(
         $map = $entry
     }    
 
-            }
+    #       }
 }
 
 function Convert-PropertiesFromVars { 
     [CmdletBinding()]
     param($obj, $vars = @{}, [switch][bool]$strict, $exclude = @()) 
-    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+    #  Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
     $exclude = @($exclude)
     if ($null -eq $vars) {
@@ -155,12 +157,12 @@ function Convert-PropertiesFromVars {
     }
 
     return $obj
-    }
+    #   }
 }
 
 #TODO: support multiple matches per line
 function _replaceVarline ([Parameter(Mandatory=$true)]$text, $vars = @{}) {
-       Measure-function  "$($MyInvocation.MyCommand.Name)" {
+    #Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
     $r = $text
     if ($null -eq $vars) {
@@ -194,12 +196,12 @@ function _replaceVarline ([Parameter(Mandatory=$true)]$text, $vars = @{}) {
     } while ($replaced)
 
     return $r    
-       }
+    #     }
 }
 
 #TODO: support multiple matches per line
 function _ReplaceVarsAuto([Parameter(Mandatory=$true)]$__text)  {
-        Measure-function  "$($MyInvocation.MyCommand.Name)" {
+    #       Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
     do {
         #each replace may insert a new variable reference in the string, so we need to iterate again
@@ -253,11 +255,11 @@ function _ReplaceVarsAuto([Parameter(Mandatory=$true)]$__text)  {
     }
     while ($__replaced)
     return $__text
-        }
+    #       }
 }
 
 function convert-vars([Parameter(Mandatory=$true)]$text, $vars = @{}, [switch][bool]$noauto = $false) {
-        Measure-function  "$($MyInvocation.MyCommand.Name)" {
+    #     Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
     $text = @($text) | % { _replaceVarline $_ $vars }
 
@@ -282,7 +284,7 @@ function convert-vars([Parameter(Mandatory=$true)]$text, $vars = @{}, [switch][b
     
         $m = [System.Text.RegularExpressions.Regex]::Matches($text, "\{(\?{0,1}[a-zA-Z0-9_.:]+?)\}")
         if ($m.count -gt 0) {
-            write-warning "missing variable '$($m[0].Groups[1].Value)'"
+            write-warning "missing variable '$($m[0].Groups[1].Value)' in '$text'"
             if ($WarningPreference -ne "SilentlyContinue") {
                 $a = 0
             }
@@ -291,13 +293,13 @@ function convert-vars([Parameter(Mandatory=$true)]$text, $vars = @{}, [switch][b
     } finally { 
         $self = $originalself
     }
-}
+    #}
 }
 
 function get-vardef ($text) {
  
-     Measure-function  "$($MyInvocation.MyCommand.Name)" {
-   $result = $null
+    #  Measure-function  "$($MyInvocation.MyCommand.Name)" {
+    $result = $null
     $m = [System.Text.RegularExpressions.Regex]::Matches($text, "__([a-zA-Z]+)__");
     if ($m.Count -gt 0) {
         $result = $m | % {
@@ -315,11 +317,11 @@ function get-vardef ($text) {
     }
 
     return $null
-}
+    #}
 }
 
 function _MatchVarPattern ($text, $pattern) {
-     Measure-function  "$($MyInvocation.MyCommand.Name)" {
+    #   Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
     $result = $null
     $vars = get-vardef $pattern
@@ -352,7 +354,7 @@ function _MatchVarPattern ($text, $pattern) {
         }
     }
     return $result
-}
+    #}
 }
 
 new-alias Replace-Vars Convert-Vars -force
