@@ -120,6 +120,26 @@ function postprocess-publishmap($map) {
     }
 }
 
+function Add-GlobalSettings($proj, $settings) {
+    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+        [Publishmap.Utils.Inheritance.Inheritance]::AddGlobalSettings($proj, $settings)
+    }
+}
+
+function import-genericgroup($group,
+    $fullpath, 
+    $settings = $null,
+    $settingskey = "settings",
+    $specialkeys = @("settings", "global_profiles")
+) {
+    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+        $g = [Publishmap.Utils.Inheritance.Inheritance]::ImportGenericGroup($group, $fullpath, $settings, $settingskey, $specialkeys)
+        return $g
+    }
+}
+
+
+
 Export-ModuleMember -Function `
         Get-Entry, Import-Map, `
         Import-PublishMap, Get-Profile, `

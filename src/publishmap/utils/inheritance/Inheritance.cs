@@ -361,5 +361,134 @@ namespace Publishmap.Utils.Inheritance
     }
     }
     */
+
+        public static void AddGlobalSettings(IDictionary proj, IDictionary settings)
+        {
+            if (null != settings)
+            {
+                //write-verbose "inheriting global settings to $($proj._fullpath). strip=$stripsettingswrapper"
+                if (settings.Contains("_strip"))
+                {
+                    var stripsettingswrapper = settings["_strip"];
+                    AddInheritedProperties(settings, proj, /*ifNotExist: true, merge:true,*/ exclude: new[] { "_strip" });
+                }
+                else
+                {
+                    AddProperty(proj, "settings", settings, ifNotExists: true, merge: true);
+                }
+            }
+
+        }
+
+        /* 
+        function Add-GlobalSettings($proj, $settings) {
+            Measure-function  "$($MyInvocation.MyCommand.Name)" {
+
+                if ($null -ne $settings) {
+                    write-verbose "inheriting global settings to $($proj._fullpath). strip=$stripsettingswrapper"
+                    $stripsettingswrapper = $settings._strip
+                    if ($null -ne $stripsettingswrapper -and $stripsettingswrapper) {
+                        $null = inherit-properties -from $settings -to $proj -ifNotExists -merge -exclude "_strip"
+                    }
+                    else {
+                        $null = add-property $proj "settings" $settings -ifNotExists -merge
+                    }
+                }
+            }
+            */
+
+        public static IDictionary ImportGenericGroup(IDictionary group,
+            string fullpath,
+            IDictionary settings = null,
+            string settingskey = "settings",
+            IEnumerable<object> specialkeys = null
+        )
+        {
+            if (specialkeys == null)
+            {
+                specialkeys = new[] { "settings", "global_profiles" };
+            }
+
+            //  Write-Verbose "processing map path $fullpath"
+
+            var result = new Hashtable();
+
+            //# only direct children inherit settings
+            var onelevelsettingsinheritance = true;
+            IDictionary childsettings = null;
+            //#get settings for children
+            if (group.Contains(settingskey))
+            {
+                childsettings = (IDictionary)group[settingskey];
+            }
+            else
+            {
+                if (!onelevelsettingsinheritance)
+                {
+                    childsettings = settings;
+                }
+            }
+
+            object[] keys = new object[group.Keys.Count];
+            group.Keys.CopyTo(keys, 0);
+            foreach (string projk in keys)
+            {
+                //#do not process special global settings
+                if (specialkeys.Contains(projk))
+                {
+                    continue;
+                }
+                var subgroup = group[projk];
+                if (!(subgroup is System.Collections.IDictionary))
+                {
+                    continue;
+                }
+                var path = $"{fullpath}.{projk}";
+
+                AddInheritedProperties(group, (IDictionary)subgroup, valuesOnly: true);
+                // # this should be run only once per group, right? 
+                // # why is this needed here?
+                if (null != settings)
+                {
+                    AddGlobalSettings(group, settings);
+                }
+                var r = ImportGenericGroup((IDictionary)subgroup, path, childsettings, settingskey, specialkeys);
+
+                //result.Add("" r);
+            }
+
+            if (null != settings)
+            {
+                AddGlobalSettings(group, settings);
+            }
+
+            return group;
+        }
+
+        /*
+    if ($null -ne $settings) {
+        inherit-globalsettings $group $settings
+
+        <#  $keys = get-propertynames $group
+    foreach($projk in $keys) {
+        $subgroup = $group.$projk
+        if ($projk -in $specialkeys) {
+            continue
+        }
+        if (!($subgroup -is [System.Collections.IDictionary])) {
+            continue
+        }
+        inherit-properties -from $group -to $subgroup -valuesonly
     }
+    #>
+    }
+
+
+
+    return $map
+}
+} */
+
+    }
+
 }
