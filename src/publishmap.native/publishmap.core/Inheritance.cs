@@ -12,6 +12,7 @@ namespace Publishmap.Utils.Inheritance
         {
             // force linq loading
             new Dictionary<string, string>().Any();
+            new Hashtable();
         }
         public static void AddProperties(
             IDictionary obj,

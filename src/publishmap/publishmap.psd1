@@ -63,7 +63,7 @@ Author = 'jakub.pawlowski'
 # FormatsToProcess = @()
 
 # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
-NestedModules = @("utils\publishmap.powershell\bin\Debug\net46\publishmap.powershell.dll")
+#NestedModules = @("utils\publishmap.powershell\bin\Debug\net46\publishmap.powershell.dll")
 
 # Functions to export from this module
 FunctionsToExport = '*'

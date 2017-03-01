@@ -12,6 +12,12 @@
         "System.Linq": "4.1.0",
         "System.Text.RegularExpressions": "4.1.0"
       }
+    },
+    "net46":{
+
+    },
+    "net451":{
+      
     }
   }
 }

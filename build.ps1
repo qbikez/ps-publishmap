@@ -1,10 +1,15 @@
 pushd 
 
 try {
-    cd "src/publishmap/utils"
+    cd "src/publishmap.native"
     cd "publishmap.core"
-    dotnet publish
+    dotnet build
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }
+
+    $libpath = "..\..\publishmap\lib"
+    if (!(test-path $libpath)) { $null = new-item -type directory "..\..\publishmap\lib" }
+    copy "bin\Debug\net451\*" $libpath
+
 } finally {
     popd
 }

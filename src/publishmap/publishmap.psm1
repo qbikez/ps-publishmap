@@ -1,7 +1,7 @@
 ﻿$helpersPath = (Split-Path -parent $MyInvocation.MyCommand.Definition);
 
 . "$helpersPath\imports.ps1"
-$usenative = $false
+$usenative = $true
 
 function loadLib($lib, [scriptblock] $init) {
     $libdir = split-path -parent $lib 
@@ -35,8 +35,8 @@ function loadLib($lib, [scriptblock] $init) {
     try {
        
   
-        [System.AppDomain]::CurrentDomain.add_AssemblyResolve($OnAssemblyResolve)
-        Add-Type -Path "$libdir\inheritance.dll"
+  #      [System.AppDomain]::CurrentDomain.add_AssemblyResolve($OnAssemblyResolve)
+        Add-Type -Path "$lib"
         if ($init -ne $null) {
             Invoke-Command $init
         }
@@ -46,7 +46,7 @@ function loadLib($lib, [scriptblock] $init) {
         throw $_
     }
     finally {
-        [System.AppDomain]::CurrentDomain.remove_AssemblyResolve($OnAssemblyResolve)
+        # [System.AppDomain]::CurrentDomain.remove_AssemblyResolve($OnAssemblyResolve)
 
     }
 }
@@ -54,25 +54,25 @@ function loadLib($lib, [scriptblock] $init) {
 if ($usenative) {
 
 
-$lib = "$helpersPath\utils\inheritance\bin\Debug\netcoreapp1.1\win81-x64\publish\inheritance.dll"
+$lib = "$helpersPath\lib\publishmap.core.dll"
 loadlib $lib -init { 
     [Publishmap.Utils.Inheritance.Inheritance]::Init()
 }
 
-# function add-property {
-#     [CmdletBinding()]
-#     param(
-#         [Parameter(ValueFromPipeline = $true, Position=1)] $object, 
-#         [Parameter(Mandatory=$true,Position=2)] $name, 
-#         [Parameter(Mandatory=$true,Position=3)] $value, 
-#         [switch][bool] $ifNotExists,
-#         [switch][bool] $overwrite,
-#         [switch][bool] $merge
-#     )  
-#     Measure-function  "$($MyInvocation.MyCommand.Name)" { 
-#         [Publishmap.Utils.Inheritance.Inheritance]::AddProperty($object, $name, $value, $ifNotExists, $overwrite, $merge)
-#     } 
-# }
+function add-property {
+    [CmdletBinding()]
+    param(
+        [Parameter(ValueFromPipeline = $true, Position=1)] $object, 
+        [Parameter(Mandatory=$true,Position=2)] $name, 
+        [Parameter(Mandatory=$true,Position=3)] $value, 
+        [switch][bool] $ifNotExists,
+        [switch][bool] $overwrite,
+        [switch][bool] $merge
+    )  
+    Measure-function  "$($MyInvocation.MyCommand.Name)" { 
+        [Publishmap.Utils.Inheritance.Inheritance]::AddProperty($object, $name, $value, $ifNotExists, $overwrite, $merge)
+    } 
+}
 
     
 function add-properties(
