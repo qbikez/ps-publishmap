@@ -1,7 +1,7 @@
 ﻿$helpersPath = (Split-Path -parent $MyInvocation.MyCommand.Definition);
 
 . "$helpersPath\imports.ps1"
-$usenative = $true
+$usenative = $false
 
 function loadLib($lib, [scriptblock] $init) {
     $libdir = split-path -parent $lib 
@@ -59,20 +59,20 @@ loadlib $lib -init {
     [Publishmap.Utils.Inheritance.Inheritance]::Init()
 }
 
-function add-property {
-    [CmdletBinding()]
-    param(
-        [Parameter(ValueFromPipeline = $true, Position=1)] $object, 
-        [Parameter(Mandatory=$true,Position=2)] $name, 
-        [Parameter(Mandatory=$true,Position=3)] $value, 
-        [switch][bool] $ifNotExists,
-        [switch][bool] $overwrite,
-        [switch][bool] $merge
-    )  
-    Measure-function  "$($MyInvocation.MyCommand.Name)" { 
-        [Publishmap.Utils.Inheritance.Inheritance]::AddProperty($object, $name, $value, $ifNotExists, $overwrite, $merge)
-    } 
-}
+# function add-property {
+#     [CmdletBinding()]
+#     param(
+#         [Parameter(ValueFromPipeline = $true, Position=1)] $object, 
+#         [Parameter(Mandatory=$true,Position=2)] $name, 
+#         [Parameter(Mandatory=$true,Position=3)] $value, 
+#         [switch][bool] $ifNotExists,
+#         [switch][bool] $overwrite,
+#         [switch][bool] $merge
+#     )  
+#     Measure-function  "$($MyInvocation.MyCommand.Name)" { 
+#         [Publishmap.Utils.Inheritance.Inheritance]::AddProperty($object, $name, $value, $ifNotExists, $overwrite, $merge)
+#     } 
+# }
 
     
 function add-properties(

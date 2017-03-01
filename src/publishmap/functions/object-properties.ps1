@@ -31,48 +31,48 @@ function add-properties(
     }
 }
 
-function add-property {
-    [CmdletBinding()]
-    param(
-        [Parameter(ValueFromPipeline = $true, Position=1)] $object, 
-        [Parameter(Mandatory=$true,Position=2)] $name, 
-        [Parameter(Mandatory=$true,Position=3)] $value, 
-        [switch][bool] $ifNotExists,
-        [switch][bool] $overwrite,
-        [switch][bool] $merge
-    ) 
-   # Measure-function  "$($MyInvocation.MyCommand.Name)" {
-        try {
-            if ($null -ne $object.$name) {
-                if ($merge -and $object.$name -is [System.Collections.IDictionary] -and $value -is [System.Collections.IDictionary]) {
-                    $r = add-properties $object.$name $value -ifNotExists:$ifNotExists -merge:$merge 
-                    return $object
-                }
-                elseif ($ifNotExists) {
-                    return 
-                }
-                elseif ($overwrite) {
-                    $object.$name = $value 
-                }
-                else {
-                    throw "property '$name' already exists with value '$($obj.$name)'"
-                }
-            }
-            if ($object -is [System.Collections.IDictionary]) {
-                $object[$name] = $value
-            }
-            else {
-                throw "optimization - only support hashtabes"
-                $null = $object | add-member -name $name -membertype noteproperty -value $value
-                #$object.$name = $value 
-            }
+# function add-property {
+#     [CmdletBinding()]
+#     param(
+#         [Parameter(ValueFromPipeline = $true, Position=1)] $object, 
+#         [Parameter(Mandatory=$true,Position=2)] $name, 
+#         [Parameter(Mandatory=$true,Position=3)] $value, 
+#         [switch][bool] $ifNotExists,
+#         [switch][bool] $overwrite,
+#         [switch][bool] $merge
+#     ) 
+#    # Measure-function  "$($MyInvocation.MyCommand.Name)" {
+#         try {
+#             if ($null -ne $object.$name) {
+#                 if ($merge -and $object.$name -is [System.Collections.IDictionary] -and $value -is [System.Collections.IDictionary]) {
+#                     $r = add-properties $object.$name $value -ifNotExists:$ifNotExists -merge:$merge 
+#                     return $object
+#                 }
+#                 elseif ($ifNotExists) {
+#                     return 
+#                 }
+#                 elseif ($overwrite) {
+#                     $object.$name = $value 
+#                 }
+#                 else {
+#                     throw "property '$name' already exists with value '$($obj.$name)'"
+#                 }
+#             }
+#             if ($object -is [System.Collections.IDictionary]) {
+#                 $object[$name] = $value
+#             }
+#             else {
+#                 throw "optimization - only support hashtabes"
+#                 $null = $object | add-member -name $name -membertype noteproperty -value $value
+#                 #$object.$name = $value 
+#             }
 
-            return $object
-        } catch {
-            throw
-        }
-#    }
-}
+#             return $object
+#         } catch {
+#             throw
+#         }
+# #    }
+# }
 
 function ConvertTo-Hashtable([Parameter(ValueFromPipeline=$true)]$obj, [switch][bool]$recurse) {
     Measure-function  "$($MyInvocation.MyCommand.Name)" {

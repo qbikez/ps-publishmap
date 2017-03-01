@@ -51,7 +51,7 @@ Author = 'jakub.pawlowski'
 # RequiredModules = @()
 
 # Assemblies that must be loaded prior to importing this module
-# RequiredAssemblies = @()
+#RequiredAssemblies = @("utils\publishmap.powershell\bin\Debug\net46\publishmap.powershell.dll")
 
 # Script files (.ps1) that are run in the caller's environment prior to importing this module.
 # ScriptsToProcess = @()
@@ -63,7 +63,7 @@ Author = 'jakub.pawlowski'
 # FormatsToProcess = @()
 
 # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
-# NestedModules = @()
+NestedModules = @("utils\publishmap.powershell\bin\Debug\net46\publishmap.powershell.dll")
 
 # Functions to export from this module
 FunctionsToExport = '*'

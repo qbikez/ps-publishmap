@@ -6,16 +6,12 @@
   },
   "dependencies": {},
   "frameworks": {
-    "netstandard1.6": {
+    "netstandard1.3": {
       "dependencies": {
-         "System.Collections.NonGeneric": "4.3.0",
-         "System.Linq": "4.3.0",
-         "System.Text.RegularExpressions": "4.3.0"
-      },
-      "imports": "dnxcore50"
-    }   
-  },
-  "runtimes": {
-    "win81-x64": {}
+        "System.Collections.NonGeneric": "4.1.0",
+        "System.Linq": "4.1.0",
+        "System.Text.RegularExpressions": "4.1.0"
+      }
+    }
   }
 }
