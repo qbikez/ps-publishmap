@@ -113,6 +113,13 @@ function Add-InheritedProperties($from, $to, $exclude = @(), [switch][bool] $val
     }
 }
 
+function postprocess-publishmap($map) {    
+    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+       [Publishmap.Utils.Inheritance.Inheritance]::PostProcessPublishmap($map)
+       return $map
+    }
+}
+
 Export-ModuleMember -Function `
         Get-Entry, Import-Map, `
         Import-PublishMap, Get-Profile, `

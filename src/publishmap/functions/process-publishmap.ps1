@@ -167,7 +167,7 @@ function postprocess-publishmap($map) {
                             # expose project at profile level
                             $null = add-property $prof -name project -value $proj
                         } else {
-                            write-verbose "removing non-profile property '$groupk.$projk.$profk'"
+                            #write-verbose "removing non-profile property '$groupk.$projk.$profk'"
                             #remove every property that isn't a real profile
                             $proj.profiles.Remove($profk)
                         }
@@ -185,7 +185,7 @@ function postprocess-publishmap($map) {
                                 for($i = ($hierarchy.length - 1); $i -ge 0; $i--) {
                                     $cur = @($hierarchy)[$i]
                                     $base = $proj.profiles.$($cur._inherit_from)
-                                    write-verbose "inheriting properties from '$($cur._inherit_from)' to '$($cur._fullpath)'"
+                                   # write-verbose "inheriting properties from '$($cur._inherit_from)' to '$($cur._fullpath)'"
                                     inherit-properties -from $base -to $cur -valuesonly -exclude @("_inherit_from","_inherited_from")
                                     $null = add-property $cur -name _inherited_from  -value $($cur._inherit_from)
                                 }                            

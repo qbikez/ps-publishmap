@@ -48,7 +48,7 @@ Describe "parse publish map performance" {
             $arr = $global:perfcounters | convertto-array 
             $arr | sort elapsed | format-table -Wrap  | out-string | write-host
             
-            $r.TotalSeconds | Should BeLessThan 6
+            $r.TotalSeconds | Should BeLessThan 10
             
         }
     }
