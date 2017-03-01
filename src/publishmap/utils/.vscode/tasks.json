@@ -7,7 +7,7 @@
         {
             "taskName": "build",
             "args": [
-                "${workspaceRoot}\\inheritance.test\\project.json"
+                "${workspaceRoot}\\publishmap.test\\project.json"
             ],
             "isBuildCommand": true,
             "problemMatcher": "$msCompile"
@@ -15,14 +15,14 @@
          {
             "taskName": "publish",
             "args": [
-                "${workspaceRoot}\\inheritance\\project.json"
+                "${workspaceRoot}\\publishmap.core\\project.json"
             ],
             "problemMatcher": "$msCompile"
         },
         {
             "taskName": "test",
             "args": [
-                "${workspaceRoot}\\inheritance.test\\project.json"
+                "${workspaceRoot}\\publishmap.test\\project.json"
             ],
             "isTestCommand": true,
             "problemMatcher": "$msCompile"

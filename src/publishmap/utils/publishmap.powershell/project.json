@@ -1,0 +1,19 @@
+{
+  "version": "1.0.0-*",
+  "buildOptions": {
+    "debugType": "portable",
+    "emitEntryPoint": true
+  },
+  "dependencies": {
+    "publishmap.core": { "target": "project" },
+    "System.Management.Automation": "6.1.7601.17515"
+  },
+  "frameworks": {
+    "net451":{
+
+    }
+  },
+  "runtimes": {
+    "win81-x64": {}
+  }
+}
