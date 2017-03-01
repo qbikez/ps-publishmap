@@ -18,6 +18,12 @@ $publishmap = @{
                     profile = "ne-dev.pubxml"
                     Machine = "machine"
                 }
+            dev_copy = @{
+                _inherit_from = "dev"
+            }
+            dev_2 = @{
+                _inherit_from = "dev"
+            }
             qa = @{
                 Config = "qa"
             }
@@ -33,6 +39,9 @@ $publishmap = @{
         }
         additional = @{
             profiles = @{
+                dev = @{
+                    password = "overriden"
+                }
                 prod = @{
                     name = "prod"
                 }
@@ -44,6 +53,9 @@ $publishmap = @{
                 dev = @{
                     password = "overriden"
                     new_prop = "abc"
+                }
+                dev_copy = @{
+                    Config = "copy"
                 }
             }
         }

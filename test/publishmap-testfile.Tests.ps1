@@ -1,3 +1,4 @@
+. $PSScriptRoot\includes.ps1
 
 Describe "parse publish map" {
   $map = import-publishmap -maps "$PSScriptRoot\input\publishmap.test.config.ps1"  
@@ -43,7 +44,13 @@ Describe "parse publish map" {
      It "profiles should be merged" {
         $p = $map.test.additional
         $p.profiles.prod | Should Not BeNullOrEmpty
-        $p.profiles.Count | Should Be 3         
+        $basicprofiles = @()
+        foreach($_ in $p.profiles.GetEnumerator()) {
+            if ($_.key -notmatch "_staging" -and $_.key -notmatch "swap_") {
+                $basicprofiles += $_
+            }
+        }  
+        $basicprofiles.Count | Should Be 5      
      }
      It "merged profiles should be exposed at project level" {
         $p = $map.test.additional
@@ -53,36 +60,68 @@ Describe "parse publish map" {
      }
   }
   
-  
+  <#
   Context "When project has inherit=false" {
       $p = $map.test.do_not_inherit_global
-      <#It "global profiles should NOT be inherited" {
+      It "global profiles should NOT be inherited" {
            $p.profiles.Count | Should Be 1
            $p.profiles.dev | Should Not Be $null
             
-      } #> 
-      <# 
+      }  
+       
       It "global profile properties should NOT be inherited" {
           $p.profiles.dev.new_prop | Should Be "abc"    
           $p.profiles.dev.Password | Should BeNullOrEmpty
           # or should it?
           #$p.profiles.dev.Password | Should Be "?"   
-      } #>
+      } 
   }
+  #>
   
+  Context "When _nherit_from is defined and local profile is defined" {      
+      It "Should inherit propeties from global profile" {
+          $profile = $map.test.override_default_profiles.dev_copy
+          $profile.connectionStringName | Should Not BeNullOrEmpty
+          $profile.connectionStringName | Should Be $map.test.override_default_profiles.dev.connectionStringName          
+      }
+      It "Should override from local profile" {
+          $profile = $map.test.override_default_profiles.dev_copy
+          $profile.Config | Should Not BeNullOrEmpty
+          $profile.Config | Should Be "copy"          
+      }
+       It "Should override from local inherited profile" {
+          $profile = $map.test.override_default_profiles.dev_copy
+          $profile.password | Should Not BeNullOrEmpty
+          $profile.password | Should Be $map.test.override_default_profiles.dev.password         
+      }
+  }
+
+  Context "When _nherit_from is defined and NO local profile" {      
+      It "Should inherit propeties from global profile" {
+          $profile = $map.test.additional.dev_2
+          $profile.connectionStringName | Should Not BeNullOrEmpty
+          $profile.connectionStringName | Should Be $map.test.additional.dev.connectionStringName          
+      }     
+    It "Should override from local inherited profile" {
+          $profile = $map.test.additional.dev_2
+          $profile.password | Should Not BeNullOrEmpty
+          $profile.password | Should Be $map.test.additional.dev.password         
+      }
+  }
+
   Context "When top level settings are defined" {
     $msg =  "should settings be inherited as wrapped 'settings' object or as properties? for now, they are inherited as properties due to global_profiles hack"      
      It "settings should be inherited in projects" {
          $p = $map.test.db_1
-     #    $p.settings.siteAuth | Should Not BeNullOrEmpty
-     #    $p.settings.siteAuth.username | Should Be "user"
-        Set-TestInconclusive -Message $msg
+         $p.siteAuth | Should Not BeNullOrEmpty
+         $p.siteAuth.username | Should Be "user"
+        # Set-TestInconclusive -Message $msg
      }
-     It "settings should be inherited in profiles" {
+     It "settings should not be inherited in profiles" {
          $p = $map.test.db_1.dev
-         #$p.settings.siteAuth | Should Not BeNullOrEmpty
-         #$p.settings.siteAuth.username | Should Be "user"
-        Set-TestInconclusive -Message $msg
+         $p.siteAuth | Should BeNullOrEmpty
+         $p.siteAuth.username | Should BeNullOrEmpty
+        #Set-TestInconclusive -Message $msg
      }
     
   }
@@ -98,7 +137,18 @@ Describe "Get publishmap entry" {
             $p = get-profile test.use_default_profiles.dev -map $map
             $p | Should Not BeNullOrEmpty
             $p.Profile | Should Not BeNullOrEmpty
+            # this will be a clone!
+            $p.Profile | Should Not Be $map.test.use_default_profiles.dev
+       
+            $p.Profile.ContainsKey("_vars") | Should Be $true
+            $p.Profile.Keys.Count | Should BeGreaterThan $map.test.use_default_profiles.dev.Keys.Count
+            foreach($kvp in $p.Profile.GetEnumerator()) {
+                $kvp.Value | Should Be $map.test.use_default_profiles.dev[$kvp.Key]
+            }
+            #Set-TestInconclusive 
+            <# the profile will be cloned, should check for object equality
             $p.Profile | Should Be $map.test.use_default_profiles.dev
+            #>
         }
     }
     

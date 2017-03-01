@@ -3,20 +3,20 @@ function get-envinfo($checkcommands) {
     $PSVersionTable.PSVersion
     
     write-warning "Available commands:"
-    if ($checkcommands -eq $null) {
+    if ($null -eq $checkcommands) {
         $commands = "Install-Module"
     } else {
         $commands = $checkcommands
     }
         
-    $commands | % {
+    $commands| % {
         $c = $_
         try {
             $cmd = get-command $c -ErrorAction SilentlyContinue
         } catch {
             $cmd = $null
         }
-        if ($cmd -eq $null) {
+        if ($null -eq $cmd) {
             write-warning "$($c):`t MISSING"            
         }
         else {

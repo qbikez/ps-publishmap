@@ -13,44 +13,50 @@ function import-map {
 function import-mapfile {
     [cmdletbinding()]
     param([Parameter(Mandatory=$true)] $maps)
+    Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
-    write-verbose "processing publishmap..."
+        write-verbose "processing publishmap..."
 
-    if ($maps -ne $null) {
-        $maps = @($maps)
-    }
+        if ($null -ne $maps) {
+            $maps = @($maps)
+        }
         
-    $publishmap = @{}
+        $publishmap = @{}
 
-    foreach($m in $maps) {
-        $publishmap += import-singlemapfile $m
+        foreach($m in $maps) {
+            $publishmap += import-singlemapfile $m
+        }
+
+        write-verbose "processing publishmap... DONE"
+
+        return $publishmap
     }
-
-    write-verbose "processing publishmap... DONE"
-
-    return $publishmap
 }
 
 
 function import-mapobject { 
-[cmdletbinding()]
-param([Parameter(Mandatory=$true)] $map) 
-   $pmap = @{}
+    [cmdletbinding()]
+    param([Parameter(Mandatory=$true)] $map) 
+    $pmap = @{}
     
-   $pmap = import-genericgroup $map ""   
-   $pmap = add-metaproperties $pmap ""
-   return $pmap
+    $pmap = import-genericgroup $map ""   
+    Measure-function  "add-metaproperties" {
+        $pmap = add-metaproperties $pmap ""
+    }
+    return $pmap
 }
 
 function import-singlemapfile($file) {
     $fullname = $file
-    if ($fullname.FullName -ne $null) { $Fullname =$Fullname.FullName }
+    if ($null -ne $fullname.FullName) {
+        $Fullname =$Fullname.FullName 
+    }
     $map = & "$FullName"
     
     #$publishmap_obj = ConvertTo-Object $publishmap
     $pmap = import-mapobject $map
 
-   return $pmap
+    return $pmap
 }
 
 
@@ -60,29 +66,34 @@ function import-genericgroup($group,
     $settingskey = "settings",
     $specialkeys = @("settings", "global_profiles")
 ) {
-    Write-Verbose "processing map path $fullpath"
-   
-    $keys = get-propertynames $group
-    
-    
-   
-    $result = {}
-        
+    Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
-    $onelevelsettingsinheritance = $true
+        Write-Verbose "processing map path $fullpath"
+   
+        $result = {}        
 
-    $childsettings = $null 
-    #get settings for children
-    if ($group.$settingskey -ne $null) {
-        $childsettings = $group.$settingskey
-    } else {
-        if (!$onelevelsettingsinheritance) {
-            $childsettings = $settings
+        # only direct children inherit settings
+        $onelevelsettingsinheritance = $true
+
+        $childsettings = $null 
+        #get settings for children
+        if ($null -ne $group.$settingskey) {
+            $childsettings = $group.$settingskey
+        } else {
+            if (!$onelevelsettingsinheritance) {
+                $childsettings = $settings
+            }
         }
-    }
     
-    foreach($projk in $keys) {
-     #do not process special global settings
+        <#
+    if ($null -ne $settings) {
+        inherit-globalsettings $group $settings
+    }
+    #>
+
+        $keys = get-propertynames $group
+        foreach($projk in $keys) {
+            #do not process special global settings
             if ($projk -in $specialkeys) {
                 continue
             }
@@ -94,46 +105,75 @@ function import-genericgroup($group,
 
 
             inherit-properties -from $group -to $subgroup -valuesonly
-                    
+            # this should be run only once per group, right? 
+            # why is this needed here?
+            if ($null -ne $settings) {
+                inherit-globalsettings $group $settings
+            }
             $r = import-genericgroup $subgroup $path -settings $childsettings -settingskey $settingskey -specialkeys $specialkeys
+        }
+        
 
-    }
 
-
-    if ($settings -ne $null) {
-        inherit-globalsettings $group $settings 
-    }
+        if ($null -ne $settings) {
+            inherit-globalsettings $group $settings
+        
+            <#  $keys = get-propertynames $group
+        foreach($projk in $keys) {
+            $subgroup = $group.$projk
+            if ($projk -in $specialkeys) {
+                continue
+            }
+            if (!($subgroup -is [System.Collections.IDictionary])) {
+                continue
+            }
+            inherit-properties -from $group -to $subgroup -valuesonly
+        }
+        #>
+        }
     
     
 
-    return $map
+        return $map
+    }
 }
 
-function add-metaproperties($group, $fullpath, $specialkeys = @("settings", "global_profiles")
-) {
+function add-metaproperties
+{
+    param($group, $fullpath, $specialkeys = @("settings", "global_prof1iles"))
+
     if ($group -isnot [System.Collections.IDictionary]) {
         return
     }
-    $level = $fullpath.split('.').length - 1
+    write-verbose "adding meta properties to '$fullpath'"        
+    $splits = $fullpath.split('.')
+    $level = $splits.length - 1
     
     $null = $group | add-property -name _level -value $level
     $null = $group | add-property -name _fullpath -value $fullpath.trim('.')
-
-      $keys = get-propertynames $group
-
+    if ($splits.length -gt 0) {
+        $null = $group | add-property -name _name -value $splits[$splits.length - 1]
+    }
+        
+    #$keys = @{}
+    $keys = get-propertynames $group
         
     foreach($projk in $keys) {
-     #do not process special global settings
+        #do not process special global settings
         if ($projk -in $specialkeys) {
-                continue
+            continue
         }
-        $path = "$fullpath.$projk"
-        $null = add-metaproperties $group.$projk $path -specialkeys $specialkeys
+        if ($group.$projk -is [System.Collections.IDictionary]) {
+            $path = "$fullpath.$projk"            
+            $null = add-metaproperties $group.$projk $path -specialkeys $specialkeys
+        }
     }
   
     return $group
+    
 }
 
+<# 
 function import-mapgroup(
     $publishmapgroup, $groupk,     
     $settings = $null,
@@ -141,7 +181,6 @@ function import-mapgroup(
 ) {
     Write-Verbose "processing map $groupk"
    
-    $globalProffiles = $publishmapgroup.global_profiles
     $keys = get-propertynames $publishmapgroup
     
     $null = add-property $publishmapgroup "level" 1
@@ -150,7 +189,7 @@ function import-mapgroup(
     $group = $publishmapgroup
     $result = {}
     foreach($projk in $keys) {
-     #do not process special global settings
+            #do not process special global settings
             if ($projk -in "settings","global_profiles") {
                 continue
             }
@@ -165,7 +204,7 @@ function import-mapgroup(
     return $publishmapgroup
 }
 
-
+#>
 <#
 
 #>

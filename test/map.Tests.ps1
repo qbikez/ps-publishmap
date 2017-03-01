@@ -1,6 +1,94 @@
 . "$PSScriptRoot\includes.ps1"
 
 
+Describe "parse map with variables" { 
+      $m = @{
+                name = "some-name.com"
+                base_url = "https://{name}"
+                services = @{
+                    svc1 = @{
+                        url = "https://{name}/svc1"
+                        url_staging = "https://{name}/svc1{?postfix}"
+                    }
+                    svc2 = @{
+                        url = "{base_url}/svc2"
+                        help = "{url}/help"
+                    }
+                    svc3 = @{
+                        name = "svc3"
+                        url = "https://some-name.com/{name}"
+                        help = "{url}/help"
+                    }
+                    svc4 = @{
+                        name = "svc4"
+                        # this is tricky: {base_url} references {name}, which is overriden in svc4
+                        # the result will be "https://svc4/svc4". sorry, Winnetou
+                        url = "{base_url}/{name}"
+                        help = "{url}/help"
+                        something = "{help}/something"
+                        other = "{services.svc1.url}"
+                    }
+                }
+            }
+
+          $map = import-map $m 
+
+     Context "when map is imported" {
+      
+          It "Should return a valid map" {
+              $map | should Not BeNullOrEmpty
+          }
+          It "variables should not be substituted" {
+              $map.base_url | should Be  "https://{name}"
+          }
+      }
+
+      Context "when entry is retrieved" {       
+          It "variables should be substituted" {
+            $url = $map | get-entry "base_url" 
+            $url | should be "https://some-name.com"
+          }
+          It "should return root entry for /" {
+            $m = $map | get-entry "/" 
+            $m | should not benullorempty
+            $m.base_url | should be "https://some-name.com"
+          }
+         
+          It "variables should be substituted in nested objects" {
+            $url = $map | get-entry "services.svc1.url" 
+            $url | Should Be "https://some-name.com/svc1"            
+          }
+           It "optional variables should be removed if missing" {
+            $url = $map | get-entry "services.svc1.url_staging" 
+            $url | should be "https://some-name.com/svc1"
+          }
+          It "one-level chained variables should be substituted " {
+            $url = $map | get-entry "services.svc2.url" 
+            $url | Should Be "https://some-name.com/svc2"            
+          }
+          It "two-level chained variables should be substituted " {
+            $url = $map | get-entry "services.svc2.help" 
+            $url | Should Be "https://some-name.com/svc2/help"            
+          }
+          It "nested object variables should override parent" {
+            $url = $map | get-entry "services.svc3.url" 
+            $url | Should Be "https://some-name.com/svc3"            
+          }
+          It "variable override should affect parent variables" {
+            $url = $map | get-entry "services.svc4.base_url" 
+            $url | Should Be "https://svc4"            
+          }
+          It "multi-level chained variables with override should be substituted" {
+            $url = $map | get-entry "services.svc4.help" 
+            $url | Should Be "https://svc4/svc4/help"            
+          }
+
+          It "variables referencing other objects should be replaced" {
+            $url = $map | get-entry "services.svc4.other" 
+            $url | Should Be  "https://some-name.com/svc1"         
+          }
+      }
+}
 
 Describe "parse simple map" {
       $m = @{
@@ -156,3 +244,5 @@ Describe "parse map with two level nesting" {
         }
     }
   }
+
+
