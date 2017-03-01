@@ -16,6 +16,14 @@ function _clone($obj) {
 
         return $copy
     }
+    if ($obj.gettype().name -eq "Hashtable" -and $obj -isnot [Hashtable]) {
+        $copy = @{}
+        foreach($e in $obj.GetEnumerator()) {
+            $copy.Add($e.Key, $e.Value)
+        }
+
+        return $copy
+    }
     else {
         return $obj.Clone()
     }

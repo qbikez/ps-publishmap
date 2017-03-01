@@ -1,7 +1,7 @@
 ﻿$helpersPath = (Split-Path -parent $MyInvocation.MyCommand.Definition);
 
 . "$helpersPath\imports.ps1"
-
+$usenative = $true
 
 function loadLib($lib, [scriptblock] $init) {
     $libdir = split-path -parent $lib 
@@ -51,12 +51,13 @@ function loadLib($lib, [scriptblock] $init) {
     }
 }
 
+if ($usenative) {
+
 
 $lib = "$helpersPath\utils\inheritance\bin\Debug\netcoreapp1.1\win81-x64\publish\inheritance.dll"
 loadlib $lib -init { 
     [Publishmap.Utils.Inheritance.Inheritance]::Init()
 }
-
 
 function add-property {
     [CmdletBinding()]
@@ -137,7 +138,7 @@ function import-genericgroup($group,
         return $g
     }
 }
-
+}
 
 
 Export-ModuleMember -Function `

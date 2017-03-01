@@ -138,6 +138,9 @@ Describe "Get publishmap entry" {
             $p | Should Not BeNullOrEmpty
             $p.Profile | Should Not BeNullOrEmpty
             # this will be a clone!
+            $p.Profile | Should Not Be $map.test.use_default_profiles.dev
+       
+            $p.Profile.ContainsKey("_vars") | Should Be $true
             $p.Profile.Keys.Count | Should BeGreaterThan $map.test.use_default_profiles.dev.Keys.Count
             foreach($kvp in $p.Profile.GetEnumerator()) {
                 $kvp.Value | Should Be $map.test.use_default_profiles.dev[$kvp.Key]
