@@ -13,7 +13,7 @@ function import-map {
 function import-mapfile {
     [cmdletbinding()]
     param([Parameter(Mandatory=$true)] $maps)
-    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+  #  Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
         write-verbose "processing publishmap..."
 
@@ -30,7 +30,7 @@ function import-mapfile {
         write-verbose "processing publishmap... DONE"
 
         return $publishmap
-    }
+  #  }
 }
 
 
@@ -40,9 +40,9 @@ function import-mapobject {
     $pmap = @{}
     
     $pmap = import-genericgroup $map ""   
-    Measure-function  "add-metaproperties" {
+  #  Measure-function  "add-metaproperties" {
         $pmap = add-metaproperties $pmap ""
-    }
+ #   }
     return $pmap
 }
 
@@ -66,7 +66,7 @@ function import-genericgroup($group,
     $settingskey = "settings",
     $specialkeys = @("settings", "global_profiles")
 ) {
-    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+ #   Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
         Write-Verbose "processing map path $fullpath"
    
@@ -135,7 +135,7 @@ function import-genericgroup($group,
     
 
         return $map
-    }
+ #   }
 }
 
 function add-metaproperties

@@ -24,7 +24,7 @@ function import-publishmap {
 function import-publishmapfile {
     [cmdletbinding()]
     param($maps)
-    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+ #   Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
         write-verbose "importing publishmaps..."
 
@@ -72,7 +72,7 @@ function import-publishmapfile {
         write-verbose "processing publishmap... DONE"
 
         return $publishmap
-    }
+#   }
 }
 
 function import-publishmapobject {
@@ -92,7 +92,7 @@ function import-publishmapobject {
  * generates `_staging` and `swap_` profiles
 #>
 function preporcess-publishmap($map) {
-    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+ #   Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
         $globalprofilesname = "global_profiles"
         foreach($groupk in get-propertynames $map) {
@@ -131,7 +131,7 @@ function preporcess-publishmap($map) {
         }
     
         return $map
-    }
+#    }
 }
 
 <#
@@ -140,7 +140,7 @@ function preporcess-publishmap($map) {
 * processes inheritance basing on `_inherit_from` properties  
 #>
 function postprocess-publishmap($map) {    
-    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+  #  Measure-function  "$($MyInvocation.MyCommand.Name)" {
         write-verbose "postprocessing map..."
         foreach($groupk in get-propertynames $map) {
             # remove generated properties from top-level
@@ -210,11 +210,11 @@ function postprocess-publishmap($map) {
                     
         }
         return $pmap
-    }
+ #   }
 }
 
 function get-profile($name, $map = $null) {
-    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+  #  Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
         $pmap = $map
         if ($null -eq $map) {
@@ -266,13 +266,13 @@ function get-profile($name, $map = $null) {
             Group = $splits[1]
             TaskName = $splits[2]
         }
-    }
+  #  }
 }
 
 
 
 function check-profileName($proj, $profk) {
-    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+ #   Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
         $prof = $proj.profiles.$profk
         if ($null -eq $prof) {
@@ -288,7 +288,7 @@ function check-profileName($proj, $profk) {
                 continue
             }
         }
-    }
+  #  }
 }
 
 <#

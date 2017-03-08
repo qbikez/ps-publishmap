@@ -12,7 +12,7 @@
 RootModule = 'publishmap.psm1'
 
 # Version number of this module.
-ModuleVersion = '1.5.0.1'
+ModuleVersion = '1.5.1.0'
 
 # ID used to uniquely identify this module
 GUID = '32fffc21-70fe-4290-b4ca-1cf3ade430f0'

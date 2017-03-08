@@ -1,11 +1,11 @@
 
 function get-propertynames($obj) {
-    Measure-function "$($MyInvocation.MyCommand.Name)" {    
+  #  Measure-function "$($MyInvocation.MyCommand.Name)" {    
         if ($obj -is [System.Collections.IDictionary]) {
             return $obj.keys
         }
         return $obj.psobject.Properties | select -ExpandProperty name
-    }
+ #   }
 }
 
 function add-properties(
@@ -17,7 +17,7 @@ function add-properties(
     [switch][bool] $merge, 
     $exclude = @()
 ) {
-    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+  #  Measure-function  "$($MyInvocation.MyCommand.Name)" {
         foreach($prop in get-propertynames $props) {
             if ($prop -notin $exclude) {
                 try {
@@ -28,7 +28,7 @@ function add-properties(
             }
         }
         return $object
-    }
+  #  }
 }
 
 # function add-property {
@@ -75,7 +75,7 @@ function add-properties(
 # }
 
 function ConvertTo-Hashtable([Parameter(ValueFromPipeline=$true)]$obj, [switch][bool]$recurse) {
-    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+ #   Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
         $object =$obj
         if (!$recurse -and ($object -is [System.Collections.IDictionary] -or $object -is [array])) {
@@ -105,13 +105,13 @@ function ConvertTo-Hashtable([Parameter(ValueFromPipeline=$true)]$obj, [switch][
             throw "could not convert object to hashtable"
             #return $object
         }
-    }
+ #   }
 	
 }
 
 
 function ConvertTo-Object([Parameter(ValueFromPipeline=$true)]$hashtable, $recurse) {    
-    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+  #  Measure-function  "$($MyInvocation.MyCommand.Name)" {
         if ($hashtable -is [hashtable]) {
             $copy = @{}
             $copy += $hashtable
@@ -137,12 +137,12 @@ function ConvertTo-Object([Parameter(ValueFromPipeline=$true)]$hashtable, $recur
         else {
             return $hashtable
         }   
-    }
+ #   }
 }
 
 
 function copy-hashtable($hash) {
-    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+  #  Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
         $new = @{}
         foreach($key in get-propertynames $hash) {
@@ -154,5 +154,5 @@ function copy-hashtable($hash) {
         }
 
         return $new
-    }
+  #  }
 }

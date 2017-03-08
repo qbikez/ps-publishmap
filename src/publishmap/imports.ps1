@@ -1,8 +1,8 @@
 # grab functions from files
 get-childitem $psscriptroot\functions\ -filter "*.ps1" | 
-    ? { -not ($_.name.Contains(".Tests.")) } |
-    ? { -not (($_.name).StartsWith("_")) } |
-    % { . $_.fullname }
+? { -not ($_.name.Contains(".Tests.")) } |
+? { -not (($_.name).StartsWith("_")) } |
+% { . $_.fullname }
 
 
 $usenative = $true
@@ -40,7 +40,7 @@ function loadLib($lib, [scriptblock] $init) {
     try {
        
   
-  #      [System.AppDomain]::CurrentDomain.add_AssemblyResolve($OnAssemblyResolve)
+        #      [System.AppDomain]::CurrentDomain.add_AssemblyResolve($OnAssemblyResolve)
         Add-Type -Path "$lib"
         if ($init -ne $null) {
             Invoke-Command $init
@@ -58,9 +58,9 @@ function loadLib($lib, [scriptblock] $init) {
 
 if ($usenative) {
 
-loadlib $lib -init { 
-    [Publishmap.Utils.Inheritance.Inheritance]::Init()
-}
+    loadlib $lib -init { 
+        [Publishmap.Utils.Inheritance.Inheritance]::Init()
+    }
 
     function add-property {
         [CmdletBinding()]
@@ -97,55 +97,54 @@ loadlib $lib -init {
         # Measure-function  "$($MyInvocation.MyCommand.Name)" { 
         $r = [Publishmap.Utils.Inheritance.Inheritance]::AddProperties($object, $props, $ifNotExists, $merge, $exclude)
         return $object
+        #   }
     }
-}
 
 
-function add-metaproperties
-{
-    param($group, $fullpath, $specialkeys = @("settings", "global_prof1iles"))
-   #Measure-function  "$($MyInvocation.MyCommand.Name)" { 
+    function add-metaproperties {
+        param($group, $fullpath, $specialkeys = @("settings", "global_prof1iles"))
+        #Measure-function  "$($MyInvocation.MyCommand.Name)" { 
         [Publishmap.Utils.Inheritance.Inheritance]::AddMetaProperties($group, $fullpath, $specialkeys)            
-   # }
-}
+        # }
+    }
 
 
 
-function copy-hashtable($hash) {
-    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+    function copy-hashtable($hash) {
+        #  Measure-function  "$($MyInvocation.MyCommand.Name)" {
         return   [Publishmap.Utils.Inheritance.Inheritance]::CopyHashtable($hash)
+        #  }
     }
-}
 
-function Add-InheritedProperties($from, $to, $exclude = @(), [switch][bool] $valuesOnly) {
-    Measure-function  "$($MyInvocation.MyCommand.Name)" {
-       $r = [Publishmap.Utils.Inheritance.Inheritance]::AddInheritedProperties($from, $to, @($exclude), $valuesOnly)
+    function Add-InheritedProperties($from, $to, $exclude = @(), [switch][bool] $valuesOnly) {
+        #  Measure-function  "$($MyInvocation.MyCommand.Name)" {
+        $r = [Publishmap.Utils.Inheritance.Inheritance]::AddInheritedProperties($from, $to, @($exclude), $valuesOnly)
        
+        #  }
     }
-}
 
-function postprocess-publishmap($map) {    
-    Measure-function  "$($MyInvocation.MyCommand.Name)" {
-       [Publishmap.Utils.Inheritance.Inheritance]::PostProcessPublishmap($map)
-       return $map
+    function postprocess-publishmap($map) {    
+        #  Measure-function  "$($MyInvocation.MyCommand.Name)" {
+        [Publishmap.Utils.Inheritance.Inheritance]::PostProcessPublishmap($map)
+        return $map
+        #  }
     }
-}
 
-function Add-GlobalSettings($proj, $settings) {
-    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+    function Add-GlobalSettings($proj, $settings) {
+        #   Measure-function  "$($MyInvocation.MyCommand.Name)" {
         [Publishmap.Utils.Inheritance.Inheritance]::AddGlobalSettings($proj, $settings)
+        #   }
     }
-}
 
-function import-genericgroup($group,
-    $fullpath, 
-    $settings = $null,
-    $settingskey = "settings",
-    $specialkeys = @("settings", "global_profiles")
-) {
-    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+    function import-genericgroup($group,
+        $fullpath, 
+        $settings = $null,
+        $settingskey = "settings",
+        $specialkeys = @("settings", "global_profiles")
+    ) {
+        # Measure-function  "$($MyInvocation.MyCommand.Name)" {
         $g = [Publishmap.Utils.Inheritance.Inheritance]::ImportGenericGroup($group, $fullpath, $settings, $settingskey, $specialkeys)
         return $g
+        #  }
     }
-}
 }

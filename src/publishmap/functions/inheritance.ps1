@@ -5,7 +5,7 @@ Inherit only value types, do not inherit dictionaries (helps prevent infinite in
 
 #>
 function Add-InheritedProperties($from, $to, $exclude = @(), [switch][bool] $valuesOnly) {
-    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+   # Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
         if ($from -is [System.Collections.IDictionary]) {
         }
@@ -63,12 +63,12 @@ function Add-InheritedProperties($from, $to, $exclude = @(), [switch][bool] $val
         }
     }
     #>
-    }
+ #   }
 }
 
 
 function Add-GlobalSettings($proj, $settings) {
-    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+ #   Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
         if ($null -ne $settings) {
             write-verbose "inheriting global settings to $($proj._fullpath). strip=$stripsettingswrapper"
@@ -80,7 +80,7 @@ function Add-GlobalSettings($proj, $settings) {
                 $null = add-property $proj "settings" $settings -ifNotExists -merge
             }
         }
-    }
+#    }
 }
 
 New-Alias -Name Inherit-Properties -Value Add-InheritedProperties -Force
