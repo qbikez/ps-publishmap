@@ -37,7 +37,7 @@ Describe "parse publish map performance" {
         It "Should take reasonable time for file '<file>'" -TestCases $maps {
             param([string]$file, $item)
             $global:perfcounters = $null
-            $r = Measure-command  {
+            $r = Measure-command {
                 try {
                     $map = import-publishmap $item -Verbose
                 } catch {
@@ -45,9 +45,10 @@ Describe "parse publish map performance" {
                     throw $_
                 }
             }
-            $arr = $global:perfcounters | convertto-array 
-            $arr | sort elapsed | format-table -Wrap  | out-string | write-host
-            
+            if ($global:perfcounters) {
+                $arr = $global:perfcounters | convertto-array 
+                $arr | sort elapsed | format-table -Wrap  | out-string | write-host
+            }
             $r.TotalSeconds | Should BeLessThan 10
             
         }

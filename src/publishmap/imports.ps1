@@ -104,7 +104,8 @@ if ($usenative) {
     function add-metaproperties {
         param($group, $fullpath, $specialkeys = @("settings", "global_prof1iles"))
         #Measure-function  "$($MyInvocation.MyCommand.Name)" { 
-        [Publishmap.Utils.Inheritance.Inheritance]::AddMetaProperties($group, $fullpath, $specialkeys)            
+        [Publishmap.Utils.Inheritance.Inheritance]::AddMetaProperties($group, $fullpath, $specialkeys)      
+        return $group      
         # }
     }
 
@@ -112,7 +113,7 @@ if ($usenative) {
 
     function copy-hashtable($hash) {
         #  Measure-function  "$($MyInvocation.MyCommand.Name)" {
-        return   [Publishmap.Utils.Inheritance.Inheritance]::CopyHashtable($hash)
+        return [Publishmap.Utils.Inheritance.Inheritance]::CopyHashtable($hash)
         #  }
     }
 
