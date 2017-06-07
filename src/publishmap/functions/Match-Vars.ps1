@@ -86,7 +86,7 @@ function get-entry(
                         $allvars += $map
                         $allvars += $root
                     }
-                    $entry2 = Convert-PropertiesFromVars $entry2 -vars $vars -exclude $excludeProperties -WarningAction $warnaction -path $entry2._fullpath
+                    $entry2 = Convert-PropertiesFromVars $entry2 -vars $allvars -exclude $excludeProperties -WarningAction $warnaction -path $entry2._fullpath
                     
                 }
 
@@ -119,7 +119,7 @@ function Convert-PropertiesFromVars {
     param($obj, $vars = @{}, [switch][bool]$strict, $exclude = @(), [int]$level = 0, $path = "") 
     Measure-function  "$($MyInvocation.MyCommand.Name)" {
     $msg = " replacing vars in object '$path' : $obj"
-        if ($global:seen[$path] -eq $null) {
+    if ($global:seen[$path] -eq $null) {
         $global:seen[$path] = $obj
     } else {
         write-warning "processing path '$path' for the second time!"
@@ -168,13 +168,14 @@ function Convert-PropertiesFromVars {
             finally {
             }
         }
+            return $clone
     }    
     elseif ($strict) {
         throw "unsupported object"
        
     }
-
-    return $clone
+    return $obj
+    
     }
 }
 
@@ -277,9 +278,11 @@ function _ReplaceVarsAuto([Parameter(Mandatory=$true)]$__text)  {
           }
 }
 
-function convert-vars([Parameter(Mandatory=$true)]$text, $vars = @{}, [switch][bool]$noauto = $false) {
+function convert-vars{
+    [CmdletBinding()]
+    param ([Parameter(Mandatory=$true)]$text, $vars = @{}, [switch][bool]$noauto = $false) 
         Measure-function  "$($MyInvocation.MyCommand.Name)" {
-
+    $org = $text
     $text = @($text) | % { _replaceVarline $_ $vars }
 
     $originalself = $self
@@ -307,6 +310,9 @@ function convert-vars([Parameter(Mandatory=$true)]$text, $vars = @{}, [switch][b
             if ($WarningPreference -ne "SilentlyContinue") {
                 $a = 0
             }
+        }
+        if ($org -ne $text) {
+            write-verbose "replaced: $org -> $text"
         }
         return $text
     } finally { 

@@ -46,7 +46,11 @@ function import-publishmapfile {
                 if ($null -ne $fullname.FullName) {
                     $Fullname =$Fullname.FullName 
                 }
+                try {
                 $cached = get-cachedobject $fullname
+                } catch {
+                    # ignore cache exceptions
+                }
                 if ($null -ne $cached) {
                     $pmap = $cached.value
                     write-verbose "loaded publishmap '$fullname' from cache"
