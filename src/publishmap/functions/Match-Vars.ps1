@@ -16,13 +16,16 @@ function _clone($obj) {
 
         return $copy
     }
-    if ($obj.gettype().name -eq "Hashtable" -or $obj -is [Hashtable]) {
+    elseif ($obj.gettype().name -eq "Hashtable" -or $obj -is [Hashtable]) {
         # hashtable created in c# code will have case-sensitive keys. convert it back to PS-style case-insensitive
         $copy = @{}
         foreach($e in $obj.GetEnumerator()) {
             $copy.Add($e.Key, $e.Value)
         }
         return $copy
+    }
+    elseif ($obj.gettype().IsAray) {
+        return @($obj.Clone())
     }
     else {
         return $obj.Clone()
@@ -34,7 +37,8 @@ function get-entry(
     [Parameter(mandatory=$true,Position=1)] $key,
     [Parameter(mandatory=$true,ValueFromPipeline=$true,Position=2)] $map,
     $excludeProperties = @("project"),
-    [switch][bool] $simpleMode = $false) {
+    [switch][bool] $simpleMode = $false,
+    [switch][bool] $noVarReplace = $false) {
     #        Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
     $root = $map
@@ -75,12 +79,15 @@ function get-entry(
                 if ($simpleMode) {
                     $warnaction = "Continue" 
                 }
-                $entry2 = replace-properties $entry2 -vars $vars -exclude $excludeProperties -WarningAction $warnaction
-                if (!$simpleMode) {
-                    # replace properties based on self values
-                    $entry2 = replace-properties $entry2 -vars $map -exclude $excludeProperties -WarningAction "SilentlyContinue"
-                    # replace properties based on root values
-                    $entry2 = replace-properties $entry2 -vars $root -exclude $excludeProperties  
+                if (!$noVarReplace) {
+                    $allvars = $vars
+
+                    if (!$simpleMode) {
+                        $allvars += $map
+                        $allvars += $root
+                    }
+                    $entry2 = Convert-PropertiesFromVars $entry2 -vars $vars -exclude $excludeProperties -WarningAction $warnaction -path $entry2._fullpath
+                    
                 }
 
                 return $entry2
@@ -105,17 +112,25 @@ function get-entry(
     #       }
 }
 
+$global:seen = @{}
+
 function Convert-PropertiesFromVars { 
     [CmdletBinding()]
-    param($obj, $vars = @{}, [switch][bool]$strict, $exclude = @()) 
-    #  Measure-function  "$($MyInvocation.MyCommand.Name)" {
-
+    param($obj, $vars = @{}, [switch][bool]$strict, $exclude = @(), [int]$level = 0, $path = "") 
+    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+    $msg = " replacing vars in object '$path' : $obj"
+        if ($global:seen[$path] -eq $null) {
+        $global:seen[$path] = $obj
+    } else {
+        write-warning "processing path '$path' for the second time!"
+    }
+    write-verbose $msg.PadLeft($level + $msg.Length, ">")
     $exclude = @($exclude)
     if ($null -eq $vars) {
         throw "vars == NULL"
     }
     if ($obj -is [string]) {
-        $replaced = replace-vars -text $obj -vars $vars
+        $replaced = Convert-Vars -text $obj -vars $vars
         return $replaced
     }
     elseif ($obj -is [System.Collections.IDictionary]) {
@@ -128,7 +143,7 @@ function Convert-PropertiesFromVars {
                 }
                 $self = $obj
                 try {
-                    $obj[$key] = replace-properties $obj[$key] $vars -exclude ($exclude + @($obj))
+                        $obj[$key] = Convert-PropertiesFromVars $obj[$key] $vars -exclude ($exclude + @($obj)) -level ($level + 1) -path "$path.$key"
                 }
                 finally {
                     $self = $null
@@ -139,13 +154,16 @@ function Convert-PropertiesFromVars {
         return $obj
     }
     elseif ($obj -is [Array]) {
-        $obj = _clone $obj
-        for($i = 0; $i -lt $obj.length; $i++) {
-            if ($obj[$i] -in $exclude) {
+            $clone = _clone $obj
+            for ($i = 0; $i -lt $clone.length; $i++) {
+                if ($clone[$i] -in $exclude) {
                 continue
             }
             try {
-                $obj[$i] = replace-properties $obj[$i] $vars -exclude ($exclude + @($obj))
+                    $clone[$i] = Convert-PropertiesFromVars $clone[$i] $vars -exclude ($exclude + @($clone)) -level ($level + 1) -path "$path[$i]"
+            }
+            catch {
+                write-error "failed to replace properties for array object $($clone)[$i]: $($_.Exception.Message)"
             }
             finally {
             }
@@ -156,19 +174,20 @@ function Convert-PropertiesFromVars {
        
     }
 
-    return $obj
-    #   }
+    return $clone
+    }
 }
 
 #TODO: support multiple matches per line
 function _replaceVarline ([Parameter(Mandatory=$true)]$text, $vars = @{}) {
-    #Measure-function  "$($MyInvocation.MyCommand.Name)" {
+    Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
     $r = $text
     if ($null -eq $vars) {
         throw "vars == NULL"
     }
 
+    if (!($text.Contains("_")) -and !($text.Contains("{"))) { return $r }
     do {
         #each replace may insert a new variable reference in the string, so we need to iterate again
         $replaced = $false
@@ -196,12 +215,12 @@ function _replaceVarline ([Parameter(Mandatory=$true)]$text, $vars = @{}) {
     } while ($replaced)
 
     return $r    
-    #     }
+         }
 }
 
 #TODO: support multiple matches per line
 function _ReplaceVarsAuto([Parameter(Mandatory=$true)]$__text)  {
-    #       Measure-function  "$($MyInvocation.MyCommand.Name)" {
+           Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
     do {
         #each replace may insert a new variable reference in the string, so we need to iterate again
@@ -255,17 +274,17 @@ function _ReplaceVarsAuto([Parameter(Mandatory=$true)]$__text)  {
     }
     while ($__replaced)
     return $__text
-    #       }
+          }
 }
 
 function convert-vars([Parameter(Mandatory=$true)]$text, $vars = @{}, [switch][bool]$noauto = $false) {
-    #     Measure-function  "$($MyInvocation.MyCommand.Name)" {
+        Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
     $text = @($text) | % { _replaceVarline $_ $vars }
 
     $originalself = $self
     try {
-        # is this necessary if we're doing replace-properties twice? 
+        # is this necessary if we're doing Convert-PropertiesFromVars twice? 
         if (!$noauto) {
             # _ReplaceVarsAuto uses $self global variable
             # if it is not set, use $vars as $self
@@ -293,7 +312,7 @@ function convert-vars([Parameter(Mandatory=$true)]$text, $vars = @{}, [switch][b
     } finally { 
         $self = $originalself
     }
-    #}
+    }
 }
 
 function get-vardef ($text) {

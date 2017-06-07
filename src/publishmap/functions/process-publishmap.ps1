@@ -213,9 +213,16 @@ function postprocess-publishmap($map) {
  #   }
 }
 
-function get-profile($name, $map = $null) {
+function get-profile {
+    [CmdletBinding()]
+    param(
+            [Parameter(Mandatory=$true)]
+            $name, 
+            $map = $null, 
+            [switch][bool] $noVarReplace = $false
+        ) 
   #  Measure-function  "$($MyInvocation.MyCommand.Name)" {
-
+        write-verbose "processing profile '$name'"
         $pmap = $map
         if ($null -eq $map) {
             $pmap = $global:pmap
@@ -232,7 +239,7 @@ function get-profile($name, $map = $null) {
             $split = $splits[$i]
             $parent = $entry
             if ($i -eq $splits.length-1) {
-                $entry = get-entry $split $map -excludeProperties @("project")             
+            $entry = get-entry $split $map -excludeProperties @("project") -noVarReplace:$noVarReplace
             }
             else {
                 $entry = $map.$split
