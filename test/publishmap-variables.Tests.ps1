@@ -82,10 +82,14 @@ Describe "parse map object with variables" {
             $e.urls[1] | Should Be "http://test:$($id)443/something"   
         }
         
-        It "Should get standard properties  with stubs" {
+        It "Should get standard properties with stubs" {
+            try {
             $e = get-entry "prod" $map.test1.default_with_stub
             $e | Should Not BeNullOrEmpty
             $e.what | Should Be "something"
+            } catch {
+                throw
+            }
         }
         
         It "Should replace property variables with stubs" {

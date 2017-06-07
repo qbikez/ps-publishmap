@@ -5,37 +5,67 @@
 
 #>
 
-function _clone($obj) {
+function _clone($obj, [switch][bool] $deep, [int]$level = 0, [int]$maxdepth = 10, $shallowkeys = @()) {
+    try {
     #        Measure-function  "$($MyInvocation.MyCommand.Name)" {
-
-    if ($obj -is [System.Collections.Specialized.OrderedDictionary]) {
+    $shkeys = $shallowkeys + @("_clone_meta")    
+    if ($level -gt $maxdepth) {
+        throw "max clone depth exceeded!"
+    }
+    if ($obj -is [System.Collections.Specialized.OrderedDictionary]) {       
         $copy = [ordered]@{}
-        foreach($e in $obj.GetEnumerator()) {
-            $copy.Add($e.Key, $e.Value)
+        foreach ($e in $obj.GetEnumerator()) {
+            $val = $e.Value
+            if ($deep -and !($e.key -in $shkeys)) { $val = _clone $val -deep:$deep -maxdepth:$maxdepth -level ($level + 1) -shallowkeys:$shallowkeys }
+            $copy.Add($e.Key, $val)
         }
+        if ($obj["_clone_meta"] -eq $null) {
+            $obj["_clone_meta"] = @{ "type" = "original" }
+        }
+        $copy["_clone_meta"] = @{ "type" = "clone" }
 
         return $copy
     }
     elseif ($obj.gettype().name -eq "Hashtable" -or $obj -is [Hashtable]) {
         # hashtable created in c# code will have case-sensitive keys. convert it back to PS-style case-insensitive
-        $copy = @{}
-        foreach($e in $obj.GetEnumerator()) {
-            $copy.Add($e.Key, $e.Value)
+       
+        $copy = [ordered]@{}
+        
+        foreach ($e in $obj.GetEnumerator()) {
+            $val = $e.Value
+            if ($deep -and !($e.key -in $shkeys)) { $val = _clone $val -deep:$deep -maxdepth:$maxdepth  -level ($level + 1) -shallowkeys:$shallowkeys }
+            $copy.Add($e.Key, $val)
         }
+        if ($obj["_clone_meta"] -eq $null) {
+            $obj["_clone_meta"] = @{ "type" = "original" }
+        }
+        $copy["_clone_meta"] = @{ "type" = "clone" }
         return $copy
     }
-    elseif ($obj.gettype().IsAray) {
-        return @($obj.Clone())
+    elseif ($obj.gettype().IsArray) {
+        if ($deep) {
+            Write-Verbose "don't know how to deep-clone an array. doing a shallow clone."
+        }
+        return @($obj.Clone())        
+    }    
+    elseif ($obj.gettype().IsValueType) {
+        return $obj
+    }
+    elseif ($obj -is [string]) {
+        return $obj.Clone()
     }
     else {
         return $obj.Clone()
     }
     #       }
+    } catch {
+        throw
+    }
 }
 
 function get-entry(
-    [Parameter(mandatory=$true,Position=1)] $key,
-    [Parameter(mandatory=$true,ValueFromPipeline=$true,Position=2)] $map,
+    [Parameter(mandatory = $true, Position = 1)] $key,
+    [Parameter(mandatory = $true, ValueFromPipeline = $true, Position = 2)] $map,
     $excludeProperties = @("project"),
     [switch][bool] $simpleMode = $false,
     [switch][bool] $noVarReplace = $false) {
@@ -44,22 +74,22 @@ function get-entry(
     $root = $map
     $parent = $null
     $entry = $null
-    $splits=$key.split(".")
-    for($i = 0; $i -lt $splits.length; $i++) {
+    $splits = $key.split(".")
+    for ($i = 0; $i -lt $splits.length; $i++) {
         $split = $splits[$i]
         $parent = $entry
-        if ($i -eq $splits.length-1) {
+        if ($i -eq $splits.length - 1) {
             $key = $split
             if ($null -ne $map[$key]) { 
                 $entry = $map[$key] 
-                $vars = @()
+                $vars = @{}
             }
             elseif ($key -eq "/" -or $key -eq "\") {
                 $entry = $map
-                $vars = @()
+                $vars = @{}
             } 
             else {     
-                foreach($kvp in $map.GetEnumerator()) {
+                foreach ($kvp in $map.GetEnumerator()) {
                     $pattern = $kvp.key
                     $vars = _MatchVarPattern $key "$pattern"
                     if ($null -ne $vars) {
@@ -70,8 +100,8 @@ function get-entry(
             }
 
             if ($null -ne $entry) {
-                #TODO: should we use a deep clone
-                $entry2 = _clone $entry
+                #TODO: should we use a deep clone?
+                $entry2 = _clone $entry -deep -shallowkeys @("project")
                 if ($entry2 -is [Hashtable]) {
                     $entry2._vars = $vars
                 }             
@@ -83,8 +113,22 @@ function get-entry(
                     $allvars = $vars
 
                     if (!$simpleMode) {
-                        $allvars += $map
-                        $allvars += $root
+                        try {
+                            foreach ($kvp in $map.GetEnumerator()) {
+                                if ($allvars[$kvp.key] -ne $null) {
+                                    #   write-warning "replacing $($allvars[$kvp.key]) with $($kvp.value)"
+                                }
+                                $allvars[$kvp.key] = $kvp.value
+                            }                       
+                            foreach ($kvp in $root.GetEnumerator()) {
+                                if ($allvars[$kvp.key] -ne $null) {
+                                    #   write-warning "replacing $($allvars[$kvp.key]) with $($kvp.value)"
+                                }
+                                $allvars[$kvp.key] = $kvp.value
+                            }   
+                        } catch {
+                            throw
+                        }                    
                     }
                     $entry2 = Convert-PropertiesFromVars $entry2 -vars $allvars -exclude $excludeProperties -WarningAction $warnaction -path $entry2._fullpath
                     
@@ -112,18 +156,21 @@ function get-entry(
     #       }
 }
 
+<#
 $global:seen = @{}
-
+#> 
 function Convert-PropertiesFromVars { 
     [CmdletBinding()]
     param($obj, $vars = @{}, [switch][bool]$strict, $exclude = @(), [int]$level = 0, $path = "") 
-    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+    #Measure-function  "$($MyInvocation.MyCommand.Name)" {
     $msg = " replacing vars in object '$path' : $obj"
+    <#
     if ($global:seen[$path] -eq $null) {
         $global:seen[$path] = $obj
     } else {
         write-warning "processing path '$path' for the second time!"
     }
+    #>
     write-verbose $msg.PadLeft($level + $msg.Length, ">")
     $exclude = @($exclude)
     if ($null -eq $vars) {
@@ -136,14 +183,14 @@ function Convert-PropertiesFromVars {
     elseif ($obj -is [System.Collections.IDictionary]) {
         $keys = _clone $obj.keys
         $keys = $keys | Sort-Object        
-        foreach($key in $keys) {
+        foreach ($key in $keys) {
             if ($key -notin $exclude) {
                 if ($obj[$key] -in $exclude) {
                     continue
                 }
                 $self = $obj
                 try {
-                        $obj[$key] = Convert-PropertiesFromVars $obj[$key] $vars -exclude ($exclude + @($obj)) -level ($level + 1) -path "$path.$key"
+                    $obj[$key] = Convert-PropertiesFromVars $obj[$key] $vars -exclude ($exclude + @($obj)) -level ($level + 1) -path "$path.$key"
                 }
                 finally {
                     $self = $null
@@ -154,13 +201,13 @@ function Convert-PropertiesFromVars {
         return $obj
     }
     elseif ($obj -is [Array]) {
-            $clone = _clone $obj
-            for ($i = 0; $i -lt $clone.length; $i++) {
-                if ($clone[$i] -in $exclude) {
+        $clone = _clone $obj
+        for ($i = 0; $i -lt $clone.length; $i++) {
+            if ($clone[$i] -in $exclude) {
                 continue
             }
             try {
-                    $clone[$i] = Convert-PropertiesFromVars $clone[$i] $vars -exclude ($exclude + @($clone)) -level ($level + 1) -path "$path[$i]"
+                $clone[$i] = Convert-PropertiesFromVars $clone[$i] $vars -exclude ($exclude + @($clone)) -level ($level + 1) -path "$path[$i]"
             }
             catch {
                 write-error "failed to replace properties for array object $($clone)[$i]: $($_.Exception.Message)"
@@ -168,7 +215,7 @@ function Convert-PropertiesFromVars {
             finally {
             }
         }
-            return $clone
+        return $clone
     }    
     elseif ($strict) {
         throw "unsupported object"
@@ -176,12 +223,12 @@ function Convert-PropertiesFromVars {
     }
     return $obj
     
-    }
+    #  }
 }
 
 #TODO: support multiple matches per line
-function _replaceVarline ([Parameter(Mandatory=$true)]$text, $vars = @{}) {
-    Measure-function  "$($MyInvocation.MyCommand.Name)" {
+function _replaceVarline ([Parameter(Mandatory = $true)]$text, $vars = @{}) {
+    #Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
     $r = $text
     if ($null -eq $vars) {
@@ -192,23 +239,23 @@ function _replaceVarline ([Parameter(Mandatory=$true)]$text, $vars = @{}) {
     do {
         #each replace may insert a new variable reference in the string, so we need to iterate again
         $replaced = $false
-        foreach($kvp in $vars.GetEnumerator()) {
+        foreach ($kvp in $vars.GetEnumerator()) {
             $name = $kvp.key
             $val = $kvp.value
 
             if ($r -match "\{$name\}") {
-                $r = $r -replace "\{$name\}",$val
+                $r = $r -replace "\{$name\}", $val
                 $replaced = $true
                 break
             }
             # support also same placeholder as in template match
             elseif ($r -match "__$($name)__") {
-                $r = $r -replace "__$($name)__",$val
+                $r = $r -replace "__$($name)__", $val
                 $replaced = $true
                 break
             }
             elseif ($r -match "_$($name)_") {
-                $r = $r -replace "_$($name)_",$val
+                $r = $r -replace "_$($name)_", $val
                 $replaced = $true
                 break
             }
@@ -216,24 +263,24 @@ function _replaceVarline ([Parameter(Mandatory=$true)]$text, $vars = @{}) {
     } while ($replaced)
 
     return $r    
-         }
+    #       }
 }
 
 #TODO: support multiple matches per line
-function _ReplaceVarsAuto([Parameter(Mandatory=$true)]$__text)  {
-           Measure-function  "$($MyInvocation.MyCommand.Name)" {
+function _ReplaceVarsAuto([Parameter(Mandatory = $true)]$__text) {
+    #       Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
     do {
         #each replace may insert a new variable reference in the string, so we need to iterate again
         $__replaced = $false
         $__matches = [System.Text.RegularExpressions.Regex]::Matches($__text, "\{(\?{0,1}[a-zA-Z0-9_.:]+?)\}")
-        foreach($__match in $__matches) {
+        foreach ($__match in $__matches) {
             if ($__match.Success) {
                 $__name = $__Match.Groups[1].Value
                 $__orgname = $__name
                 $__defaultifnull = $false
                 if ($__name.startswith("?")) {
-                    $__name= $__name.substring(1)
+                    $__name = $__name.substring(1)
                     $__defaultifnull = $true
                 }
                 $__varpath = $__name 
@@ -242,7 +289,8 @@ function _ReplaceVarsAuto([Parameter(Mandatory=$true)]$__text)  {
                 if (!($__varpath -match ":")) {
                     if ($__varpath.startswith("vars.")) {
                         $__varpath = "variable:" + $__splits[0]                 
-                    } else {
+                    }
+                    else {
                         $__varpath = "cannot-reference-local-script-or-global-vars-without-namespace-prefix"
                     }
                 }
@@ -250,7 +298,7 @@ function _ReplaceVarsAuto([Parameter(Mandatory=$true)]$__text)  {
                 # this is a fragile thing. the module itself may define local vars that collide with map vars
                 if (test-path "$__varpath") {
                     $__val = (get-item $__varpath).Value
-                    for($__i = $__splitstart; $__i -lt $__splits.length; $__i++) {
+                    for ($__i = $__splitstart; $__i -lt $__splits.length; $__i++) {
                         $__s = $__splits[$__i] 
                         $__val = $__val.$__s
                     }  
@@ -258,16 +306,16 @@ function _ReplaceVarsAuto([Parameter(Mandatory=$true)]$__text)  {
                 elseif (test-path "variable:self") {
                     $__selftmp = (get-item "variable:self").Value
                     $__val = $__selftmp
-                    foreach($__s in $__splits) {
+                    foreach ($__s in $__splits) {
                         $__val = $__val.$__s
                     }            
                 }
                 if ($null -ne $__val) {
-                    $__text = $__text -replace "\{$([System.Text.RegularExpressions.Regex]::Escape($__orgname))\}",$__val
+                    $__text = $__text -replace "\{$([System.Text.RegularExpressions.Regex]::Escape($__orgname))\}", $__val
                     $__replaced = $true
                 } 
                 elseif ($__defaultifnull) {
-                    $__text = $__text -replace "\{$([System.Text.RegularExpressions.Regex]::Escape($__orgname))\}",""
+                    $__text = $__text -replace "\{$([System.Text.RegularExpressions.Regex]::Escape($__orgname))\}", ""
                     $__replaced = $true                
                 }
             }
@@ -275,13 +323,13 @@ function _ReplaceVarsAuto([Parameter(Mandatory=$true)]$__text)  {
     }
     while ($__replaced)
     return $__text
-          }
+    #         }
 }
 
-function convert-vars{
+function convert-vars {
     [CmdletBinding()]
-    param ([Parameter(Mandatory=$true)]$text, $vars = @{}, [switch][bool]$noauto = $false) 
-        Measure-function  "$($MyInvocation.MyCommand.Name)" {
+    param ([Parameter(Mandatory = $true)]$text, $vars = @{}, [switch][bool]$noauto = $false) 
+    #     Measure-function  "$($MyInvocation.MyCommand.Name)" {
     $org = $text
     $text = @($text) | % { _replaceVarline $_ $vars }
 
@@ -318,7 +366,7 @@ function convert-vars{
     } finally { 
         $self = $originalself
     }
-    }
+    #   }
 }
 
 function get-vardef ($text) {
@@ -357,19 +405,20 @@ function _MatchVarPattern ($text, $pattern) {
     if ($vars.Length -eq 0) {
         
     }
-    $regex = $pattern -replace "__[a-zA-Z]+__","([a-zA-Z0-9]*)"    
-    $regex = $regex -replace "_[a-zA-Z]+_","([a-zA-Z0-9]*)"    
+    $regex = $pattern -replace "__[a-zA-Z]+__", "([a-zA-Z0-9]*)"    
+    $regex = $regex -replace "_[a-zA-Z]+_", "([a-zA-Z0-9]*)"    
     $m = [System.Text.RegularExpressions.Regex]::Matches($text, "^$regex`$");
     
     if ($null -ne $m) {
         try {
             $result = $m | % {
-                for($i = 1; $i -lt $_.Groups.Count; $i++) {
+                for ($i = 1; $i -lt $_.Groups.Count; $i++) {
                     $val = $_.Groups[$i].Value
-                    $name = $vars[$i-1]
+                    $name = $vars[$i - 1]
                     if ($null -ne $name) {
                         return @{ $name = $val }
-                    } else {
+                    }
+                    else {
                         Write-Warning "null name in vars??"
                     }
                 }
