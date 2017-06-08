@@ -112,25 +112,32 @@ function get-entry(
                 if (!$noVarReplace) {
                     $allvars = $vars
 
-                    if (!$simpleMode) {
-                        try {
-                            foreach ($kvp in $map.GetEnumerator()) {
-                                # only use self vars as fallback 
-                                if ($allvars[$kvp.key] -eq $null) {
-                                    $allvars[$kvp.key] = $kvp.value
-                                }
-                            }                       
-                            foreach ($kvp in $root.GetEnumerator()) {
-                                # only use root vars as fallback
-                                if ($allvars[$kvp.key] -eq $null) {
-                                    $allvars[$kvp.key] = $kvp.value
-                                }
-                            }   
-                        } catch {
-                            throw
-                        }                    
-                    }
                     $entry2 = Convert-PropertiesFromVars $entry2 -vars $allvars -exclude $excludeProperties -WarningAction $warnaction -path $entry2._fullpath
+                    if (!$simpleMode) {
+                        $entry2 = Convert-PropertiesFromVars $entry2 -vars $map -exclude $excludeProperties -WarningAction $warnaction -path $entry2._fullpath
+                        $entry2 = Convert-PropertiesFromVars $entry2 -vars $root -exclude $excludeProperties -WarningAction $warnaction -path $entry2._fullpath
+                    }
+                    # if (!$simpleMode) {
+                    #     try {
+                    #         foreach ($kvp in $map.GetEnumerator()) {
+                    #             # only use self vars as fallback 
+                    #             if ($allvars[$kvp.key] -eq $null) {
+                    #                 $allvars[$kvp.key] = $kvp.value
+                    #             }
+                    #         }                       
+                    #         foreach ($kvp in $root.GetEnumerator()) {
+                    #             # only use root vars as fallback
+                    #             if ($allvars[$kvp.key] -eq $null) {
+                    #                 $allvars[$kvp.key] = $kvp.value
+                    #             }
+                    #         }   
+                    #     } catch {
+                    #         throw
+                    #     }                    
+                    # }
+
+                    # # replacement with $map and $root variable should be done in separate steps!
+                    # $entry2 = Convert-PropertiesFromVars $entry2 -vars $allvars -exclude $excludeProperties -WarningAction $warnaction -path $entry2._fullpath
                     
                 }
 
