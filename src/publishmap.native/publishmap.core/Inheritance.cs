@@ -205,6 +205,14 @@ namespace Publishmap.Utils.Inheritance
                          */
         }
 
+        private static string GetInheritedProfileName(IDictionary prof) {
+            return (string)prof["_inherit_from"];
+        }
+
+        private static bool AlreadyInherits(IDictionary prof) {
+            return prof.Contains("_inherited_from");
+        }
+
         public static void PostProcessPublishmap(IDictionary map)
         {
             var groupsToRemove = new List<string>();
@@ -247,33 +255,6 @@ namespace Publishmap.Utils.Inheritance
                                 //  use fullpath for backward compatibility    
                                 AddProperty(prof, "fullpath", $"{groupk}.{projk}.{profk}", overwrite: true);
                                 AddProperty(prof, "project", proj, overwrite: true);
-
-                                if (prof.Contains("_inherit_from"))
-                                {
-                                    if (!profiles.Contains(prof["_inherit_from"]))
-                                    {
-                                        // write - warning "cannot find inheritance base '$($prof._inherit_from)' for profile '$($prof._fullpath)'"
-                                    }
-                                    else
-                                    {
-                                        var cur = prof;
-                                        var hierarchy = new List<IDictionary>();
-                                        while (cur.Contains("_inherit_from") && !cur.Contains("_inherited_from"))
-                                        {
-                                            hierarchy.Add(cur);
-                                            var baseprof = (IDictionary)profiles[cur["_inherit_from"]];
-                                            cur = baseprof;
-                                        }
-                                        for (var i = hierarchy.Count - 1; i >= 0; i--)
-                                        {
-                                            cur = hierarchy[i];
-                                            var baseprof = (IDictionary)profiles[cur["_inherit_from"]];
-                                            // write-verbose "inheriting properties from '$($cur._inherit_from)' to '$($cur._fullpath)'"
-                                            AddInheritedProperties(baseprof, cur, valuesOnly: true, exclude: new[] { "_inherit_from", "_inherited_from" });
-                                            AddProperty(cur, "_inherited_from", cur["_inherit_from"]);
-                                        }
-                                    }
-                                }
                             }
                         }
                         foreach (var k in profilesToRemove) profiles.Remove(k);
@@ -296,6 +277,40 @@ namespace Publishmap.Utils.Inheritance
             }
 
             foreach (var k in groupsToRemove) map.Remove(k);
+        }
+
+        private static void ProcessInheritanceChain(IDictionary prof, IDictionary profiles)
+        {
+            var inheritFrom = GetInheritedProfileName(prof);
+            if (inheritFrom != null)
+            {
+                if (!profiles.Contains(inheritFrom))
+                {
+                    // write - warning "cannot find inheritance base '$($prof._inherit_from)' for profile '$($prof._fullpath)'"
+                }
+                else
+                {
+                    var cur = prof;
+                    var hierarchy = new List<IDictionary>();
+                    while ((inheritFrom = GetInheritedProfileName(cur)) != null && !AlreadyInherits(prof))
+                    {
+                        hierarchy.Add(cur);
+                        var baseprof = (IDictionary)profiles[inheritFrom];
+                        cur = baseprof;
+                    }
+                    for (var i = hierarchy.Count - 1; i >= 0; i--)
+                    {
+                        cur = hierarchy[i];
+                        if (!AlreadyInherits(cur)) {
+                            inheritFrom = GetInheritedProfileName(cur);
+                            var baseprof = (IDictionary)profiles[inheritFrom];
+                            // write-verbose "inheriting properties from '$($cur._inherit_from)' to '$($cur._fullpath)'"
+                            AddInheritedProperties(baseprof, cur, valuesOnly: true, exclude: new[] { "_inherit_from", "_inherited_from" });
+                            AddProperty(cur, "_inherited_from",inheritFrom);
+                        }
+                    }
+                }
+            }
         }
 
         /*
@@ -446,6 +461,7 @@ namespace Publishmap.Utils.Inheritance
                 }
                 var path = $"{fullpath}.{projk}";
 
+                ProcessInheritanceChain((IDictionary)subgroup, group);
                 AddInheritedProperties(group, (IDictionary)subgroup, valuesOnly: true);
                 // # this should be run only once per group, right? 
                 // # why is this needed here?

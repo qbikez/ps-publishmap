@@ -59,5 +59,31 @@ namespace Publishmap.Utils.Inheritance.Tests
 
             System.Console.WriteLine($"{count} iterations took {sw.ElapsedMilliseconds}ms");
         }
+
+        [Fact]
+        public void inherit_from_sibling() {
+            dynamic dict = new Dictionary<string, object>() {
+                { "test", new Dictionary<string, object> {
+                    { "a", "root" },
+                    { "c", "root" },
+                    { "profiles", new Dictionary<string, object>() {
+                        {"dev_1", new Dictionary<string, object>() {
+                            { "a", "dev_1" },
+                            { "b", "dev_1" }
+                        }},
+                        {"dev_2", new Dictionary<string, object>() {
+                            { "_inherit_from", "dev_1"},
+                            { "a", "dev_2" }
+                        }}
+                    }}
+                }}
+            };
+
+            var map = Inheritance.ImportGenericGroup(dict, "");
+
+            Assert.Equal("root", map["test"]["profiles"]["dev_2"]["c"]);
+            Assert.Equal("dev_1", map["test"]["profiles"]["dev_2"]["b"]);            
+            Assert.Equal("dev_2", map["test"]["profiles"]["dev_2"]["a"]);
+        }
     }
 }

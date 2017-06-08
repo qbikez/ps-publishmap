@@ -138,84 +138,87 @@ function preporcess-publishmap($map) {
 #    }
 }
 
-<#
-.Synopsis
-* adds profile links at project level
-* processes inheritance basing on `_inherit_from` properties  
-#>
-function postprocess-publishmap($map) {    
-  #  Measure-function  "$($MyInvocation.MyCommand.Name)" {
-        write-verbose "postprocessing map..."
-        foreach($groupk in get-propertynames $map) {
-            # remove generated properties from top-level
-            if ($groupk.startswith("_")) {
-                $map.Remove($groupk)
-                continue
-            }
-            $group = $map.$groupk
-            foreach($projk in get-propertynames $group) {
-                $proj = $group.$projk
-                if ($null -ne $proj.profiles) {
-                    foreach($profk in get-propertynames $proj.profiles) {
-                        $prof = $proj.profiles.$profk
-                        if ($prof -is [System.Collections.IDictionary]) {
-                            write-verbose "adding post-properties to '$groupk.$projk.$profk'" 
-                            # set full path as if profiles were created at project level
-                            $null = add-property $prof -name _fullpath -value "$groupk.$projk.$profk" -overwrite
-                            $null = add-property $prof -name _name -value "$profk" -overwrite
-                            # use fullpath for backward compatibility    
-                            if ($prof._fullpath -eq $null) {
-                                write-warning "no fullpath property!"
-                            }   
-                            $null = add-property $prof -name fullpath -value $prof._fullpath -overwrite
-                            # expose project at profile level
-                            $null = add-property $prof -name project -value $proj
-                        } else {
-                            #write-verbose "removing non-profile property '$groupk.$projk.$profk'"
-                            #remove every property that isn't a real profile
-                            $proj.profiles.Remove($profk)
-                        }
-                        if ($null -ne $prof._inherit_from) {
-                            if ($proj.profiles.$($null -eq $prof._inherit_from)) {
-                                write-warning "cannot find inheritance base '$($prof._inherit_from)' for profile '$($prof._fullpath)'"
-                            } else { 
-                                $cur = $prof
-                                $hierarchy = @()
-                                while($null -ne $cur._inherit_from -and $null -eq $cur._inherited_from) {                                
-                                    $hierarchy += $cur
-                                    $base = $proj.profiles.$($cur._inherit_from)
-                                    $cur = $base
-                                }
-                                for($i = ($hierarchy.length - 1); $i -ge 0; $i--) {
-                                    $cur = @($hierarchy)[$i]
-                                    $base = $proj.profiles.$($cur._inherit_from)
-                                   # write-verbose "inheriting properties from '$($cur._inherit_from)' to '$($cur._fullpath)'"
-                                    inherit-properties -from $base -to $cur -valuesonly -exclude @("_inherit_from","_inherited_from")
-                                    $null = add-property $cur -name _inherited_from  -value $($cur._inherit_from)
-                                }                            
-                            }
-                        }
-                    }
-                    # expose profiles at project level
-                    $null = add-properties $proj $proj.profiles -merge -ifNotExists
+
+# this function is imported from native .dll module
+
+# <#
+# .Synopsis
+# * adds profile links at project level
+# * processes inheritance basing on `_inherit_from` properties  
+# #>
+# function postprocess-publishmap($map) {    
+#   #  Measure-function  "$($MyInvocation.MyCommand.Name)" {
+#         write-verbose "postprocessing map..."
+#         foreach($groupk in get-propertynames $map) {
+#             # remove generated properties from top-level
+#             if ($groupk.startswith("_")) {
+#                 $map.Remove($groupk)
+#                 continue
+#             }
+#             $group = $map.$groupk
+#             foreach($projk in get-propertynames $group) {
+#                 $proj = $group.$projk
+#                 if ($null -ne $proj.profiles) {
+#                     foreach($profk in get-propertynames $proj.profiles) {
+#                         $prof = $proj.profiles.$profk
+#                         if ($prof -is [System.Collections.IDictionary]) {
+#                             write-verbose "adding post-properties to '$groupk.$projk.$profk'" 
+#                             # set full path as if profiles were created at project level
+#                             $null = add-property $prof -name _fullpath -value "$groupk.$projk.$profk" -overwrite
+#                             $null = add-property $prof -name _name -value "$profk" -overwrite
+#                             # use fullpath for backward compatibility    
+#                             if ($prof._fullpath -eq $null) {
+#                                 write-warning "no fullpath property!"
+#                             }   
+#                             $null = add-property $prof -name fullpath -value $prof._fullpath -overwrite
+#                             # expose project at profile level
+#                             $null = add-property $prof -name project -value $proj
+#                         } else {
+#                             #write-verbose "removing non-profile property '$groupk.$projk.$profk'"
+#                             #remove every property that isn't a real profile
+#                             $proj.profiles.Remove($profk)
+#                         }
+#                         if ($null -ne $prof._inherit_from) {
+#                             if ($proj.profiles.$($null -eq $prof._inherit_from)) {
+#                                 write-warning "cannot find inheritance base '$($prof._inherit_from)' for profile '$($prof._fullpath)'"
+#                             } else { 
+#                                 $cur = $prof
+#                                 $hierarchy = @()
+#                                 while($null -ne $cur._inherit_from -and $null -eq $cur._inherited_from) {                                
+#                                     $hierarchy += $cur
+#                                     $base = $proj.profiles.$($cur._inherit_from)
+#                                     $cur = $base
+#                                 }
+#                                 for($i = ($hierarchy.length - 1); $i -ge 0; $i--) {
+#                                     $cur = @($hierarchy)[$i]
+#                                     $base = $proj.profiles.$($cur._inherit_from)
+#                                    # write-verbose "inheriting properties from '$($cur._inherit_from)' to '$($cur._fullpath)'"
+#                                     inherit-properties -from $base -to $cur -valuesonly -exclude @("_inherit_from","_inherited_from")
+#                                     $null = add-property $cur -name _inherited_from  -value $($cur._inherit_from)
+#                                 }                            
+#                             }
+#                         }
+#                     }
+#                     # expose profiles at project level
+#                     $null = add-properties $proj $proj.profiles -merge -ifNotExists
 
                                 
-                }
-                # use fullpath for backward compatibility
-                if ($proj._fullpath) {
-                    $null = add-property $proj -name fullpath -value $proj._fullpath -overwrite
-                }
-            }
+#                 }
+#                 # use fullpath for backward compatibility
+#                 if ($proj._fullpath) {
+#                     $null = add-property $proj -name fullpath -value $proj._fullpath -overwrite
+#                 }
+#             }
 
-            # use fullpath for backward compatibility
-            if ($group._fullpath) {
-                $null = add-property $group -name fullpath -value $group._fullpath -overwrite
-            }
+#             # use fullpath for backward compatibility
+#             if ($group._fullpath) {
+#                 $null = add-property $group -name fullpath -value $group._fullpath -overwrite
+#             }
                     
-        }
-        return $pmap
- #   }
-}
+#         }
+#         return $pmap
+#  #   }
+# }
 
 function get-profile {
     [CmdletBinding()]
