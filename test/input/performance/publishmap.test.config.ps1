@@ -24,6 +24,7 @@ $publishmap = @{
             dev_2 = @{
                 _inherit_from = "dev"
             }
+         
             qa = @{
                 Config = "qa"
             }
@@ -56,7 +57,7 @@ $publishmap = @{
                 }
                 dev_copy = @{
                     Config = "copy"
-                }
+                }               
             }
         }
         do_not_inherit_global = @{

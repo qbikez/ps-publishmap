@@ -49,13 +49,20 @@ $publishmap = @{
         }
         override_default_profiles = @{
             task = "Migrate"
+            appname = "override"
             profiles = @{
                 dev = @{
+                    appname = "override/dev"
                     password = "overriden"
                     new_prop = "abc"
                 }
                 dev_copy = @{
                     Config = "copy"
+                }
+                dev_3 = @{
+                    _inherit_from = "dev"
+                    profile = "ne-dev-3.pubxml"
+                    task = "Migrate-3"
                 }
             }
         }

@@ -17,6 +17,7 @@ namespace Publishmap.Utils.Inheritance.Tests
 
             Assert.Equal("val1", dict1["prop1"]);
         }
+        
         [Fact]
         public void merge_dictionaries()
         {
@@ -42,6 +43,7 @@ namespace Publishmap.Utils.Inheritance.Tests
             Assert.True(((IDictionary)dict1["content"]).Contains("newcontent.prop1"));
             Assert.Equal("newcontent.val1", ((IDictionary)dict1["content"])["newcontent.prop1"]);
         }
+
         [Fact]
         public void add_property_performance()
         {

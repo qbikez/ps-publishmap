@@ -109,10 +109,22 @@ Describe "parse publish map" {
           $profile.Config | Should Not BeNullOrEmpty
           $profile.Config | Should Be "copy"          
       }
-       It "Should override from local inherited profile" {
+      It "Should override from local inherited profile" {
           $profile = $map.test.override_default_profiles.dev_copy
           $profile.password | Should Not BeNullOrEmpty
-          $profile.password | Should Be $map.test.override_default_profiles.dev.password         
+          $profile.password | Should Be $map.test.override_default_profiles.dev.password
+      }
+      It "Should inherit overriden project properties" {
+          $profile = $map.test.override_default_profiles.dev_3
+          $profile.appname | Should Not BeNullOrEmpty
+          $profile.appname | Should Be $map.test.override_default_profiles.dev.appname
+      }
+       It "Should override in child profile" {
+          $profile = $map.test.override_default_profiles.dev_3
+          $profile.Config | Should Not BeNullOrEmpty
+          $profile.profile | Should Be  "ne-dev-3.pubxml"
+          $profile.Task | Should Be  "Migrate-3"
+          
       }
   }
 
@@ -122,7 +134,7 @@ Describe "parse publish map" {
           $profile.connectionStringName | Should Not BeNullOrEmpty
           $profile.connectionStringName | Should Be $map.test.additional.dev.connectionStringName          
       }     
-    It "Should override from local inherited profile" {
+      It "Should override from local inherited profile" {
           $profile = $map.test.additional.dev_2
           $profile.password | Should Not BeNullOrEmpty
           $profile.password | Should Be $map.test.additional.dev.password         
