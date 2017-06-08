@@ -29,7 +29,7 @@ function _clone($obj, [switch][bool] $deep, [int]$level = 0, [int]$maxdepth = 10
     elseif ($obj.gettype().name -eq "Hashtable" -or $obj -is [Hashtable]) {
         # hashtable created in c# code will have case-sensitive keys. convert it back to PS-style case-insensitive
        
-        $copy = [ordered]@{}
+        $copy = @{}
         
         foreach ($e in $obj.GetEnumerator()) {
             $val = $e.Value
@@ -54,8 +54,11 @@ function _clone($obj, [switch][bool] $deep, [int]$level = 0, [int]$maxdepth = 10
     elseif ($obj -is [string]) {
         return $obj.Clone()
     }
-    else {
+    elseif ($obj.Clone -ne $null) {
         return $obj.Clone()
+    }
+    else {
+        return $obj
     }
     #       }
     } catch {
@@ -102,8 +105,8 @@ function get-entry(
             if ($null -ne $entry) {
                 #TODO: should we use a deep clone?
                 $entry2 = _clone $entry -deep -shallowkeys @("project")
-                if ($entry2 -is [Hashtable]) {
-                    $entry2._vars = $vars
+                if ($entry2 -is [Hashtable] -or $entry2 -is [System.Collections.Specialized.OrderedDictionary]) {
+                    $entry2["_vars"] = $vars
                 }             
                 $warnaction = "SilentlyContinue"
                 if ($simpleMode) {
@@ -169,6 +172,9 @@ $global:seen = @{}
 function Convert-PropertiesFromVars { 
     [CmdletBinding()]
     param($obj, $vars = @{}, [switch][bool]$strict, $exclude = @(), [int]$level = 0, $path = "") 
+    if ("_vars" -notin $exclude) {
+        $exclude += @("_vars")
+    }
     #Measure-function  "$($MyInvocation.MyCommand.Name)" {
     $msg = " replacing vars in object '$path' : $obj"
     <#

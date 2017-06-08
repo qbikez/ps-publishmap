@@ -33,7 +33,7 @@ $publishmap = @{
             proj = "Platform\src\server\NowaEra.Server.Content\NowaEra.Server.Content.csproj"
             task = "Migrate"            
             #deployprop="DeployBookMeta"
-            appname="svc/content"           
+            appname="svc/content"
         }
         db_1 = @{
         }
