@@ -1,5 +1,25 @@
 . $PSScriptRoot\includes.ps1
 
+
+function Compare-Dicts($src, $dst, $exclude = @(), [int]$level = 0) {
+    if ($level -gt 10) {
+        throw "recursion to deep"
+    }
+    foreach($kvp in $src.GetEnumerator()) {
+        try {
+            if ($kvp.key -in $exclude) { continue }
+            # dictionaries and arrays will be cloned!
+            if ($kvp.value -is [Hashtable] -or $kvp.value -is [System.Collections.Specialized.OrderedDictionary]){
+                compare-dicts $kvp.value $dst[$kvp.key] -exclude:$exclude -level ($level+1)
+            } else {
+                $kvp.Value | Should Be $dst[$kvp.Key]
+            }
+        } catch {
+            throw "property '$($kvp.key)' mismatch!`r`n$($_.Exception.Message)"
+        }
+    }
+}
+
 Describe "parse publish map" {
   $map = import-publishmap -maps "$PSScriptRoot\input\publishmap.test.config.ps1"  
 
@@ -138,10 +158,12 @@ Describe "Get publishmap entry" {
             $p | Should Not BeNullOrEmpty
             $p.Profile | Should Not BeNullOrEmpty
             # this will be a clone!
+            $p.Profile | Should Not Be $map.test.use_default_profiles.dev
+       
+            $p.Profile["_vars"] | Should Not BeNullOrEmpty
             $p.Profile.Keys.Count | Should BeGreaterThan $map.test.use_default_profiles.dev.Keys.Count
-            foreach($kvp in $p.Profile.GetEnumerator()) {
-                $kvp.Value | Should Be $map.test.use_default_profiles.dev[$kvp.Key]
-            }
+            compare-dicts $p.Profile $map.test.use_default_profiles.dev -exclude "_vars","_clone_meta","project"
+           
             #Set-TestInconclusive 
             <# the profile will be cloned, should check for object equality
             $p.Profile | Should Be $map.test.use_default_profiles.dev

@@ -12,7 +12,7 @@
 RootModule = 'publishmap.psm1'
 
 # Version number of this module.
-ModuleVersion = '1.3.3'
+ModuleVersion = '1.5.1.0'
 
 # ID used to uniquely identify this module
 GUID = '32fffc21-70fe-4290-b4ca-1cf3ade430f0'
@@ -51,7 +51,7 @@ Author = 'jakub.pawlowski'
 # RequiredModules = @()
 
 # Assemblies that must be loaded prior to importing this module
-# RequiredAssemblies = @()
+#RequiredAssemblies = @("utils\publishmap.powershell\bin\Debug\net46\publishmap.powershell.dll")
 
 # Script files (.ps1) that are run in the caller's environment prior to importing this module.
 # ScriptsToProcess = @()
@@ -63,7 +63,7 @@ Author = 'jakub.pawlowski'
 # FormatsToProcess = @()
 
 # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
-# NestedModules = @()
+#NestedModules = @("utils\publishmap.powershell\bin\Debug\net46\publishmap.powershell.dll")
 
 # Functions to export from this module
 FunctionsToExport = '*'
@@ -117,6 +117,11 @@ PrivateData = @{
 # DefaultCommandPrefix = ''
 
 }
+
+
+
+
+
 
 
 

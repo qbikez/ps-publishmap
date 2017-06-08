@@ -1,0 +1,9 @@
+{
+    "$schema": "http://json.schemastore.org/global",
+    "projects": [
+        "."
+    ],
+    "sdk":{
+        "version": "1.0.0-preview1-002702"
+    }
+}

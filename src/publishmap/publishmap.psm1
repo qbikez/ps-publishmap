@@ -2,13 +2,15 @@
 
 . "$helpersPath\imports.ps1"
 
+
 Export-ModuleMember -Function `
         Get-Entry, Import-Map, `
         Import-PublishMap, Get-Profile, `
         Get-PropertyNames, Add-Property, Add-Properties, `
         Convert-Vars, ConvertTo-Hashtable, ConvertTo-Object, `
 	Convert-PropertiesFromVars, `
-        Add-InheritedProperties `
+        Add-InheritedProperties, `
+        Measure-Function `
     -Alias *
     
     
