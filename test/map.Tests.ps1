@@ -9,6 +9,7 @@ Describe "parse map with variables" {
                     svc1 = @{
                         url = "https://{name}/svc1"
                         url_staging = "https://{name}/svc1{?postfix}"
+                        other = "svc1-other"
                     }
                     svc2 = @{
                         url = "{base_url}/svc2"
@@ -26,6 +27,7 @@ Describe "parse map with variables" {
                         url = "{base_url}/{name}"
                         help = "{url}/help"
                         something = "{help}/something"
+                        other_no_var = "{services.svc1.other}"
                         other = "{services.svc1.url}"
                     }
                 }
@@ -71,7 +73,7 @@ Describe "parse map with variables" {
             $url | Should Be "https://some-name.com/svc2/help"            
           }
           It "nested object variables should override parent" {
-            $url = $map | get-entry "services.svc3.url" 
+            $url = $map | get-entry "services.svc3.url" -verbose
             $url | Should Be "https://some-name.com/svc3"            
           }
           It "variable override should affect parent variables" {
@@ -84,9 +86,13 @@ Describe "parse map with variables" {
           }
 
           It "variables referencing other objects should be replaced" {
-            $url = $map | get-entry "services.svc4.other" 
-            $url | Should Be  "https://some-name.com/svc1"         
+            $url = $map | get-entry "services.svc4.other_no_var" 
+            $url | Should Be  "svc1-other"         
           }
+        It "variables referencing other objects with variables should take value from other objects" {
+            $url = $map | get-entry "services.svc4.other" 
+            $url | Should Be  "https://some-name.com/svc1"
+        }
       }
 }
 

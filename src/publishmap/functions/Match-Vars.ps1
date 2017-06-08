@@ -115,16 +115,16 @@ function get-entry(
                     if (!$simpleMode) {
                         try {
                             foreach ($kvp in $map.GetEnumerator()) {
-                                if ($allvars[$kvp.key] -ne $null) {
-                                    #   write-warning "replacing $($allvars[$kvp.key]) with $($kvp.value)"
+                                # only use self vars as fallback 
+                                if ($allvars[$kvp.key] -eq $null) {
+                                    $allvars[$kvp.key] = $kvp.value
                                 }
-                                $allvars[$kvp.key] = $kvp.value
                             }                       
                             foreach ($kvp in $root.GetEnumerator()) {
-                                if ($allvars[$kvp.key] -ne $null) {
-                                    #   write-warning "replacing $($allvars[$kvp.key]) with $($kvp.value)"
+                                # only use root vars as fallback
+                                if ($allvars[$kvp.key] -eq $null) {
+                                    $allvars[$kvp.key] = $kvp.value
                                 }
-                                $allvars[$kvp.key] = $kvp.value
                             }   
                         } catch {
                             throw
