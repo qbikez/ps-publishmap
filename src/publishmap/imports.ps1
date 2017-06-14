@@ -31,7 +31,7 @@ function loadLib($lib, [scriptblock] $init) {
     foreach($asm in (get-childitem $libdir -Filter "*.dll")) {
         try {
             [System.Reflection.Assembly]::LoadFile($asm.fullname)
-            write-host "imported $($asm.Name)"
+            #write-host "imported $($asm.Name)"
         } catch {
             write-warning "failed to import $($asm.Name): $($_.Exception.Message)"
         }
@@ -45,7 +45,7 @@ function loadLib($lib, [scriptblock] $init) {
         if ($init -ne $null) {
             Invoke-Command $init
         }
-        write-host "lib $lib imported"
+        #write-host "lib $lib imported"
        
     } catch {
         throw $_
