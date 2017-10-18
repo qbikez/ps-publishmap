@@ -5,7 +5,7 @@
 
 #>
 
-function _clone($obj, [switch][bool] $deep, [int]$level = 0, [int]$maxdepth = 10, $shallowkeys = @()) {
+function _clone($obj, [switch][bool] $deep, [int]$level = 0, [int]$maxdepth = 10, $shallowkeys = @(), $path) {
     try {
     #        Measure-function  "$($MyInvocation.MyCommand.Name)" {
     $shkeys = $shallowkeys + @("_clone_meta")    
@@ -16,7 +16,7 @@ function _clone($obj, [switch][bool] $deep, [int]$level = 0, [int]$maxdepth = 10
         $copy = [ordered]@{}
         foreach ($e in $obj.GetEnumerator()) {
             $val = $e.Value
-            if ($deep -and !($e.key -in $shkeys)) { $val = _clone $val -deep:$deep -maxdepth:$maxdepth -level ($level + 1) -shallowkeys:$shallowkeys }
+            if ($deep -and !($e.key -in $shkeys)) { $val = _clone $val -deep:$deep -maxdepth:$maxdepth -level ($level + 1) -shallowkeys:$shallowkeys -path "$path.$($e.key)" }
             $copy.Add($e.Key, $val)
         }
         if ($obj["_clone_meta"] -eq $null) {
@@ -33,11 +33,11 @@ function _clone($obj, [switch][bool] $deep, [int]$level = 0, [int]$maxdepth = 10
         
         foreach ($e in $obj.GetEnumerator()) {
             $val = $e.Value
-            if ($deep -and !($e.key -in $shkeys)) { $val = _clone $val -deep:$deep -maxdepth:$maxdepth  -level ($level + 1) -shallowkeys:$shallowkeys }
+            if ($deep -and !($e.key -in $shkeys)) { $val = _clone $val -deep:$deep -maxdepth:$maxdepth  -level ($level + 1) -shallowkeys:$shallowkeys -path "$path.$($e.key)" }
             try {
-            $copy.Add($e.Key, $val)
+                $copy.Add($e.Key, $val)
             } catch {
-                throw
+                throw "failed to copy object '$path': $($_.Exception.Message)"
             }
         }
         if ($obj["_clone_meta"] -eq $null) {
@@ -81,6 +81,7 @@ function get-entry(
     $root = $map
     $parent = $null
     $entry = $null
+    $key_org = $key
     $splits = $key.split(".")
     for ($i = 0; $i -lt $splits.length; $i++) {
         $split = $splits[$i]
@@ -108,7 +109,7 @@ function get-entry(
 
             if ($null -ne $entry) {
                 #TODO: should we use a deep clone?
-                $entry2 = _clone $entry -deep -shallowkeys @("project")
+                $entry2 = _clone $entry -deep -shallowkeys @("project") -path $key_org
                 if ($entry2 -is [Hashtable] -or $entry2 -is [System.Collections.Specialized.OrderedDictionary]) {
                     $entry2["_vars"] = $vars
                 }             
