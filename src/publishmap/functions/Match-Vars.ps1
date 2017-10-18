@@ -34,7 +34,11 @@ function _clone($obj, [switch][bool] $deep, [int]$level = 0, [int]$maxdepth = 10
         foreach ($e in $obj.GetEnumerator()) {
             $val = $e.Value
             if ($deep -and !($e.key -in $shkeys)) { $val = _clone $val -deep:$deep -maxdepth:$maxdepth  -level ($level + 1) -shallowkeys:$shallowkeys }
+            try {
             $copy.Add($e.Key, $val)
+            } catch {
+                throw
+            }
         }
         if ($obj["_clone_meta"] -eq $null) {
             $obj["_clone_meta"] = @{ "type" = "original" }
@@ -175,8 +179,11 @@ function Convert-PropertiesFromVars {
     if ("_vars" -notin $exclude) {
         $exclude += @("_vars")
     }
+    if ($level -eq 0) {
+        write-verbose "VARS: $($vars.keys)"
+    }
     #Measure-function  "$($MyInvocation.MyCommand.Name)" {
-    $msg = " replacing vars in object '$path' : $obj"
+    $msg = " replacing vars in object '$path' self=$($self._fullpath) : $obj"
     <#
     if ($global:seen[$path] -eq $null) {
         $global:seen[$path] = $obj
@@ -201,12 +208,19 @@ function Convert-PropertiesFromVars {
                 if ($obj[$key] -in $exclude) {
                     continue
                 }
-                $self = $obj
+                
+                $selfChanged = $false
+                # when we're in a profile (level=3) and encounter a dictionary, keep the profile as self
+                if ($level -lt 2) {                    
+                    #write-verbose "setting self to '$obj' ($path)"
+                    $selfChanged = $true
+                    $self = $obj
+                }
                 try {
                     $obj[$key] = Convert-PropertiesFromVars $obj[$key] $vars -exclude ($exclude + @($obj)) -level ($level + 1) -path "$path.$key"
                 }
                 finally {
-                    $self = $null
+                    if ($selfChanged) { $self = $null }
                 }
                 
             }
