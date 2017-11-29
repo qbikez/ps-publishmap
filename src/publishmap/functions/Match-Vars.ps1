@@ -6,66 +6,69 @@
 #>
 
 function _clone($obj, [switch][bool] $deep, [int]$level = 0, [int]$maxdepth = 10, $shallowkeys = @(), $path) {
+    if ($obj -eq $null) { return $null }
     try {
-    #        Measure-function  "$($MyInvocation.MyCommand.Name)" {
-    $shkeys = $shallowkeys + @("_clone_meta")    
-    if ($level -gt $maxdepth) {
-        throw "max clone depth exceeded!"
-    }
-    if ($obj -is [System.Collections.Specialized.OrderedDictionary]) {       
-        $copy = [ordered]@{}
-        foreach ($e in $obj.GetEnumerator()) {
-            $val = $e.Value
-            if ($deep -and !($e.key -in $shkeys)) { $val = _clone $val -deep:$deep -maxdepth:$maxdepth -level ($level + 1) -shallowkeys:$shallowkeys -path "$path.$($e.key)" }
-            $copy.Add($e.Key, $val)
+        #        Measure-function  "$($MyInvocation.MyCommand.Name)" {
+        $shkeys = $shallowkeys + @("_clone_meta")    
+        if ($level -gt $maxdepth) {
+            throw "max clone depth exceeded!"
         }
-        if ($obj["_clone_meta"] -eq $null) {
-            $obj["_clone_meta"] = @{ "type" = "original" }
-        }
-        $copy["_clone_meta"] = @{ "type" = "clone" }
-
-        return $copy
-    }
-    elseif ($obj.gettype().name -eq "Hashtable" -or $obj -is [Hashtable]) {
-        # hashtable created in c# code will have case-sensitive keys. convert it back to PS-style case-insensitive
-       
-        $copy = @{}
-        
-        foreach ($e in $obj.GetEnumerator()) {
-            $val = $e.Value
-            if ($deep -and !($e.key -in $shkeys)) { $val = _clone $val -deep:$deep -maxdepth:$maxdepth  -level ($level + 1) -shallowkeys:$shallowkeys -path "$path.$($e.key)" }
-            try {
+        if ($obj -is [System.Collections.Specialized.OrderedDictionary]) {       
+            $copy = [ordered]@{}
+            foreach ($e in $obj.GetEnumerator()) {
+                $val = $e.Value
+                if ($deep -and !($e.key -in $shkeys)) { $val = _clone $val -deep:$deep -maxdepth:$maxdepth -level ($level + 1) -shallowkeys:$shallowkeys -path "$path.$($e.key)" }
                 $copy.Add($e.Key, $val)
-            } catch {
-                throw "failed to copy object '$path': $($_.Exception.Message)"
             }
+            if ($obj["_clone_meta"] -eq $null) {
+                $obj["_clone_meta"] = @{ "type" = "original" }
+            }
+            $copy["_clone_meta"] = @{ "type" = "clone" }
+
+            return $copy
         }
-        if ($obj["_clone_meta"] -eq $null) {
-            $obj["_clone_meta"] = @{ "type" = "original" }
+        elseif ($obj.gettype().name -eq "Hashtable" -or $obj -is [Hashtable]) {
+            # hashtable created in c# code will have case-sensitive keys. convert it back to PS-style case-insensitive
+       
+            $copy = @{}
+        
+            foreach ($e in $obj.GetEnumerator()) {
+                $val = $e.Value
+                if ($deep -and !($e.key -in $shkeys)) { $val = _clone $val -deep:$deep -maxdepth:$maxdepth  -level ($level + 1) -shallowkeys:$shallowkeys -path "$path.$($e.key)" }
+                try {
+                    $copy.Add($e.Key, $val)
+                }
+                catch {
+                    throw "failed to copy object '$path': $($_.Exception.Message)"
+                }
+            }
+            if ($obj["_clone_meta"] -eq $null) {
+                $obj["_clone_meta"] = @{ "type" = "original" }
+            }
+            $copy["_clone_meta"] = @{ "type" = "clone" }
+            return $copy
         }
-        $copy["_clone_meta"] = @{ "type" = "clone" }
-        return $copy
-    }
-    elseif ($obj.gettype().IsArray) {
-        if ($deep) {
-            Write-Verbose "don't know how to deep-clone an array. doing a shallow clone."
+        elseif ($obj.gettype().IsArray) {
+            if ($deep) {
+                Write-Verbose "don't know how to deep-clone an array. doing a shallow clone."
+            }
+            return @($obj.Clone())        
+        }    
+        elseif ($obj.gettype().IsValueType) {
+            return $obj
         }
-        return @($obj.Clone())        
-    }    
-    elseif ($obj.gettype().IsValueType) {
-        return $obj
+        elseif ($obj -is [string]) {
+            return $obj.Clone()
+        }
+        elseif ($obj.Clone -ne $null) {
+            return $obj.Clone()
+        }
+        else {
+            return $obj
+        }
+        #       }
     }
-    elseif ($obj -is [string]) {
-        return $obj.Clone()
-    }
-    elseif ($obj.Clone -ne $null) {
-        return $obj.Clone()
-    }
-    else {
-        return $obj
-    }
-    #       }
-    } catch {
+    catch {
         throw
     }
 }
@@ -391,7 +394,8 @@ function convert-vars {
             write-verbose "replaced: $org -> $text"
         }
         return $text
-    } finally { 
+    }
+    finally { 
         $self = $originalself
     }
     #   }
@@ -451,7 +455,8 @@ function _MatchVarPattern ($text, $pattern) {
                     }
                 }
             }
-        } catch {
+        }
+        catch {
             throw
         }
     }
