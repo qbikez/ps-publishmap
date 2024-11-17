@@ -140,7 +140,7 @@ Describe "map parsing" {
             Name   = "options func"
             Map    = @{
                 options = {
-                    return @{ 
+                    return @{
                         "a" = 1
                         "b" = 2
                     }
