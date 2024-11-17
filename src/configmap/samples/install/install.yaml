@@ -1,0 +1,75 @@
+dependencies:
+  media:
+    - spotify[--ignore-checksums]
+  lang:
+    - python@3.11.9 # 3.12 removes "imp" packages, which is used by some of the packages
+    - dotnet-8[winget install Microsoft.DotNet.SDK.8]
+    - dotnet
+    - terraform
+    - git-fork
+    - name: nvm
+      after: |
+        refresh-env
+        nvm install latest
+        nvm use latest
+
+  other:
+    - rescuetime[--ignore-checksums]
+    - thefuck[pip install thefuck]
+  utils:
+    - alt-tab-terminator
+    - totalcommanderpowerpack[--pre]
+    - totalcommander
+  # talk:
+  #  - discord
+  core:
+    - powershell-core # [--pre]
+    - vscode-insiders
+    - starship
+    - gsudo
+    - microsoft-windows-terminal[--pre]
+    - nerd-fonts-firacode
+    - kdiff3
+    - name: git
+      after: |
+        refresh-env
+        git config --global merge.tool kdiff3 
+        git config --global mergetool.kdiff3.path "C:/Program Files/KDiff3/bin/kdiff3.exe" 
+        git config --global mergetool.kdiff3.trustExitCode false
+        git config --global diff.guitool kdiff3 
+        git config --global difftool.kdiff3.path "C:/Program Files/KDiff3/bin/kdiff3.exe" 
+        git config --global difftool.kdiff3.trustExitCode false
+        git config --global user.name jakub.pawlowski
+        git config --global user.email jakub.pawlowski@guestline.com
+        
+        pwsh $psscriptroot/configure -target profile
+  azure:
+    - azure-cli
+    - azure-data-studio
+    - azurestorageemulator
+    - AzureStorageExplorer
+    - azure-cosmosdb-emulator
+    - subscription-manager[dotnet tool install -g subscription-manager]
+  tools:
+    # - postman
+    # - postman-cli
+    - sql-server-management-studio
+    - docker-desktop
+    # - rancher-desktop #alternative to docker
+    - mkcert
+  net:
+    - mqtt-explorer
+    - tailscale
+    - googlechrome.canary
+    - googlechrome
+    - ngrok
+    - telnet[dism /online /Enable-Feature /FeatureName:TelnetClient]
+  k8s:  
+    - k9s@0.32.4
+    - kubernetes-cli 
+    - kustomize
+    - kubeconform[winget install YannHamon.kubeconform]
+    - azure-kubelogin
+    - flux
+  server:
+    - sql-server-2022
