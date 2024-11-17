@@ -4,17 +4,24 @@ BeforeAll {
     function Get-CompletionList($modules) {
         $result = [ordered]@{}
 
-        $l = $modules
         if ($modules.list) {
             $l = $modules.list
+            if ($l -is [scriptblock]) {
+                $submodules = Invoke-Command -ScriptBlock $l
+            }
+            elseif ($l -is [array]) {
+                $submodules = $l | % { $r = @{} } { $r[$_] = $_ } { $r }
+            }
+            elseif ($l -is [System.Collections.IDictionary]) {
+                $submodules = $l
+            }
         }
-        if ($l -is [scriptblock]) {
-            $submodules = Invoke-Command -ScriptBlock $l
-        }
-        elseif ($l -is [array]) {
+
+        if ($modules -is [array]) {
+            $l = $modules
             $submodules = $l | % { $r = @{} } { $r[$_] = $_ } { $r }
         }
-        
+
         if ($submodules) {
             foreach ($sub in $submodules.GetEnumerator()) {
                 $result[$sub.key] = $sub.value
@@ -22,7 +29,7 @@ BeforeAll {
             return $result
         }
 
-        if ($modules -isnot [hashtable] -and $modules -isnot [System.Collections.Specialized.OrderedDictionary]) {
+        if ($modules -isnot [System.Collections.IDictionary]) {
             throw "$($modules.GetType().FullName) type not supported"
         }
 
@@ -68,6 +75,34 @@ Describe 'configuration map' -ForEach @(
             "key2" = @{ id = "b" }
         }
         Keys = @("key1*", "a", "b", "key2")
+    }
+    @{
+        Name = "config-like"
+        Map  = [ordered]@{
+            "db" = @{
+                options = @{
+                    "local" = @{
+                        connectionString = "blah"
+                    }
+                    "remote" = @{
+                        connectionString = "boom"
+                    }
+                }
+            }
+            "secrets" = @{
+                list = @{
+                    connectionString = @{
+                        "local" = "blah"
+                        "remote" = "boom"
+                    }
+                    keyVault = @{
+                        "local" = "blah"
+                        "remote" = "boom"
+                    }
+                }
+            }
+        }
+        Keys = @("db", "secrets*", "connectionString", "keyVault")
     }
 ) {
     Describe "<name>" {
