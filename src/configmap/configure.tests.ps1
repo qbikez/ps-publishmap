@@ -22,6 +22,10 @@ BeforeAll {
             return $result
         }
 
+        if ($modules -isnot [hashtable] -and $modules -isnot [System.Collections.Specialized.OrderedDictionary]) {
+            throw "$($modules.GetType().FullName) type not supported"
+        }
+
         foreach ($kvp in $modules.GetEnumerator()) {
             $module = $kvp.value
             if ($module.list) {
