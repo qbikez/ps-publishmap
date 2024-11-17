@@ -4,19 +4,40 @@ BeforeAll {
     function Get-CompletionList($modules) {
         $result = [ordered]@{}
 
+        $l = $modules
         if ($modules.list) {
             $l = $modules.list
-            if ($l -is [scriptblock]) {
-                $submodules = Invoke-Command -ScriptBlock $l
+        }
+        
+        if ($l -is [System.Collections.IDictionary]) {
+            foreach ($kvp in $l.GetEnumerator()) {
+                $module = $kvp.value
+                if ($module.list) {
+                    $groupKey = "$($kvp.key)*"
+                    $result.$groupKey = $module
+                
+                    $submodules = Get-CompletionList $module
+                    $result += $submodules
+                }
+                else {
+                    $groupKey = "$($kvp.key)"
+                    $result.$groupKey = $module
+                }
             }
-            elseif ($l -is [array]) {
-                $submodules = $l | % { $r = @{} } { $r[$_] = $_ } { $r }
-            }
-            elseif ($l -is [System.Collections.IDictionary]) {
-                $submodules = $l
-            }
+
+            return $result
         }
 
+        if ($l -is [scriptblock]) {
+            $submodules = Invoke-Command -ScriptBlock $l
+        }
+        elseif ($l -is [array]) {
+            $submodules = $l | % { $r = @{} } { $r[$_] = $_ } { $r }
+        }
+        elseif ($l -is [System.Collections.IDictionary]) {
+            $submodules = $l
+        }
+        
         if ($modules -is [array]) {
             $l = $modules
             $submodules = $l | % { $r = @{} } { $r[$_] = $_ } { $r }
@@ -29,86 +50,110 @@ BeforeAll {
             return $result
         }
 
-        if ($modules -isnot [System.Collections.IDictionary]) {
-            throw "$($modules.GetType().FullName) type not supported"
+        throw "$($modules.GetType().FullName) type not supported"
+    }
+
+    function Get-ValuesList($map) {
+        if (!$map.options) {
+            throw "map doesn't have 'options' entry"
         }
 
-        foreach ($kvp in $modules.GetEnumerator()) {
-            $module = $kvp.value
-            if ($module.list) {
-                $groupKey = "$($kvp.key)*"
-                $result.$groupKey = $module
-                
-                $submodules = Get-CompletionList $module
-                $result += $submodules
-            }
-            else {
-                $groupKey = "$($kvp.key)"
-                $result.$groupKey = $module
-            }
-        }
-        return $result
+        return Get-CompletionList $map.options
     }
 }
 
+Describe "map parsing" {
 
-Describe 'configuration map' -ForEach @(
-    @{
-        Name = "simple list"
-        Map  = @("item1", "item2")
-        Keys = @("item1", "item2")
-    }
-    @{
-        Name = "simple map"
-        Map  = [ordered]@{
-            "key1" = @{ id = "a" }
-            "key2" = @{ id = "b" }
+    Describe 'keys' -ForEach @(
+        @{
+            Name = "simple list"
+            Map  = @("item1", "item2")
+            Keys = @("item1", "item2")
         }
-        Keys = @("key1", "key2")
-    }
-    @{
-        Name = "one-level simple list"
-        Map  = [ordered]@{
-            "key1" = @{
-                list = ("a", "b")
+        @{
+            Name = "simple map"
+            Map  = [ordered]@{
+                "key1" = @{ id = "a" }
+                "key2" = @{ id = "b" }
             }
-            "key2" = @{ id = "b" }
+            Keys = @("key1", "key2")
         }
-        Keys = @("key1*", "a", "b", "key2")
+        @{
+            Name = "one-level simple list"
+            Map  = [ordered]@{
+                "key1" = @{
+                    list = ("a", "b")
+                }
+                "key2" = @{ id = "b" }
+            }
+            Keys = @("key1*", "a", "b", "key2")
+        }
+        @{
+            Name = "config-like"
+            Map  = [ordered]@{
+                "db"      = @{
+                    options = @{
+                        "local"  = @{
+                            connectionString = "blah"
+                        }
+                        "remote" = @{
+                            connectionString = "boom"
+                        }
+                    }
+                }
+                "secrets" = @{
+                    list = @{
+                        connectionString = @{
+                            "local"  = "blah"
+                            "remote" = "boom"
+                        }
+                        keyVault         = @{
+                            "local"  = "blah"
+                            "remote" = "boom"
+                        }
+                    }
+                }
+            }
+            Keys = @("db", "secrets*", "connectionString", "keyVault")
+        }
+    ) {
+        Describe "<name>" {
+            It '<name> => keys' {
+                $result = Get-CompletionList $map
+                $result.Keys | Should -Be $keys
+            }
+        }
     }
-    @{
-        Name = "config-like"
-        Map  = [ordered]@{
-            "db" = @{
+
+    Describe "values" -ForEach @(
+        @{
+            Name   = "options value"
+            Map    = @{
                 options = @{
-                    "local" = @{
-                        connectionString = "blah"
-                    }
-                    "remote" = @{
-                        connectionString = "boom"
-                    }
+                    "a" = 1
+                    "b" = 2
                 }
             }
-            "secrets" = @{
-                list = @{
-                    connectionString = @{
-                        "local" = "blah"
-                        "remote" = "boom"
-                    }
-                    keyVault = @{
-                        "local" = "blah"
-                        "remote" = "boom"
-                    }
-                }
-            }
+            Values = @("a", "b")
         }
-        Keys = @("db", "secrets*", "connectionString", "keyVault")
-    }
-) {
-    Describe "<name>" {
-        It '<name> resolves to list of keys' {
-            $result = Get-CompletionList $map
-            $result.Keys | Should -Be $keys
+        @{
+            Name   = "options func"
+            Map    = @{
+                options = {
+                    return @{ 
+                        "a" = 1
+                        "b" = 2
+                    }
+                }
+            }
+            Values = @("a", "b")
+        }
+    ) {
+        Describe "<name>" {
+            It "<name> => options" {
+                $result = Get-ValuesList $map
+                $result.Keys | Should -Be $Values
+            }
         }
     }
 }
