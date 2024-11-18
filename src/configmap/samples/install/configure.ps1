@@ -1,3 +1,4 @@
+#requires -modules ConfigMap
 
 [CmdletBinding()]
 param(
@@ -5,47 +6,15 @@ param(
             param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
             $modules = . "$PSScriptRoot/.configuration.map.ps1"
 
-            $list = convertto-completionList $modules
-            $keys = $list.keys
-            return $keys | ? { $_.startswith($wordToComplete) }
+            $list = Get-CompletionList $modules
+            return $list.Keys | ? { $_.startswith($wordToComplete) }
         })] 
     $module = $null
 )
 
 
-$modules = . $PSScriptRoot/.configuration.map.ps1
-$list = convertto-completionList $modules
-
-$scripts = @{
-    essentials = {
-        & "$psscriptroot/bootstrap.ps1"
-        #winget
-        Add-AppxPackage -RegisterByFamilyName -MainPackage Microsoft.DesktopAppInstaller_8wekyb3d8bbwe
-
-        #pwsh
-        # winget install --id Microsoft.Powershell.Preview --source winget # done by install.yaml
-
-        # chocolatey
-        Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
-
-        # choco install -y oh-my-posh
-        # oh-my-posh font install FiraCode
-
-        choco install -y gsudo
-        gsudo config PowerShellLoadProfile true
-        choco install powershell-core
-
-        Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-
-        install-module require
-        import-module require
-
-        # todo: if you run this as admin, you also need to do it for each specific user?
-        req pathutils -scope AllUsers
-        req cd-extras -scope AllUsers
-        req posh-git -scope AllUsers
-    }
-}
+$modules = . "$PSScriptRoot/.configuration.map.ps1"
+$list = Get-CompletionList $modules
 
 write-verbose "installing targets: $target" -verbose
 @($module) | % {
@@ -53,7 +22,6 @@ write-verbose "installing targets: $target" -verbose
         & $_
         return
     }
-    
     $target = $list[$module]
     if (!$target) {
         Write-Warning "No module '$module' found."

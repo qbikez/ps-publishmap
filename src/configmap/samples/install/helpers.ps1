@@ -1,25 +1,3 @@
-function convertto-completionList($modules) {
-    $result = @{}
-    foreach ($kvp in $modules.GetEnumerator()) {
-        $module = $kvp.value
-        if ($module.list) {
-            $groupKey = "$($kvp.key)*"
-            $result.$groupKey = $module
-            
-            $submodules = Invoke-Command -ScriptBlock $module.list
-            foreach($sub in $submodules.GetEnumerator()) {
-                $result[$sub.key] = $sub.value
-            }
-        }
-        else {
-            $groupKey = "$($kvp.key)"
-            $result.$groupKey = $module
-        }
-    }
-
-    return $result
-}
-
 function parse-packageEntry($entry) {
     if ($entry.GetType().Name -eq "String") {
         if ($entry -notmatch "^\s*(?<name>.*?)\s*(@(?<version>[a-zA-Z0-9\.]+)){0,1}(\[(?<installer>.+)\]){0,1}\s*$") {
