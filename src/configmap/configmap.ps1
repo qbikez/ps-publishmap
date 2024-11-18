@@ -67,7 +67,8 @@ function Get-DynamicParam($map) {
     
 }
 
-function Invoke-ModuleCommand($module, $key, $context) {
+function Invoke-ModuleCommand($module, $key, $context = @{}) {
+    $context.self = $module
     if ($module -is [scriptblock]) {
         return Invoke-Command -ScriptBlock $module -ArgumentList @($context)
     }

@@ -179,7 +179,7 @@ Describe "map execuction" {
         It "<name> => exec-mock without args" {
             $result = Get-CompletionList $map
 
-            Invoke-ModuleCommand $result "build" -context @{ a = 1 }
+            Invoke-ModuleCommand $result.build "build" -context @{ a = 1 }
             Should -Invoke exec-mock
         }
     }
@@ -198,7 +198,7 @@ Describe "map execuction" {
         It "<name> => exec-mock" {
             $result = Get-CompletionList $map
 
-            Invoke-ModuleCommand $result "build" -context @{ a = 1 }
+            Invoke-ModuleCommand $result.build "build" -context @{ a = 1 }
             Should -Invoke exec-mock -ParameterFilter {
                 $ctx | Should -MatchObject @{ a = 1 }
                 return $true
