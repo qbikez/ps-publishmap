@@ -17,6 +17,10 @@ foreach ($kvp in $dependencies.GetEnumerator()) {
     
     foreach ($item in $list) {
         $package = parse-packageEntry $item
+        $package.exec = {
+            . "$PSScriptRoot/helpers.ps1"
+            install-mypackage $package
+        }.GetNewClosure()
         $submodules[$package.name] = $package
     }
     $parsed.$group = $submodules
@@ -24,6 +28,12 @@ foreach ($kvp in $dependencies.GetEnumerator()) {
     $parsed.$group.list = {
         return $submodules
     }.GetNewClosure()
+
+    $parsed.$group.exec = {
+        . "$PSScriptRoot/helpers.ps1"
+        install-mygroup $parsed.$group
+    }.GetNewClosure()
+
 }
 
 return $parsed

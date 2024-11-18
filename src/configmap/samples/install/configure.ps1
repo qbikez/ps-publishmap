@@ -12,28 +12,32 @@ param(
     $module = $null
 )
 
-
 $modules = . "$PSScriptRoot/.configuration.map.ps1"
 $list = Get-CompletionList $modules
 
-write-verbose "installing targets: $target" -verbose
-@($module) | % {
-    if ($_ -is [ScriptBlock]) {
-        & $_
-        return
-    }
-    $target = $list[$module]
-    if (!$target) {
-        Write-Warning "No module '$module' found."
-        continue
-    }
+$targets = $list.GetEnumerator() | ? { $_.key -in @($module) }
+write-verbose "installing targets: $($targets.Keys)" -verbose
 
-    if ($null -eq $target.list) {
-        write-verbose "installing '$($target.name)'" -verbose
-        install-mypackage $target
-    }
-    else {
-        write-verbose "installing group '$module'" -verbose
-        install-mygroup $target
-    }
+@($targets) | % {
+    write-host "installing module '$($_.key)'"
+
+    Invoke-ModuleCommand -module $_.value -key $_.Key
+    # if ($_ -is [ScriptBlock]) {
+    #     & $_
+    #     return
+    # }
+    # $target = $list[$module]
+    # if (!$target) {
+    #     Write-Warning "No module '$module' found."
+    #     continue
+    # }
+
+    # if ($null -eq $target.list) {
+    #     write-verbose "installing '$($target.name)'" -verbose
+    #     install-mypackage $target
+    # }
+    # else {
+    #     write-verbose "installing group '$module'" -verbose
+    #     install-mygroup $target
+    # }
 }
