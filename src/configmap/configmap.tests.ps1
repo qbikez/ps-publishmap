@@ -67,7 +67,7 @@ BeforeAll {
 
 Describe "map parsing" {
 
-    Describe 'keys' -ForEach @(
+    Describe '<name>' -ForEach @(
         @{
             Name = "simple list"
             Map  = @("item1", "item2")
@@ -105,7 +105,7 @@ Describe "map parsing" {
                     }
                 }
                 "secrets" = @{
-                    list = @{
+                    list = [ordered]@{
                         connectionString = @{
                             "local"  = "blah"
                             "remote" = "boom"
@@ -120,12 +120,11 @@ Describe "map parsing" {
             Keys = @("db", "secrets*", "connectionString", "keyVault")
         }
     ) {
-        Describe "<name>" {
             It '<name> => keys' {
                 $result = Get-CompletionList $map
                 $result.Keys | Should -Be $keys
             }
-        }
+       
     }
 
     Describe "values" -ForEach @(
