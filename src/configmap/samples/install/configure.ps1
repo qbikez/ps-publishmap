@@ -1,9 +1,9 @@
-#requires -modules ConfigMap
-
 [CmdletBinding()]
 param(
     [ArgumentCompleter({
             param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+            ipmo "$PSScriptRoot/../../configmap.psm1"
+
             $modules = . "$PSScriptRoot/.configuration.map.ps1"
 
             $list = Get-CompletionList $modules
@@ -11,6 +11,7 @@ param(
         })] 
     $module = $null
 )
+ipmo "$PSScriptRoot/../../configmap.psm1"
 
 $modules = . "$PSScriptRoot/.configuration.map.ps1"
 $list = Get-CompletionList $modules

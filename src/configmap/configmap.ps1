@@ -1,5 +1,9 @@
 $reservedKeys = @("options", "exec", "list")
 function Get-CompletionList($modules) {
+    if (!$modules) {
+        throw "modules is null"
+    }
+
     $result = [ordered]@{}
     $listKey = "list"
 
@@ -10,6 +14,9 @@ function Get-CompletionList($modules) {
     
     if ($l -is [System.Collections.IDictionary]) {
         foreach ($kvp in $l.GetEnumerator()) {
+            if ($kvp.key -in $reservedKeys) {
+                continue
+            }
             $module = $kvp.value
             if ($module.$listKey) {
                 $groupKey = "$($kvp.key)*"
@@ -68,7 +75,7 @@ function Get-DynamicParam($map) {
 }
 
 function Invoke-ModuleCommand($module, $key, $context = @{}) {
-    $context.self = $module
+    if (!$context.self) { $context.self = $module }
     if ($module -is [scriptblock]) {
         return Invoke-Command -ScriptBlock $module -ArgumentList @($context)
     }

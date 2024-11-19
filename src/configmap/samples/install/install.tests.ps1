@@ -28,8 +28,8 @@ Describe "install" {
 
     It "can install group" {
         $list = Get-CompletionList $modules
-        $target = $list["core"]
+        $target = $list["core*"]
         
-        Invoke-ModuleCommand $target "core"
+        Invoke-ModuleCommand $target "core*"
     }
 }
