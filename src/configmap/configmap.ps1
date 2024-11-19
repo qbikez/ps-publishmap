@@ -1,5 +1,5 @@
 $reservedKeys = @("options", "exec", "list")
-function Get-CompletionList($modules) {
+function Get-CompletionList($modules, [switch][bool]$flatten = $true, $separator = ".", $groupMarker = "*") {
     $result = [ordered]@{}
     $listKey = "list"
 
@@ -12,15 +12,22 @@ function Get-CompletionList($modules) {
         foreach ($kvp in $l.GetEnumerator()) {
             $module = $kvp.value
             if ($module.$listKey) {
-                $groupKey = "$($kvp.key)*"
+                $groupKey = "$($kvp.key)$groupMarker"
                 $result.$groupKey = $module
             
                 $submodules = Get-CompletionList $module
-                $result += $submodules
+                foreach($sub in $submodules.GetEnumerator()) {
+                    
+                    $subKey = $sub.Key
+                    if (!$flatten) {
+                        $subKey = "$groupKey$separator$($sub.Key)"
+                    }
+                    $result[$subKey] = $sub.value
+                }
             }
             else {
-                $groupKey = "$($kvp.key)"
-                $result.$groupKey = $module
+                $singleKey = "$($kvp.key)"
+                $result.$singleKey = $module
             }
         }
 
