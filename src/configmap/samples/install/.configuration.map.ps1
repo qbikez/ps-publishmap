@@ -30,9 +30,9 @@ foreach ($kvp in $dependencies.GetEnumerator()) {
     }.GetNewClosure()
 
     $parsed.$group.exec = {
-        . "$PSScriptRoot/helpers.ps1"
-        install-mygroup $parsed.$group
-    }.GetNewClosure()
+        param($ctx)
+        install-mygroup $ctx.self
+    }
 
 }
 

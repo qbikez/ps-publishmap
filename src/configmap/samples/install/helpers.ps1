@@ -64,19 +64,22 @@ function parse-packageEntry($entry) {
 }
 
 function install-mygroup($group) {
-    if (!$group.list) {
-        throw "group '$group' doesn't have a list"
-    }
-    $submodules = Invoke-Command $group.list
+    $submodules = get-completionlist $group
 
     write-verbose "installing group: $($submodules.Keys)" -verbose
     foreach($kvp in $submodules.GetEnumerator()) {
         write-verbose "installing '$($kvp.key)'"
+        if (!$kvp.value.installer) {
+            throw "package '$($kvp.key)' doesn't have an installer"
+        }
         Install-mypackage $kvp.value
     }
 }
 function install-mypackage($package) {
     write-verbose "$($package.installer) $($package.installerArgs)"
+    if (!$package.installer) {
+        throw "package '$($package.name)' doesn't have an installer"
+    }
     & $package.installer $package.installerArgs
     if ($lastexitcode -eq 0 -and $package.after) {
         Write-Verbose "executing after script"
