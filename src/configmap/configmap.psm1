@@ -4,5 +4,6 @@ $helpersPath = (Split-Path -parent $MyInvocation.MyCommand.Definition);
 
 Export-ModuleMember `
     -Function `
-        Get-CompletionList, Get-ValuesList, Get-MapModules, Get-MapModule, Get-ModuleCommand, Get-ScriptArgs, Invoke-ModuleCommand `
+        Get-CompletionList, Get-ValuesList, Get-MapModules, Get-MapModule, Get-ModuleCommand, Get-ScriptArgs, Invoke-ModuleCommand, qbuild `
     -Alias *
+    
