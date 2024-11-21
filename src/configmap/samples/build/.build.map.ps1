@@ -2,7 +2,11 @@ $targets = @{
     "build" = {
         param($ctx, [bool][switch]$noRestore)
 
+        $bound = $PSBoundParameters
         write-host "build script body"
+        write-host "ctx=$($ctx | convertto-json)"
+        write-host "noRestore=$noRestore"
+        write-host "bound=$($bound | ConvertTo-Json)"
     }
 }
 

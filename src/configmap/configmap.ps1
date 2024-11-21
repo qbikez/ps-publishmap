@@ -140,18 +140,38 @@ function invoke-build {
     }
 }
 
-function Invoke-ModuleCommand($module, $key, $context = @{}) {
-    if (!$context.self) { $context.self = $module }
-    if ($module -is [scriptblock]) {
-        return Invoke-Command -ScriptBlock $module -ArgumentList @($context)
-    }
+function Get-MapModules($map, $keys) {
+    $list = Get-CompletionList $map
+    
+    return $list.GetEnumerator() | ? { $_.key -in @($keys) }
+}
+
+function Get-MapModule($map, $key) {
+    return (Get-MapModules $map $key).Value
+}
+
+function Get-ModuleCommand($module, $key) {
+    if ($module -is [scriptblock]) { return $module }
+
     if ($module -is [System.Collections.IDictionary]) {
         $commandKey = "exec"
         if (!$module.$commandKey) {
             throw "Command $key.$commandKey not found"
         }
-        return Invoke-ModuleCommand $module.$commandKey $key $context
+        return Get-ModuleCommand $module.$commandKey $key
     }
+}
+
+function Invoke-ModuleCommand($module, $key, $context = @{}) {
     
+    $command = Get-ModuleCommand $module $key
+
+    if ($command -is [scriptblock]) {
+        if (!$context.self) { $context.self = $module }
+        $bound = $context.bound
+        if (!$bound) { $bound = @() }
+        return & $command $context @bound
+    }
+
     throw "Module $key is not supported"
 }

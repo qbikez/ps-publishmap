@@ -176,9 +176,9 @@ Describe "map execuction" {
         }
     ) {
         It "<name> => exec-mock without args" {
-            $result = Get-CompletionList $map
+            $module = Get-Module $map "build"
 
-            Invoke-ModuleCommand $result.build "build" -context @{ a = 1 }
+            Invoke-ModuleCommand $module "build" -context @{ a = 1 }
             Should -Invoke exec-mock
         }
     }
