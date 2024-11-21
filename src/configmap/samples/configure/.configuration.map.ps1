@@ -10,7 +10,6 @@ $modules = [ordered]@{
                 }
             }
         }
-
         get     = {
             param($path, $options)
             return get-appsettingsobject -file "src/appsettings.Development.json" -options $options
@@ -21,3 +20,5 @@ $modules = [ordered]@{
         }
     }
 }
+
+return $modules

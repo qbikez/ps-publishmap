@@ -2,7 +2,7 @@ $targets = @{
     "build" = {
         param($ctx, [bool][switch]$noRestore)
 
-        invoke-build $args
+        write-host "build script body"
     }
 }
 

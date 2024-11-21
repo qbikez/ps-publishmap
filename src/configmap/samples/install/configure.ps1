@@ -23,22 +23,4 @@ write-verbose "installing targets: $($targets.Keys)" -verbose
     write-host "installing module '$($_.key)'"
 
     Invoke-ModuleCommand -module $_.value -key $_.Key
-    # if ($_ -is [ScriptBlock]) {
-    #     & $_
-    #     return
-    # }
-    # $target = $list[$module]
-    # if (!$target) {
-    #     Write-Warning "No module '$module' found."
-    #     continue
-    # }
-
-    # if ($null -eq $target.list) {
-    #     write-verbose "installing '$($target.name)'" -verbose
-    #     install-mypackage $target
-    # }
-    # else {
-    #     write-verbose "installing group '$module'" -verbose
-    #     install-mygroup $target
-    # }
 }
