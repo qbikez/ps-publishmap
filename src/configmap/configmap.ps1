@@ -117,7 +117,7 @@ function Get-ScriptArgs {
         -Type System.Management.Automation.RuntimeDefinedParameterDictionary
     
     foreach ($param in $parameters) {
-        $dynParam = get-single-arg $param
+        $dynParam = Get-SingleArg $param
         $paramDictionary.Add($dynParam.Name, $dynParam)
     }
     
