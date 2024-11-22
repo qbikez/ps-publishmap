@@ -129,7 +129,7 @@ function Get-ScriptArgs {
     return $paramDictionary
 }
 
-function Get-MapModules($map, $keys, [switch][bool]$flatten=$true) {
+function Get-MapModules($map, $keys, [switch][bool]$flatten = $true) {
     $list = Get-CompletionList $map -flatten:$flatten
     
     return $list.GetEnumerator() | ? { $_.key -in @($keys) }
@@ -139,29 +139,31 @@ function Get-MapModule($map, $key) {
     return (Get-MapModules $map $key).Value
 }
 
-function Get-ModuleCommand($module, $key, $commandKey = "exec") {
+# TODO: key should be a hidden property of $module
+function Get-ModuleCommand($module, $commandKey = "exec") {
     if ($module -is [scriptblock]) { return $module }
 
     if ($module -is [System.Collections.IDictionary]) {
         if (!$module.$commandKey) {
-            throw "Command $key.$commandKey not found"
+            throw "Command '$commandKey' not found"
         }
-        return Get-ModuleCommand $module.$commandKey $key -commandKey:$commandKey
+        return $module.$commandKey
     }
 }
 
-function Invoke-ModuleCommand($module, $key, $context = @{}, [string] $commandKey = "exec") {
+function Invoke-ModuleCommand($module, $key, $context = @{}) {
     
-    $command = Get-ModuleCommand $module $key -commandKey:$commandKey
+    $command = Get-ModuleCommand $module $key
 
-    if ($command -is [scriptblock]) {
-        if (!$context.self) { $context.self = $module }
-        $bound = $context.bound
-        if (!$bound) { $bound = @() }
-        return & $command $context @bound
+    if ($command -isnot [scriptblock]) {
+        throw "Module $key is not supported"
     }
-
-    throw "Module $key is not supported"
+    if (!$context.self) { $context.self = $module }
+    
+    $bound = $context.bound
+    if (!$bound) { $bound = @() }
+    
+    return & $command $context @bound
 }
 
 function Get-ModuleCompletion($map, $commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters) {
@@ -187,7 +189,7 @@ function Get-ModuleDynamicParam($map, $key, $bound) {
 
     $selectedModule = Get-MapModule $map $key
     if (!$selectedModule) { return @() }
-    $command = Get-ModuleCommand $selectedModule $key
+    $command = Get-ModuleCommand $selectedModule
     if (!$command) { return @() }
     $p = Get-ScriptArgs $command
 
