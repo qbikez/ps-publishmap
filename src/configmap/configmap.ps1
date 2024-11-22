@@ -133,21 +133,20 @@ function Get-MapModule($map, $key) {
     return (Get-MapModules $map $key).Value
 }
 
-function Get-ModuleCommand($module, $key) {
+function Get-ModuleCommand($module, $key, $commandKey = "exec") {
     if ($module -is [scriptblock]) { return $module }
 
     if ($module -is [System.Collections.IDictionary]) {
-        $commandKey = "exec"
         if (!$module.$commandKey) {
             throw "Command $key.$commandKey not found"
         }
-        return Get-ModuleCommand $module.$commandKey $key
+        return Get-ModuleCommand $module.$commandKey $key -commandKey:$commandKey
     }
 }
 
-function Invoke-ModuleCommand($module, $key, $context = @{}) {
+function Invoke-ModuleCommand($module, $key, $context = @{}, [string] $commandKey = "exec") {
     
-    $command = Get-ModuleCommand $module $key
+    $command = Get-ModuleCommand $module $key -commandKey:$commandKey
 
     if ($command -is [scriptblock]) {
         if (!$context.self) { $context.self = $module }

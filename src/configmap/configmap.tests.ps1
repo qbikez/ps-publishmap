@@ -265,8 +265,8 @@ Describe "qconf" {
 
                     Set-Conf @PSBoundParameters
                 }
-                test = {
-
+                get = {
+                    
                 }
             }
         }
