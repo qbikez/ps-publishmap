@@ -131,7 +131,7 @@ Describe "map parsing" {
         @{
             Name   = "options value"
             Map    = @{
-                options = @{
+                options = [ordered]@{
                     "a" = 1
                     "b" = 2
                 }
@@ -142,7 +142,7 @@ Describe "map parsing" {
             Name   = "options func"
             Map    = @{
                 options = {
-                    return @{
+                    return [ordered]@{
                         "a" = 1
                         "b" = 2
                     }
@@ -176,7 +176,7 @@ Describe "map execuction" {
         }
     ) {
         It "<name> => exec-mock without args" {
-            $module = Get-Module $map "build"
+            $module = Get-MapModule $map "build"
 
             Invoke-ModuleCommand $module "build" -context @{ a = 1 }
             Should -Invoke exec-mock
@@ -265,6 +265,9 @@ Describe "qconf" {
 
                     Set-Conf @PSBoundParameters
                 }
+                test = {
+
+                }
             }
         }
     }
@@ -273,6 +276,20 @@ Describe "qconf" {
         It "should return parameters" {
             $parameters = Get-ScriptArgs $targets.db.set
             $parameters.Keys | Should -Be @("key", "value")
+        }
+        It "should return top-level completion list" {
+            $list = Get-CompletionList $targets
+            $list.Keys | Should -be @("db")
+        }
+        It "should return options list" {
+            $entry = Get-MapModule $targets "db"
+            $entry | Should -Not -BeNullOrEmpty
+            $options = Get-CompletionList $entry -listKey "options"
+            $options.Keys | Should -Be @("local", "remote")
+        }
+
+        It "should call set hook" {
+            
         }
     }
 }

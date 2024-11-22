@@ -1,12 +1,11 @@
-$reservedKeys = @("options", "exec", "list")
-function Get-CompletionList($modules, [switch][bool]$flatten = $true, $separator = ".", $groupMarker = "*") {
+$reservedKeys = @("options", "exec")
+function Get-CompletionList($modules, [switch][bool]$flatten = $true, $separator = ".", $groupMarker = "*", $listKey = "list") {
     if (!$modules) {
         throw "modules is null"
     }
 
     $result = [ordered]@{}
-    $listKey = "list"
-
+    
     $l = $modules
     if ($modules.$listKey) {
         $l = $modules.$listKey
@@ -14,7 +13,7 @@ function Get-CompletionList($modules, [switch][bool]$flatten = $true, $separator
     
     if ($l -is [System.Collections.IDictionary]) {
         foreach ($kvp in $l.GetEnumerator()) {
-            if ($kvp.key -in $reservedKeys) {
+            if ($kvp.key -in $reservedKeys -or $kvp.key -eq $listKey) {
                 continue
             }
             $module = $kvp.value
@@ -58,7 +57,7 @@ function Get-CompletionList($modules, [switch][bool]$flatten = $true, $separator
 
     if ($submodules) {
         foreach ($sub in $submodules.GetEnumerator()) {
-            if ($sub.key -in $reservedKeys) {
+            if ($sub.key -in $reservedKeys -or $sub.key -eq $listKey) {
                 continue
             }
             $result[$sub.key] = $sub.value
@@ -163,6 +162,9 @@ function Invoke-ModuleCommand($module, $key, $context = @{}) {
 function Get-ModuleCompletion($map, $commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
 {
     if ($map -is [string]) {
+        if (!(test-path $map)) {
+            return "'error: map file '$map' not found'"
+        }
         $map = . $map
     }
 
@@ -234,17 +236,20 @@ function qbuild {
         [ArgumentCompleter({
                 param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
                 # ipmo configmap
-                return Get-ModuleCompletion "./.build.map.ps1" @PSBoundParameters
+                $map = $fakeBoundParameters.map 
+                if (!$map) { $map = "./.build.map.ps1"}
+                return Get-ModuleCompletion $map @PSBoundParameters
             })]
-        $module = $null
+        $module = $null,
+        $map = "./.build.map.ps1"
     )
     DynamicParam {
         # ipmo configmap
-        return Get-ModuleDynamicParam "./.build.map.ps1" $module $PSBoundParameters
+        return Get-ModuleDynamicParam $map $module $PSBoundParameters
     }
 
     process {
-        Invoke-Module "./.build.map.ps1" $PSBoundParameters
+        Invoke-Module $map $PSBoundParameters
     }
 }
 
@@ -253,17 +258,19 @@ function qconf {
     param(
         [ArgumentCompleter({
                 param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-                # ipmo configmap
-                return Get-ModuleCompletion "./.configuration.map.ps1" @PSBoundParameters
+                $map = $fakeBoundParameters.map
+                if (!$map) { $map = "./.configuration.map.ps1" }
+                return Get-ModuleCompletion $map @PSBoundParameters
             })] 
-        $module = $null
+        $module = $null,
+        $map = "./.configuration.map.ps1"
     )
     DynamicParam {
         # ipmo configmap
-        return Get-ModuleDynamicParam "./.configuration.map.ps1" $module $PSBoundParameters
+        return Get-ModuleDynamicParam $map $module $PSBoundParameters
     }
 
     process {
-        Invoke-Module "./.configuration.map.ps1" $PSBoundParameters
+        Invoke-Module $map $PSBoundParameters
     }
 }
