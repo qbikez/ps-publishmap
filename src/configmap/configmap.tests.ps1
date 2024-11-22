@@ -82,18 +82,19 @@ Describe "map parsing" {
             Keys = @("key1", "key2")
         }
         @{
-            Name = "one-level simple list"
-            Map  = [ordered]@{
+            Name    = "one-level simple list"
+            Map     = [ordered]@{
                 "key1" = @{
                     list = ("a", "b")
                 }
                 "key2" = @{ id = "b" }
             }
-            Keys = @("key1*", "a", "b", "key2")
+            Flatten = @("key1*", "a", "b", "key2")
+            Tree    = @("key1.a", "key1.b", "key2")
         }
         @{
-            Name = "config-like"
-            Map  = [ordered]@{
+            Name    = "config-like"
+            Map     = [ordered]@{
                 "db"      = @{
                     options = @{
                         "local"  = @{
@@ -117,14 +118,26 @@ Describe "map parsing" {
                     }
                 }
             }
-            Keys = @("db", "secrets*", "connectionString", "keyVault")
+            Flatten = @("db", "secrets*", "connectionString", "keyVault")
+            Tree    = @("db", "secrets.connectionString", "secrets.keyVault")
         }
     ) {
-        It '<name> => keys' {
-            $result = Get-CompletionList $map
-            $result.Keys | Should -Be $keys
+        It '<name> => flatten keys' {
+            $list = (Get-CompletionList $map -flatten:$true)
+            if (!$flatten) {
+                $flatten = $keys
+            }
+            
+            $list.Keys | Should -Be $Flatten
         }
-       
+        It '<name> => tree keys' {
+            $list = (Get-CompletionList $map -flatten:$false)
+            if (!$tree) {
+                $tree = $keys
+            }
+            
+            $list.Keys | Should -Be $Tree
+        }
     }
 
     Describe "values" -ForEach @(
@@ -252,7 +265,7 @@ Describe "qconf" {
         Mock Set-Conf
         $targets = @{
             "db" = @{
-                options = @{
+                options = [ordered]@{
                     "local"  = @{
                         "connectionString" = "localconnstr"
                     }
@@ -260,12 +273,12 @@ Describe "qconf" {
                         "connectionString" = "localconnstr"
                     }
                 }
-                set = {
+                set     = {
                     param($key, $value)
 
                     Set-Conf @PSBoundParameters
                 }
-                get = {
+                get     = {
                     
                 }
             }
@@ -287,9 +300,10 @@ Describe "qconf" {
             $options = Get-CompletionList $entry -listKey "options"
             $options.Keys | Should -Be @("local", "remote")
         }
+        It "should get set submodule" {
+            $entry = Get-MapModule $targets "db.set"
 
-        It "should call set hook" {
-            
+            $entry | Should -not -BeNullOrEmpty
         }
     }
 }

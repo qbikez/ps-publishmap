@@ -1,5 +1,10 @@
 $reservedKeys = @("options", "exec")
-function Get-CompletionList($modules, [switch][bool]$flatten = $true, $separator = ".", $groupMarker = "*", $listKey = "list") {
+function Get-CompletionList($modules,
+    [switch][bool]$flatten = $true,
+    $separator = ".", 
+    $groupMarker = "*", 
+    $listKey = "list") {
+    
     if (!$modules) {
         throw "modules is null"
     }
@@ -18,15 +23,16 @@ function Get-CompletionList($modules, [switch][bool]$flatten = $true, $separator
             }
             $module = $kvp.value
             if ($module.$listKey) {
-                $groupKey = "$($kvp.key)$groupMarker"
-                $result.$groupKey = $module
-            
+                if ($flatten) {
+                    $result["$($kvp.key)$groupMarker"] = $module
+                }
+
                 $submodules = Get-CompletionList $module
-                foreach($sub in $submodules.GetEnumerator()) {
+                foreach ($sub in $submodules.GetEnumerator()) {
                     
                     $subKey = $sub.Key
                     if (!$flatten) {
-                        $subKey = "$groupKey$separator$($sub.Key)"
+                        $subKey = "$($kvp.key)$separator$($sub.Key)"
                     }
                     $result[$subKey] = $sub.value
                 }
@@ -123,8 +129,8 @@ function Get-ScriptArgs {
     return $paramDictionary
 }
 
-function Get-MapModules($map, $keys) {
-    $list = Get-CompletionList $map
+function Get-MapModules($map, $keys, [switch][bool]$flatten=$true) {
+    $list = Get-CompletionList $map -flatten:$flatten
     
     return $list.GetEnumerator() | ? { $_.key -in @($keys) }
 }
@@ -158,8 +164,7 @@ function Invoke-ModuleCommand($module, $key, $context = @{}, [string] $commandKe
     throw "Module $key is not supported"
 }
 
-function Get-ModuleCompletion($map, $commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-{
+function Get-ModuleCompletion($map, $commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters) {
     if ($map -is [string]) {
         if (!(test-path $map)) {
             return "'error: map file '$map' not found'"
@@ -209,14 +214,14 @@ function Invoke-Module($map, $bound) {
 function qrun {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory=$true, Position=0)]
+        [Parameter(Mandatory = $true, Position = 0)]
         $map,
         [ArgumentCompleter({
                 param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
                 # ipmo configmap
                 return Get-ModuleCompletion $map @PSBoundParameters
             })]
-        [Parameter(Mandatory=$true, Position=1)]
+        [Parameter(Mandatory = $true, Position = 1)]
         $module = $null
     )
     DynamicParam {
@@ -236,7 +241,7 @@ function qbuild {
                 param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
                 # ipmo configmap
                 $map = $fakeBoundParameters.map 
-                if (!$map) { $map = "./.build.map.ps1"}
+                if (!$map) { $map = "./.build.map.ps1" }
                 return Get-ModuleCompletion $map @PSBoundParameters
             })]
         $module = $null,
