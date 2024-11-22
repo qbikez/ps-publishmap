@@ -240,6 +240,39 @@ Describe "qbuild" {
             qrun $targets "build" -NoRestore
             Should -Invoke Invoke-Build -Times 1 -ParameterFilter { $noRestore -eq $true }
         }
+    }
+}
 
+
+Describe "qconf" {
+    BeforeAll {
+        function Set-Conf {
+            param($key, $value)
+        }
+        Mock Set-Conf
+        $targets = @{
+            "db" = @{
+                options = @{
+                    "local"  = @{
+                        "connectionString" = "localconnstr"
+                    }
+                    "remote" = @{
+                        "connectionString" = "localconnstr"
+                    }
+                }
+                set = {
+                    param($key, $value)
+
+                    Set-Conf @PSBoundParameters
+                }
+            }
+        }
+    }
+    
+    Describe "set custom parameters" {
+        It "should return parameters" {
+            $parameters = Get-ScriptArgs $targets.db.set
+            $parameters.Keys | Should -Be @("key", "value")
+        }
     }
 }
