@@ -117,27 +117,11 @@ function Get-ScriptArgs {
         -Type System.Management.Automation.RuntimeDefinedParameterDictionary
     
     foreach ($param in $parameters) {
-        $dynParam = get-single-arg $param
+        $dynParam = Get-SingleArg $param
         $paramDictionary.Add($dynParam.Name, $dynParam)
     }
     
     return $paramDictionary
-}
-
-function invoke-build {
-    [CmdletBinding()]
-    param ($target)
-
-    DynamicParam {
-        $p = get-script-args $targets.$target
-
-        return $p
-    }
-    begin {}
-    process {
-        $p = $PSBoundParameters
-        write-host "build $p"
-    }
 }
 
 function Get-MapModules($map, $keys) {
@@ -176,53 +160,110 @@ function Invoke-ModuleCommand($module, $key, $context = @{}) {
     throw "Module $key is not supported"
 }
 
+function Get-ModuleCompletion($map, $commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+{
+    if ($map -is [string]) {
+        $map = . $map
+    }
+
+    $list = Get-CompletionList $map
+    return $list.Keys | ? { $_.startswith($wordToComplete) }
+}
+
+function Get-ModuleDynamicParam($map, $key, $bound) {
+    if (!$key) { return @() }
+
+    if ($map -is [string]) {
+        $map = . $map
+    }
+
+    $bound = $PSBoundParameters
+
+    $selectedModule = Get-MapModule $map $key
+    if (!$selectedModule) { return @() }
+    $command = Get-ModuleCommand $selectedModule $key
+    if (!$command) { return @() }
+    $p = Get-ScriptArgs $command
+
+    return $p
+}
+
+function Invoke-Module($map, $bound) {
+    if ($map -is [string]) {
+        $map = . $map
+    }
+
+    $module = $bound.module
+
+    $targets = Get-MapModules $map $module
+    write-verbose "running targets: $($targets.Key)"
+
+    @($targets) | % {
+        Write-Verbose "running module '$($_.key)'"
+
+        Invoke-ModuleCommand -module $_.value -key $_.Key @{ bound = $bound }
+    }
+}
+
+function qrun {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true, Position=0)]
+        $map,
+        [ArgumentCompleter({
+                param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+                # ipmo configmap
+                return Get-ModuleCompletion $map @PSBoundParameters
+            })]
+        [Parameter(Mandatory=$true, Position=1)]
+        $module = $null
+    )
+    DynamicParam {
+        # ipmo configmap
+        return Get-ModuleDynamicParam $map $module $PSBoundParameters
+    }
+
+    process {
+        Invoke-Module $map $PSBoundParameters
+    }
+}
+
 function qbuild {
     [CmdletBinding()]
     param(
         [ArgumentCompleter({
                 param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
                 # ipmo configmap
-
-                $map = . "./.build.map.ps1"
-
-                $list = Get-CompletionList $map
-                return $list.Keys | ? { $_.startswith($wordToComplete) }
+                return Get-ModuleCompletion "./.build.map.ps1" @PSBoundParameters
             })] 
         $module = $null
     )
     DynamicParam {
-        if (!$module) { return @() }
-
         # ipmo configmap
-        $map = . "./.build.map.ps1"
-
-        $key = $module
-        $bound = $PSBoundParameters
-
-        $selectedModule = Get-MapModule $map $key
-        if (!$selectedModule) { return @() }
-        $command = Get-ModuleCommand $selectedModule $key
-        if (!$command) { return @() }
-        $p = Get-ScriptArgs $command
-
-        return $p
+        return Get-ModuleDynamicParam "./.build.map.ps1" $module $PSBoundParameters
     }
 
     process {
-        if (!(test-path "./.build.map.ps1")) {
-            throw "map file '.build.map.ps1' not found"
-        }
+        Invoke-Module "./.build.map.ps1" $PSBoundParameters
+    }
+}
+
+function qconf {
+    [CmdletBinding()]
+    param(
+        [ArgumentCompleter({
+                param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+                # ipmo configmap
+                return Get-ModuleCompletion "./.configuration.map.ps1" @PSBoundParameters
+            })] 
+        $module = $null
+    )
+    DynamicParam {
         # ipmo configmap
-        $map = . "./.build.map.ps1"
+        return Get-ModuleDynamicParam "./.configuration.map.ps1" $module $PSBoundParameters
+    }
 
-        $targets = Get-MapModules $map $module
-        write-verbose "running targets: $($targets.Key)"
-
-        @($targets) | % {
-            Write-Verbose "running module '$($_.key)'"
-
-            $bound = $PSBoundParameters
-            Invoke-ModuleCommand -module $_.value -key $_.Key @{ bound = $bound }
-        }
+    process {
+        Invoke-Module "./.configuration.map.ps1" $PSBoundParameters
     }
 }
