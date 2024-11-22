@@ -120,10 +120,10 @@ Describe "map parsing" {
             Keys = @("db", "secrets*", "connectionString", "keyVault")
         }
     ) {
-            It '<name> => keys' {
-                $result = Get-CompletionList $map
-                $result.Keys | Should -Be $keys
-            }
+        It '<name> => keys' {
+            $result = Get-CompletionList $map
+            $result.Keys | Should -Be $keys
+        }
        
     }
 
@@ -202,6 +202,77 @@ Describe "map execuction" {
                 $ctx | Should -MatchObject @{ a = 1 }
                 return $true
             }
+        }
+    }
+}
+
+Describe "qbuild" {
+    BeforeAll {
+        function Invoke-Build {
+            param($ctx, [bool][switch]$noRestore)
+        }
+        Mock Invoke-Build {
+            param($ctx, [bool][switch]$noRestore)
+        
+            $bound = $PSBoundParameters
+            write-host "build script body"
+            write-host "ctx=$($ctx | convertto-json)"
+            write-host "noRestore=$noRestore"
+            write-host "bound=$($bound | ConvertTo-Json)"
+        }
+        $targets = @{
+            "build" = {
+                param($ctx, [bool][switch]$noRestore)
+        
+                Invoke-Build @PSBoundParameters
+            }
+        }
+    }
+    
+    Describe "script custom parameters" {
+        It "should return parameters" {
+        
+            $parameters = Get-ScriptArgs $targets.build
+            $parameters.Keys | Should -Be @("ctx", "noRestore")
+        }
+
+        It "should invoke with correct parameters" {
+            qrun $targets "build" -NoRestore
+            Should -Invoke Invoke-Build -Times 1 -ParameterFilter { $noRestore -eq $true }
+        }
+    }
+}
+
+
+Describe "qconf" {
+    BeforeAll {
+        function Set-Conf {
+            param($key, $value)
+        }
+        Mock Set-Conf
+        $targets = @{
+            "db" = @{
+                options = @{
+                    "local"  = @{
+                        "connectionString" = "localconnstr"
+                    }
+                    "remote" = @{
+                        "connectionString" = "localconnstr"
+                    }
+                }
+                set = {
+                    param($key, $value)
+
+                    Set-Conf @PSBoundParameters
+                }
+            }
+        }
+    }
+    
+    Describe "set custom parameters" {
+        It "should return parameters" {
+            $parameters = Get-ScriptArgs $targets.db.set
+            $parameters.Keys | Should -Be @("key", "value")
         }
     }
 }

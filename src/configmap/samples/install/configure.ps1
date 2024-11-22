@@ -2,25 +2,17 @@
 param(
     [ArgumentCompleter({
             param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-            ipmo "$PSScriptRoot/../../configmap.psm1"
-
-            $modules = . "$PSScriptRoot/.configuration.map.ps1"
-
-            $list = Get-CompletionList $modules
-            return $list.Keys | ? { $_.startswith($wordToComplete) }
+            # ipmo configmap
+            return Get-ModuleCompletion "./.configuration.map.ps1" @PSBoundParameters
         })] 
     $module = $null
 )
-ipmo "$PSScriptRoot/../../configmap.psm1"
+DynamicParam {
+    # ipmo configmap
+    return Get-ModuleDynamicParam "./.configuration.map.ps1" $module $PSBoundParameters
+}
 
-$modules = . "$PSScriptRoot/.configuration.map.ps1"
-$list = Get-CompletionList $modules
-
-$targets = $list.GetEnumerator() | ? { $_.key -in @($module) }
-write-verbose "installing targets: $($targets.Keys)" -verbose
-
-@($targets) | % {
-    write-host "installing module '$($_.key)'"
-
-    Invoke-ModuleCommand -module $_.value -key $_.Key
+process {
+    # ipmo configmap
+    Invoke-Module "./.configuration.map.ps1" $PSBoundParameters
 }
