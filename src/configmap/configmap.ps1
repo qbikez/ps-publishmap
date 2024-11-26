@@ -355,6 +355,16 @@ function qconf {
         if (!$submodule) {
             throw "module '$module' not found"
         }
-        Invoke-ModuleCommand $map.$module $command -context @{ bound = $PSBoundParameters }
+
+        $optionKey = $value
+        $options = Get-CompletionList $submodule -listKey "options"
+        $optionValue = $options.$optionKey
+
+        $bound = $PSBoundParameters
+        $bound["key"] = $optionKey
+        $bound["value"] = $optionValue
+        $context = @{ bound = $bound }
+        $context | ConvertTo-Json | Write-Verbose
+        Invoke-ModuleCommand $submodule $command -context $context
     }
 }

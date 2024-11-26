@@ -11,15 +11,17 @@ $modules = [ordered]@{
             }
         }
         get     = {
-            param($path, $options)
+            param($ctx, $options)
             return get-appsettingsobject -file "src/appsettings.Development.json" -options $options
         }
         set     = {
-            param($path, $value, $key)
+            param($ctx, $key, $value)
 
-            Write-Host "set storage $key=$value"
+            Write-Host "set storage to '$key' ($value)"
+            $bound = $PSBoundParameters
+            $bound | ConvertTo-Json | write-host
 
-            set-appsettingsobject -file "src/appsettings.Development.json" -value $value
+            # set-appsettingsobject -file "src/appsettings.Development.json" -value $value
         }
     }
 }
