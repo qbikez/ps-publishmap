@@ -146,6 +146,7 @@ function Get-MapModule($map, $key) {
 
 # TODO: key should be a hidden property of $module
 function Get-ModuleCommand($module, $commandKey = "exec") {
+    if (!$module) { throw "module is NULL" }
     if ($module -is [scriptblock]) { return $module }
 
     if ($module -is [System.Collections.IDictionary]) {
@@ -154,20 +155,24 @@ function Get-ModuleCommand($module, $commandKey = "exec") {
         }
         return $module.$commandKey
     }
+
+    throw "Module of type $($module.GetType().Name) is not supported"
 }
 
 function Invoke-ModuleCommand($module, $key, $context = @{}) {
-    
     $command = Get-ModuleCommand $module $key
 
+    if (!$command) {
+        throw "Command '$key' not found"
+    }
     if ($command -isnot [scriptblock]) {
-        throw "Module $key is not supported"
+        throw "Module '$key' of type $($command.GetType().Name) is not supported"
     }
     if (!$context.self) { $context.self = $module }
-    
+
     $bound = $context.bound
     if (!$bound) { $bound = @() }
-    
+
     return & $command $context @bound
 }
 
@@ -334,7 +339,22 @@ function qconf {
     }
 
     process {
+        if ($map -is [string]) {
+            if (!(test-path $map)) {
+                throw "map file '$map' not found"
+            }
+            $map = . $map
+        }
+        if (!$map) {
+            throw "Failed to load map"
+        }
+
         Write-Verbose "module=$module command=$command"
-        Invoke-Module $map "$module.$command" $PSBoundParameters
+
+        $submodule = $map.$module
+        if (!$submodule) {
+            throw "module '$module' not found"
+        }
+        Invoke-ModuleCommand $map.$module $command -context @{ bound = $PSBoundParameters }
     }
 }
