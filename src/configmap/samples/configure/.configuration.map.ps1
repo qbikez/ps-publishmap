@@ -16,6 +16,9 @@ $modules = [ordered]@{
         }
         set     = {
             param($path, $value, $key)
+
+            Write-Host "set storage $key=$value"
+
             set-appsettingsobject -file "src/appsettings.Development.json" -value $value
         }
     }

@@ -132,7 +132,12 @@ function Get-ScriptArgs {
 function Get-MapModules($map, $keys, [switch][bool]$flatten = $true) {
     $list = Get-CompletionList $map -flatten:$flatten
     
-    return $list.GetEnumerator() | ? { $_.key -in @($keys) }
+    $found = $list.GetEnumerator() | ? { $_.key -in @($keys) }
+
+    if (!$found) {
+        Write-Verbose "module '$keys' not found in ($($list.Keys))"
+    }
+    return $found
 }
 
 function Get-MapModule($map, $key) {
@@ -169,7 +174,7 @@ function Invoke-ModuleCommand($module, $key, $context = @{}) {
 function Get-ModuleCompletion($map, $commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters) {
     if ($map -is [string]) {
         if (!(test-path $map)) {
-            return "'error: map file '$map' not found'"
+            throw "map file '$map' not found"
         }
         $map = . $map
     }
@@ -182,7 +187,11 @@ function Get-ModuleDynamicParam($map, $key, $bound) {
     if (!$key) { return @() }
 
     if ($map -is [string]) {
-        $map = . $map
+        $mapFile = $map
+        $map = . $mapFile
+    }
+    if (!$map) {
+        throw "failed to load map from $mapFile"
     }
 
     $bound = $PSBoundParameters
@@ -196,12 +205,10 @@ function Get-ModuleDynamicParam($map, $key, $bound) {
     return $p
 }
 
-function Invoke-Module($map, $bound) {
+function Invoke-Module($map, $module, $bound) {
     if ($map -is [string]) {
         $map = . $map
     }
-
-    $module = $bound.module
 
     $targets = Get-MapModules $map $module
     write-verbose "running targets: $($targets.Key)"
@@ -232,7 +239,7 @@ function qrun {
     }
 
     process {
-        Invoke-Module $map $PSBoundParameters
+        Invoke-Module $map $module $PSBoundParameters
     }
 }
 
@@ -255,28 +262,79 @@ function qbuild {
     }
 
     process {
-        Invoke-Module $map $PSBoundParameters
+        Invoke-Module $map $module $PSBoundParameters
     }
 }
 
 function qconf {
     [CmdletBinding()]
     param(
+        [ValidateSet("set", "get", "list")]
+        $command,
         [ArgumentCompleter({
                 param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-                $map = $fakeBoundParameters.map
-                if (!$map) { $map = "./.configuration.map.ps1" }
-                return Get-ModuleCompletion $map @PSBoundParameters
+                try {
+                    $map = $fakeBoundParameters.map
+                    if (!$map) { $map = "./.configuration.map.ps1" }
+                    
+                    return Get-ModuleCompletion $map @PSBoundParameters
+                }
+                catch {
+                    return "ERROR: $($_.Exception.Message) $($_.ScriptStackTrace)"
+                }
             })] 
         $module = $null,
+        [ArgumentCompleter({
+                param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+                try {
+                    $map = $fakeBoundParameters.map
+                    if (!$map) { $map = "./.configuration.map.ps1" }
+                    if ($map -is [string]) {
+                        if (!(test-path $map)) {
+                            throw "map file '$map' not found"
+                        }
+                        $map = . $map
+                    }
+                    $module = $fakeBoundParameters.module
+                    $entry = Get-MapModule $map $module
+                    if (!$entry) {
+                        throw "module '$module' not found"
+                    }
+                    $options = Get-CompletionList $entry -listKey "options"
+                    return $options.Keys | ? { $_.startswith($wordToComplete) }
+                }
+                catch {
+                    return "ERROR: $($_.Exception.Message) $($_.ScriptStackTrace)"
+                }
+            
+            })] 
+        $value = $null,
         $map = "./.configuration.map.ps1"
     )
+
     DynamicParam {
         # ipmo configmap
-        return Get-ModuleDynamicParam $map $module $PSBoundParameters
+        try {
+            if (!$module) {
+                return @()
+            }
+            if (!$map) { $map = "./.configuration.map.ps1" }
+            if ($map -is [string]) {
+                if (!(test-path $map)) {
+                    throw "map file '$map' not found"
+                }
+                $map = . $map
+            }
+            return Get-ModuleDynamicParam $map "$module.$command" $PSBoundParameters
+        }
+        catch {
+            Write-Host "ERROR: $($_.Exception.Message) $($_.ScriptStackTrace)"
+            throw
+        }
     }
 
     process {
-        Invoke-Module $map $PSBoundParameters
+        Write-Verbose "module=$module command=$command"
+        Invoke-Module $map "$module.$command" $PSBoundParameters
     }
 }

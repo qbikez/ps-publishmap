@@ -309,5 +309,9 @@ Describe "qconf" {
             $r = Invoke-ModuleCommand $targets.db "get"
             $r | Should -Be "my_value"
         }
+        It "invoke set" {
+            $r = Invoke-ModuleCommand $targets.db "set" -context @{ bound = @{ "key" = "key1"; "value" = "value2" } }
+            Should -Invoke Set-Conf -ParameterFilter { $key -eq "key1" -and $value -eq "value2" }
+        }
     }
 }
