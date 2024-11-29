@@ -159,7 +159,7 @@ function Get-ModuleCommand($module, $commandKey = "exec") {
     throw "Module of type $($module.GetType().Name) is not supported"
 }
 
-function Invoke-ModuleCommand($module, $key, $bound = @{}) {
+function Invoke-ModuleCommand($module, $key, $ordered = @(), $bound = @{}) {
     $command = Get-ModuleCommand $module $key
 
     if (!$command) {
@@ -173,10 +173,17 @@ function Invoke-ModuleCommand($module, $key, $bound = @{}) {
     if (!$bound.context) { $bound.context = @{} }
     if (!$bound.context.self) { $bound.context.self = $module }
 
-    return & $command @bound
+    return & $command @ordered @bound
 }
 
-function Invoke-Set($module) {
+function Invoke-Set($module, $bound = @{}) {
+    # use ordered parameters, just in case the handler has different parameter names
+    Invoke-ModuleCommand $module "set" -ordered @("", $bound.key, $bound.value) -bound $bound
+}
+
+function Invoke-Get($module, $bound = @{}) {
+    # use ordered parameters, just in case the handler has different parameter names
+    Invoke-ModuleCommand $module "get" -ordered @("", $bound.options) -bound $bound
 }
 
 function Get-ModuleCompletion($map, $commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters) {
@@ -366,18 +373,17 @@ function qconf {
                 $optionValue = $options.$optionKey
 
                 $bound = $PSBoundParameters
-                $bound["key"] = $optionKey
-                $bound["value"] = $optionValue
-                
-                Invoke-ModuleCommand $submodule $command -bound $bound
+                $bound.key = $optionKey
+                $bound.value = $optionValue
+                Invoke-Set $submodule -ordered "",$optionValue,$optionKey -bound $bound
             }
             "get" {
                 $options = Get-CompletionList $submodule -listKey "options"
                 
                 $bound = $PSBoundParameters
+                $bound.options = $options
                 
-                $value = Invoke-ModuleCommand $submodule $command -bound $bound
-
+                Invoke-Get $submodule -bound $bound
                 $result = $null
 
                 if ($value -is [Hashtable]) {
