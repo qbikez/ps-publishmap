@@ -383,45 +383,9 @@ function qconf {
                 $bound = $PSBoundParameters
                 $bound.options = $options
                 
-                Invoke-Get $submodule -bound $bound
-                $result = $null
-
-                if ($value -is [Hashtable]) {
-                    $hash = @{ Path = "$moduleName/$subPath" }
-                    $hash += $value
-                    $result = $hash
-                }
-                else {
-                    $result = @{ Path = "$moduleName/$subPath"; Value = $value }
-                }
-
-                if (!$result.Active) {
-                    $result.Active = $options.keys | where { $options.$_ -eq $value }
-                }
-                $result.Options = $options.keys
-
-                $isvalid = "?"
-                if ($validate -and $module.validate) {
-                    if (!$result.Active) {
-                        write-host "no active option found for $moduleName/$subPath"
-                        $isvalid = $null
-                    }
-                    else {
-                        $optionvalue = $options.$($result.Active)
-                        $isvalid = Invoke-Command $module.validate -ArgumentList @($path, $optionvalue, $result.Active)
-                    }
-                }
-
-                $result = [PSCustomObject]@{
-                    Path    = $result.Path
-                    Value   = $result.Value
-                    Active  = $result.Active
-                    Options = $result.Options
-                    IsValid = $isvalid
-                } 
-                # if ($isvalid -ne "?") {
-                #     $result | Add-Member -MemberType NoteProperty -Name IsValid -Value $isvalid
-                # }
+                $value = Invoke-Get $submodule -bound $bound
+                
+                $result = ConvertTo-MapResult $value $submodule $options
                 $result | Write-Output
             }
             Default {
@@ -430,4 +394,49 @@ function qconf {
         }
         
     }
+}
+
+function ConvertTo-MapResult($value, $module, $options, $validate = $false) {
+    $result = $null
+    if ($value -is [Hashtable]) {
+        $hash = @{
+            Path = "$moduleName/$subPath"
+        }
+        $hash += $value
+        
+        $result = $hash
+    }
+    else {
+        $result = @{ 
+            Path = "$moduleName/$subPath"
+            Value = $value
+        }
+    }
+
+    if (!$result.Active) {
+        $result.Active = $options.keys | where { $options.$_ -eq $value }
+    }
+    $result.Options = $options.keys
+
+    $isvalid = "?"
+    if ($validate -and $module.validate) {
+        if (!$result.Active) {
+            write-host "no active option found for $moduleName/$subPath"
+            $isvalid = $null
+        }
+        else {
+            $optionvalue = $options.$($result.Active)
+            $isvalid = Invoke-Command $module.validate -ArgumentList @($path, $optionvalue, $result.Active)
+        }
+    }
+
+    $result = [PSCustomObject]@{
+        Path    = $result.Path
+        Value   = $result.Value
+        Active  = $result.Active
+        Options = $result.Options
+        IsValid = $isvalid
+    }
+
+    return $result
 }
