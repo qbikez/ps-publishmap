@@ -12,7 +12,9 @@ $modules = [ordered]@{
         }
         get     = {
             param($ctx, $options)
-            return get-appsettingsobject -file "src/appsettings.Development.json" -options $options
+            
+            return "something"
+            # return get-appsettingsobject -file "src/appsettings.Development.json" -options $options
         }
         set     = {
             param($ctx, $key, $value)

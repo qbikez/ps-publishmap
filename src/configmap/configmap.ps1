@@ -1,19 +1,23 @@
 $reservedKeys = @("options", "exec")
-function Get-CompletionList($modules,
+function Get-CompletionList($map,
     [switch][bool]$flatten = $true,
     $separator = ".", 
     $groupMarker = "*", 
     $listKey = "list") {
     
-    if (!$modules) {
-        throw "modules is null"
+    if (!$map) {
+        throw "map is null"
     }
 
     $result = [ordered]@{}
     
-    $l = $modules
-    if ($modules.$listKey) {
-        $l = $modules.$listKey
+    $l = $map
+    if ($map.$listKey) {
+        $l = $map.$listKey
+    }
+
+    if ($l -is [scriptblock]) {
+        $l = Invoke-Command -ScriptBlock $l
     }
     
     if ($l -is [System.Collections.IDictionary]) {
@@ -27,7 +31,7 @@ function Get-CompletionList($modules,
                     $result["$($kvp.key)$groupMarker"] = $module
                 }
 
-                $submodules = Get-CompletionList $module
+                $submodules = Get-CompletionList $module -listKey $listKey -flatten:$flatten
                 foreach ($sub in $submodules.GetEnumerator()) {
                     
                     $subKey = $sub.Key
@@ -45,10 +49,6 @@ function Get-CompletionList($modules,
 
         return $result
     }
-
-    if ($l -is [scriptblock]) {
-        $submodules = Invoke-Command -ScriptBlock $l
-    }
     elseif ($l -is [array]) {
         $submodules = $l | % { $r = [ordered]@{} } { $r[$_] = $_ } { $r }
     }
@@ -56,8 +56,8 @@ function Get-CompletionList($modules,
         $submodules = $l
     }
     
-    if ($modules -is [array]) {
-        $l = $modules
+    if ($map -is [array]) {
+        $l = $map
         $submodules = $l | % { $r = [ordered]@{} } { $r[$_] = $_ } { $r }
     }
 
@@ -71,7 +71,7 @@ function Get-CompletionList($modules,
         return $result
     }
 
-    throw "$($modules.GetType().FullName) type not supported"
+    throw "$($map.GetType().FullName) type not supported"
 }
 
 function Get-ValuesList($map) {
@@ -356,15 +356,29 @@ function qconf {
             throw "module '$module' not found"
         }
 
-        $optionKey = $value
-        $options = Get-CompletionList $submodule -listKey "options"
-        $optionValue = $options.$optionKey
+        switch ($command) {
+            "set" {
+                $optionKey = $value
+                $options = Get-CompletionList $submodule -listKey "options"
+                $optionValue = $options.$optionKey
 
-        $bound = $PSBoundParameters
-        $bound["key"] = $optionKey
-        $bound["value"] = $optionValue
-        $context = @{ bound = $bound }
-        $context | ConvertTo-Json | Write-Verbose
-        Invoke-ModuleCommand $submodule $command -context $context
+                $bound = $PSBoundParameters
+                $bound["key"] = $optionKey
+                $bound["value"] = $optionValue
+                $context = @{ bound = $bound }
+                $context | ConvertTo-Json | Write-Verbose
+                Invoke-ModuleCommand $submodule $command -context $context
+            }
+            "get" {
+                $bound = $PSBoundParameters
+                $context = @{ bound = $bound }
+                $context | ConvertTo-Json | Write-Verbose
+                Invoke-ModuleCommand $submodule $command -context $context
+            }
+            Default {
+                throw "command '$command' not supported"
+            }
+        }
+        
     }
 }
