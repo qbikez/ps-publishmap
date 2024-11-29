@@ -175,8 +175,8 @@ Describe "map parsing" {
 
 Describe "map execuction" {
     BeforeEach {
-        function exec-mock($ctx) { "real" }
-        Mock exec-mock { param($ctx) write-host $ctx }
+        function exec-mock($context) { "real" }
+        Mock exec-mock { param($context) write-host $context }
     }
     Describe 'exec without args' -ForEach @(
         @{
@@ -200,9 +200,9 @@ Describe "map execuction" {
             Name = "scriptblock with param"
             Map  = @{
                 "build" = {
-                    param($ctx)
+                    param($context)
 
-                    exec-mock $ctx
+                    exec-mock $context
                 }
             }
         }
@@ -210,9 +210,9 @@ Describe "map execuction" {
         It "<name> => exec-mock" {
             $result = Get-CompletionList $map
 
-            Invoke-ModuleCommand $result.build -context @{ a = 1 }
+            Invoke-ModuleCommand $result.build -bound @{ context = @{ a = 1 } }
             Should -Invoke exec-mock -ParameterFilter {
-                $ctx | Should -MatchObject @{ a = 1 }
+                $context | Should -MatchObject @{ a = 1 }
                 return $true
             }
         }
@@ -310,7 +310,7 @@ Describe "qconf" {
             $r | Should -Be "my_value"
         }
         It "invoke set" {
-            $r = Invoke-ModuleCommand $targets.db "set" -context @{ bound = @{ "key" = "key1"; "value" = "value2" } }
+            $r = Invoke-ModuleCommand $targets.db "set" -bound @{ "key" = "key1"; "value" = "value2" } 
             Should -Invoke Set-Conf -ParameterFilter { $key -eq "key1" -and $value -eq "value2" }
         }
     }

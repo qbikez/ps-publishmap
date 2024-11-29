@@ -159,7 +159,7 @@ function Get-ModuleCommand($module, $commandKey = "exec") {
     throw "Module of type $($module.GetType().Name) is not supported"
 }
 
-function Invoke-ModuleCommand($module, $key, $context = @{}) {
+function Invoke-ModuleCommand($module, $key, $bound = @{}) {
     $command = Get-ModuleCommand $module $key
 
     if (!$command) {
@@ -168,12 +168,15 @@ function Invoke-ModuleCommand($module, $key, $context = @{}) {
     if ($command -isnot [scriptblock]) {
         throw "Module '$key' of type $($command.GetType().Name) is not supported"
     }
-    if (!$context.self) { $context.self = $module }
-
-    $bound = $context.bound
+    
     if (!$bound) { $bound = @() }
+    if (!$bound.context) { $bound.context = @{} }
+    if (!$bound.context.self) { $bound.context.self = $module }
 
-    return & $command $context @bound
+    return & $command @bound
+}
+
+function Invoke-Set($module) {
 }
 
 function Get-ModuleCompletion($map, $commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters) {
@@ -221,7 +224,7 @@ function Invoke-Module($map, $module, $bound) {
     @($targets) | % {
         Write-Verbose "running module '$($_.key)'"
 
-        Invoke-ModuleCommand -module $_.value -key $_.Key @{ bound = $bound }
+        Invoke-ModuleCommand -module $_.value -key $_.Key $bound
     }
 }
 
@@ -365,15 +368,55 @@ function qconf {
                 $bound = $PSBoundParameters
                 $bound["key"] = $optionKey
                 $bound["value"] = $optionValue
-                $context = @{ bound = $bound }
-                $context | ConvertTo-Json | Write-Verbose
-                Invoke-ModuleCommand $submodule $command -context $context
+                
+                Invoke-ModuleCommand $submodule $command -bound $bound
             }
             "get" {
+                $options = Get-CompletionList $submodule -listKey "options"
+                
                 $bound = $PSBoundParameters
-                $context = @{ bound = $bound }
-                $context | ConvertTo-Json | Write-Verbose
-                Invoke-ModuleCommand $submodule $command -context $context
+                
+                $value = Invoke-ModuleCommand $submodule $command -bound $bound
+
+                $result = $null
+
+                if ($value -is [Hashtable]) {
+                    $hash = @{ Path = "$moduleName/$subPath" }
+                    $hash += $value
+                    $result = $hash
+                }
+                else {
+                    $result = @{ Path = "$moduleName/$subPath"; Value = $value }
+                }
+
+                if (!$result.Active) {
+                    $result.Active = $options.keys | where { $options.$_ -eq $value }
+                }
+                $result.Options = $options.keys
+
+                $isvalid = "?"
+                if ($validate -and $module.validate) {
+                    if (!$result.Active) {
+                        write-host "no active option found for $moduleName/$subPath"
+                        $isvalid = $null
+                    }
+                    else {
+                        $optionvalue = $options.$($result.Active)
+                        $isvalid = Invoke-Command $module.validate -ArgumentList @($path, $optionvalue, $result.Active)
+                    }
+                }
+
+                $result = [PSCustomObject]@{
+                    Path    = $result.Path
+                    Value   = $result.Value
+                    Active  = $result.Active
+                    Options = $result.Options
+                    IsValid = $isvalid
+                } 
+                # if ($isvalid -ne "?") {
+                #     $result | Add-Member -MemberType NoteProperty -Name IsValid -Value $isvalid
+                # }
+                $result | Write-Output
             }
             Default {
                 throw "command '$command' not supported"
