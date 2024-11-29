@@ -426,7 +426,7 @@ function ConvertTo-MapResult($value, $module, $options, $validate = $false) {
         }
         else {
             $optionvalue = $options.$($result.Active)
-            $isvalid = Invoke-Command $module.validate -ArgumentList @($path, $optionvalue, $result.Active)
+            $isvalid = Invoke-ModuleCommand $module validate -ordered @($path, $optionvalue, $result.Active)
         }
     }
 
