@@ -264,7 +264,7 @@ function qbuild {
         [ArgumentCompleter({
                 param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
                 # ipmo configmap
-                $map = $fakeBoundParameters.map 
+                $map = $fakeBoundParameters.map
                 if (!$map) { $map = "./.build.map.ps1" }
                 return Get-ModuleCompletion $map @PSBoundParameters
             })]
@@ -273,6 +273,7 @@ function qbuild {
     )
     DynamicParam {
         # ipmo configmap
+        if (!$map) { $map = "./.build.map.ps1" }
         return Get-ModuleDynamicParam $map $module $PSBoundParameters
     }
 
@@ -396,7 +397,7 @@ function qconf {
     }
 }
 
-function ConvertTo-MapResult($value, $module, $options, $validate = $false) {
+function ConvertTo-MapResult($value, $module, $options, $validate = $true) {
     $result = $null
     if ($value -is [Hashtable]) {
         $hash = @{
