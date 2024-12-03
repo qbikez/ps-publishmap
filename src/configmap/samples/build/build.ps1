@@ -14,5 +14,5 @@ DynamicParam {
 
 process {
     # ipmo configmap
-    Invoke-Module "./.build.map.ps1" $PSBoundParameters
+    Invoke-Module "./.build.map.ps1" $module $PSBoundParameters
 }

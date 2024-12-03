@@ -82,18 +82,19 @@ Describe "map parsing" {
             Keys = @("key1", "key2")
         }
         @{
-            Name = "one-level simple list"
-            Map  = [ordered]@{
+            Name    = "one-level simple list"
+            Map     = [ordered]@{
                 "key1" = @{
                     list = ("a", "b")
                 }
                 "key2" = @{ id = "b" }
             }
-            Keys = @("key1*", "a", "b", "key2")
+            Flatten = @("key1*", "a", "b", "key2")
+            Tree    = @("key1.a", "key1.b", "key2")
         }
         @{
-            Name = "config-like"
-            Map  = [ordered]@{
+            Name    = "config-like"
+            Map     = [ordered]@{
                 "db"      = @{
                     options = @{
                         "local"  = @{
@@ -117,21 +118,33 @@ Describe "map parsing" {
                     }
                 }
             }
-            Keys = @("db", "secrets*", "connectionString", "keyVault")
+            Flatten = @("db", "secrets*", "connectionString", "keyVault")
+            Tree    = @("db", "secrets.connectionString", "secrets.keyVault")
         }
     ) {
-        It '<name> => keys' {
-            $result = Get-CompletionList $map
-            $result.Keys | Should -Be $keys
+        It '<name> => flatten keys' {
+            $list = (Get-CompletionList $map -flatten:$true)
+            if (!$flatten) {
+                $flatten = $keys
+            }
+            
+            $list.Keys | Should -Be $Flatten
         }
-       
+        It '<name> => tree keys' {
+            $list = (Get-CompletionList $map -flatten:$false)
+            if (!$tree) {
+                $tree = $keys
+            }
+            
+            $list.Keys | Should -Be $Tree
+        }
     }
 
     Describe "values" -ForEach @(
         @{
             Name   = "options value"
             Map    = @{
-                options = @{
+                options = [ordered]@{
                     "a" = 1
                     "b" = 2
                 }
@@ -142,7 +155,7 @@ Describe "map parsing" {
             Name   = "options func"
             Map    = @{
                 options = {
-                    return @{
+                    return [ordered]@{
                         "a" = 1
                         "b" = 2
                     }
@@ -162,8 +175,8 @@ Describe "map parsing" {
 
 Describe "map execuction" {
     BeforeEach {
-        function exec-mock($ctx) { "real" }
-        Mock exec-mock { param($ctx) write-host $ctx }
+        function exec-mock($context) { "real" }
+        Mock exec-mock { param($context) write-host $context }
     }
     Describe 'exec without args' -ForEach @(
         @{
@@ -176,7 +189,7 @@ Describe "map execuction" {
         }
     ) {
         It "<name> => exec-mock without args" {
-            $module = Get-Module $map "build"
+            $module = Get-MapModule $map "build"
 
             Invoke-ModuleCommand $module "build" -context @{ a = 1 }
             Should -Invoke exec-mock
@@ -187,9 +200,9 @@ Describe "map execuction" {
             Name = "scriptblock with param"
             Map  = @{
                 "build" = {
-                    param($ctx)
+                    param($context)
 
-                    exec-mock $ctx
+                    exec-mock $context
                 }
             }
         }
@@ -197,9 +210,9 @@ Describe "map execuction" {
         It "<name> => exec-mock" {
             $result = Get-CompletionList $map
 
-            Invoke-ModuleCommand $result.build "build" -context @{ a = 1 }
+            Invoke-ModuleCommand $result.build -bound @{ context = @{ a = 1 } }
             Should -Invoke exec-mock -ParameterFilter {
-                $ctx | Should -MatchObject @{ a = 1 }
+                $context | Should -MatchObject @{ a = 1 }
                 return $true
             }
         }
@@ -252,18 +265,22 @@ Describe "qconf" {
         Mock Set-Conf
         $targets = @{
             "db" = @{
-                options = @{
-                    "local"  = @{
-                        "connectionString" = "localconnstr"
+                options = { return [ordered]@{
+                        "local"  = @{
+                            "connectionString" = "localconnstr"
+                        }
+                        "remote" = @{
+                            "connectionString" = "localconnstr"
+                        }
                     }
-                    "remote" = @{
-                        "connectionString" = "localconnstr"
-                    }
-                }
-                set = {
+                }   
+                set     = {
                     param($key, $value)
 
                     Set-Conf @PSBoundParameters
+                }
+                get     = {
+                    return "my_value"
                 }
             }
         }
@@ -273,6 +290,28 @@ Describe "qconf" {
         It "should return parameters" {
             $parameters = Get-ScriptArgs $targets.db.set
             $parameters.Keys | Should -Be @("key", "value")
+        }
+        It "should return top-level completion list" {
+            $list = Get-CompletionList $targets
+            $list.Keys | Should -be @("db")
+        }
+        It "should return options list" {
+            $entry = Get-MapModule $targets "db"
+            $entry | Should -Not -BeNullOrEmpty
+            $options = Get-CompletionList $entry -listKey "options"
+            $options.Keys | Should -Be @("local", "remote")
+        }
+        It "invoke options" {
+            $r = Invoke-ModuleCommand $targets.db "options"
+            $r.Keys | Should -Be @("local", "remote")
+        }
+        It "invoke get" {
+            $r = Invoke-ModuleCommand $targets.db "get"
+            $r | Should -Be "my_value"
+        }
+        It "invoke set" {
+            $r = Invoke-ModuleCommand $targets.db "set" -bound @{ "key" = "key1"; "value" = "value2" } 
+            Should -Invoke Set-Conf -ParameterFilter { $key -eq "key1" -and $value -eq "value2" }
         }
     }
 }
