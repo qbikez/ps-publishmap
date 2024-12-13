@@ -71,7 +71,7 @@ function Get-CompletionList($map,
         return $result
     }
 
-    throw "$($map.GetType().FullName) type not supported"
+    throw "cannot get completion list for '$map': type '$($map.GetType().FullName)' not supported"
 }
 
 function Get-ValuesList($map) {
@@ -268,8 +268,7 @@ function qbuild {
                 if (!$map) { $map = "./.build.map.ps1" }
                 return Get-ModuleCompletion $map @PSBoundParameters
             })]
-        $module = $null,
-        $map = "./.build.map.ps1"
+        $module = $null
     )
     DynamicParam {
         # ipmo configmap
@@ -298,7 +297,7 @@ function qconf {
                 catch {
                     return "ERROR: $($_.Exception.Message) $($_.ScriptStackTrace)"
                 }
-            })] 
+            })]
         $module = $null,
         [ArgumentCompleter({
                 param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)

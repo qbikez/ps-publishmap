@@ -95,7 +95,7 @@ function invoke-modulecommand($moduleAndPath, $command, [object] $additionalOpts
     }
 
     switch ($command) {
-        "set" {  
+        "set" {
             $options = Invoke-Command -ScriptBlock $module.options -ArgumentList @($path)
             if (!$options) {
                 throw "module $moduleName does not support options[$path]"
