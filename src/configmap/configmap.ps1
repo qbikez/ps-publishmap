@@ -102,9 +102,20 @@ function Get-ScriptArgs {
                     $paramType = [switch]
                 }
                 else {
-                    # $newAttr = New-Object -type System.Management.Automation.PSTypeNameAttribute($attr.TypeName.Name)
-                    # $paramAttributesCollect.Add($newAttr)
                 }
+            }
+            elseif ($attr.TypeName.ToString() -eq "ValidateSet") {
+                $newAttr = New-Object -type System.Management.Automation.ValidateSetAttribute -ArgumentList @($attr.PositionalArguments.Value)
+                $paramAttributesCollect.Add($newAttr)
+            }
+            elseif ($attr.TypeName.ToString() -eq "ArgumentCompleter") {
+                #[System.Management.Automation.Language.AstVisitor]$visitor = $null
+                #[System.Management.Automation.Language.AttributeAst]$a = $attr
+                #$a.Visit($visitor)
+                $s = $attr.PositionalArguments[0].ScriptBlock.ToString()
+                $block = [scriptblock]::Create($s)
+                
+                $newAttr = New-Object -type System.Management.Automation.ArgumentCompleterAttribute -ArgumentList @($block)
             }
         }
         
@@ -288,6 +299,7 @@ function qconf {
         $command,
         [ArgumentCompleter({
                 param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+                
                 try {
                     $map = $fakeBoundParameters.map
                     if (!$map) { $map = "./.configuration.map.ps1" }
@@ -375,7 +387,7 @@ function qconf {
                 $bound = $PSBoundParameters
                 $bound.key = $optionKey
                 $bound.value = $optionValue
-                Invoke-Set $submodule -ordered "",$optionValue,$optionKey -bound $bound
+                Invoke-Set $submodule -ordered "", $optionValue, $optionKey -bound $bound
             }
             "get" {
                 $options = Get-CompletionList $submodule -listKey "options"
@@ -408,7 +420,7 @@ function ConvertTo-MapResult($value, $module, $options, $validate = $true) {
     }
     else {
         $result = @{ 
-            Path = "$moduleName/$subPath"
+            Path  = "$moduleName/$subPath"
             Value = $value
         }
     }
