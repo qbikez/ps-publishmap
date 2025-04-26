@@ -277,7 +277,7 @@ function qbuild {
                 try {
                     # ipmo configmap
                     $map = $fakeBoundParameters.map
-                    if (!$map) { $map = "./.build.map.ps1" }
+                    if (!$map) { $map = find-fileUpwards ".build.map.ps1" }
                     if (!(test-path $map)) {
                         return @("init", "help") | ? { $_.startswith($wordToComplete) }
                     }
@@ -292,7 +292,7 @@ function qbuild {
     DynamicParam {
         try {
             # ipmo configmap
-            if (!$map) { $map = "./.build.map.ps1" }
+            if (!$map) { $map = find-fileUpwards ".build.map.ps1" }
             return Get-ModuleDynamicParam $map $module $PSBoundParameters
         }
         catch {
@@ -342,7 +342,7 @@ function qconf {
                         return @()
                     }
                     $map = $fakeBoundParameters.map
-                    if (!$map) { $map = "./.configuration.map.ps1" }
+                    if (!$map) { $map = find-fileUpwards ".configuration.map.ps1" }
                     
                     return Get-ModuleCompletion $map @PSBoundParameters
                 }
@@ -360,7 +360,7 @@ function qconf {
                     }
 
                     $map = $fakeBoundParameters.map
-                    if (!$map) { $map = "./.configuration.map.ps1" }
+                    if (!$map) { $map = find-fileUpwards ".configuration.map.ps1" }
                     if ($map -is [string]) {
                         if (!(test-path $map)) {
                             throw "map file '$map' not found"
@@ -380,7 +380,7 @@ function qconf {
                 }
             })] 
         $value = $null,
-        $map = "./.configuration.map.ps1"
+        $map = $null
     )
 
     ## we need dynamic parameters for commands that have custom parameter list
@@ -391,7 +391,7 @@ function qconf {
             if ( !$module) {
                 return @()
             }
-            if (!$map) { $map = "./.configuration.map.ps1" }
+            if (!$map) { $map = find-fileUpwards ".configuration.map.ps1" }
             if ($map -is [string]) {
                 if (!(test-path $map)) {
                     throw "map file '$map' not found"
@@ -415,7 +415,7 @@ function qconf {
             return
         }
         if ($command -eq "init") {
-            if (!$map) { $map = "./.configuration.map.ps1" }
+            if (!$map) { $map = find-fileUpwards ".configuration.map.ps1" }
             if ($map -is [string]) {
                 if ((test-path $map)) {
                     throw "map file '$map' already exists"
@@ -430,6 +430,9 @@ function qconf {
             return
         }
 
+        if (!$map) {
+            $map = find-fileUpwards ".configuration.map.ps1"
+        }
         if ($map -is [string]) {
             if (!(test-path $map)) {
                 throw "map file '$map' not found"
@@ -546,4 +549,20 @@ function init-buildMap([Parameter(Mandatory = $true)] $file) {
     $defaultConfig = get-content $PSScriptRoot/samples/_default/.build.map.ps1
     write-host "Initializing buildmap file '$file'"
     $defaultConfig | Out-File $file
+}
+
+function find-fileUpwards([Parameter(Mandatory=$true)]$map) {
+    $dir = $PWD.Path
+    $mapFile = (Join-Path $dir $map)
+    do {
+        $mapFile = (Join-Path $dir $map)
+        if (Test-Path $mapFile) {
+            return $mapFile
+        }
+        $dir = Split-Path $dir -Parent
+    }
+    while(!(Test-Path $mapFile) -and $dir)
+
+    # return starting file, so we can use test-path to check if we found it
+    return $map;
 }
