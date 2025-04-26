@@ -274,20 +274,57 @@ function qbuild {
     param(
         [ArgumentCompleter({
                 param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-                # ipmo configmap
-                $map = $fakeBoundParameters.map
-                if (!$map) { $map = "./.build.map.ps1" }
-                return Get-ModuleCompletion $map @PSBoundParameters
+                try {
+                    # ipmo configmap
+                    $map = $fakeBoundParameters.map
+                    if (!$map) { $map = "./.build.map.ps1" }
+                    if (!(test-path $map)) {
+                        return @("init", "help") | ? { $_.startswith($wordToComplete) }
+                    }
+                    return Get-ModuleCompletion $map @PSBoundParameters
+                }
+                catch {
+                    return "ERROR [-module]: $($_.Exception.Message) $($_.ScriptStackTrace)"
+                }
             })]
         $module = $null
     )
     DynamicParam {
-        # ipmo configmap
-        if (!$map) { $map = "./.build.map.ps1" }
-        return Get-ModuleDynamicParam $map $module $PSBoundParameters
+        try {
+            # ipmo configmap
+            if (!$map) { $map = "./.build.map.ps1" }
+            return Get-ModuleDynamicParam $map $module $PSBoundParameters
+        }
+        catch {
+            return "ERROR [dynamic]: $($_.Exception.Message) $($_.ScriptStackTrace)"
+        }
     }
 
     process {
+        if ($module -eq "help") {
+            Write-Host "QBUILD"
+            Write-Host "A command line tool to manage build scripts"
+            Write-Host ""
+            Write-Host "Usage:"
+            write-host "qbuild <your-script-name>"
+            return
+        }
+        if ($module -eq "init") {
+            if (!$map) { $map = "./.build.map.ps1" }
+            if ($map -is [string]) {
+                if ((test-path $map)) {
+                    throw "map file '$map' already exists"
+                }
+            }
+            else {
+                throw "Map appears to be an object, not a file"
+            }
+
+            init-buildMap -file $map
+
+            return
+        }
+
         Invoke-Module $map $module $PSBoundParameters
     }
 }
@@ -295,25 +332,33 @@ function qbuild {
 function qconf {
     [CmdletBinding()]
     param(
-        [ValidateSet("set", "get", "list")]
+        [ValidateSet("set", "get", "list", "help", "init")]
         $command,
+        
         [ArgumentCompleter({
                 param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-                
                 try {
+                    if ($fakeBoundParameters.command -in @("init", "help")) {
+                        return @()
+                    }
                     $map = $fakeBoundParameters.map
                     if (!$map) { $map = "./.configuration.map.ps1" }
                     
                     return Get-ModuleCompletion $map @PSBoundParameters
                 }
                 catch {
-                    return "ERROR: $($_.Exception.Message) $($_.ScriptStackTrace)"
+                    return "ERROR [-module]: $($_.Exception.Message) $($_.ScriptStackTrace)"
                 }
             })]
         $module = $null,
+        
         [ArgumentCompleter({
                 param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
                 try {
+                    if ($fakeBoundParameters.command -in @("init", "help")) {
+                        return @()
+                    }
+
                     $map = $fakeBoundParameters.map
                     if (!$map) { $map = "./.configuration.map.ps1" }
                     if ($map -is [string]) {
@@ -331,18 +376,19 @@ function qconf {
                     return $options.Keys | ? { $_.startswith($wordToComplete) }
                 }
                 catch {
-                    return "ERROR: $($_.Exception.Message) $($_.ScriptStackTrace)"
+                    return "ERROR [-value]: $($_.Exception.Message) $($_.ScriptStackTrace)"
                 }
-            
             })] 
         $value = $null,
         $map = "./.configuration.map.ps1"
     )
 
+    ## we need dynamic parameters for commands that have custom parameter list
+    ## this assumes that -module and -command are already provided
     DynamicParam {
         # ipmo configmap
         try {
-            if (!$module) {
+            if ( !$module) {
                 return @()
             }
             if (!$map) { $map = "./.configuration.map.ps1" }
@@ -355,12 +401,35 @@ function qconf {
             return Get-ModuleDynamicParam $map "$module.$command" $PSBoundParameters
         }
         catch {
-            Write-Host "ERROR: $($_.Exception.Message) $($_.ScriptStackTrace)"
-            throw
+            return "ERROR [dynamic]: $($_.Exception.Message) $($_.ScriptStackTrace)"
         }
     }
 
     process {
+        if ($command -eq "help") {
+            Write-Host "QCONF"
+            Write-Host "A command line tool to manage configuration maps"
+            Write-Host ""
+            Write-Host "Usage:"
+            write-host "qconf -module <module> -command <command> -value <value>"
+            return
+        }
+        if ($command -eq "init") {
+            if (!$map) { $map = "./.configuration.map.ps1" }
+            if ($map -is [string]) {
+                if ((test-path $map)) {
+                    throw "map file '$map' already exists"
+                }
+            }
+            else {
+                throw "Map appears to be an object, not a file"
+            }
+
+            init-configmap -file $map
+
+            return
+        }
+
         if ($map -is [string]) {
             if (!(test-path $map)) {
                 throw "map file '$map' not found"
@@ -451,4 +520,30 @@ function ConvertTo-MapResult($value, $module, $options, $validate = $true) {
     }
 
     return $result
+}
+
+function init-configmap([Parameter(Mandatory = $true)] $file) {
+    if (test-path $file) {
+        throw "map file '$file' already exists"
+    }
+
+    $defaultConfig = get-content $PSScriptRoot/samples/_default/.configuration.map.ps1
+    write-host "Initializing configmap file '$file'"
+    $defaultConfig | Out-File $file
+
+    $fullPath = (get-item $file).FullName
+    $dir = Split-Path $fullPath -Parent
+    $defaultUtils = get-content $PSScriptRoot/samples/_default/.config-utils.ps1
+    $defaultUtils | Out-File (Join-Path $dir ".config-utils.ps1")
+}
+
+
+function init-buildMap([Parameter(Mandatory = $true)] $file) {
+    if (test-path $file) {
+        throw "map file '$file' already exists"
+    }
+
+    $defaultConfig = get-content $PSScriptRoot/samples/_default/.build.map.ps1
+    write-host "Initializing buildmap file '$file'"
+    $defaultConfig | Out-File $file
 }
