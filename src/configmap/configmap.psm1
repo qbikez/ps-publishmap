@@ -7,6 +7,7 @@ Export-ModuleMember `
         Get-CompletionList, Get-ValuesList, `
         Get-MapModules, Get-MapModule, Get-ModuleCommand, `
         Get-ScriptArgs, Invoke-ModuleCommand, `
+        Get-ModuleCompletion, `
         qbuild, qconf, qrun `
     -Alias *
     
