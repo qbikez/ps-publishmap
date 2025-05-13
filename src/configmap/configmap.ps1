@@ -277,7 +277,7 @@ function qbuild {
                 try {
                     # ipmo configmap
                     $map = $fakeBoundParameters.map
-                    if (!$map) { $map = find-fileUpwards ".build.map.ps1" }
+                    if (!$map) { $map = "./.build.map.ps1" }
                     if (!(test-path $map)) {
                         return @("init", "help") | ? { $_.startswith($wordToComplete) }
                     }
@@ -443,15 +443,20 @@ function qconf {
             throw "Failed to load map"
         }
 
+        if (!$command) {
+            $command = "get"
+        }
         Write-Verbose "module=$module command=$command"
 
-        $submodule = $map.$module
-        if (!$submodule) {
-            throw "module '$module' not found"
-        }
+        
 
         switch ($command) {
             "set" {
+                $submodule = $map.$module
+                if (!$submodule) {
+                    throw "module '$module' not found"
+                }
+        
                 $optionKey = $value
                 $options = Get-CompletionList $submodule -listKey "options"
                 $optionValue = $options.$optionKey
@@ -462,15 +467,35 @@ function qconf {
                 Invoke-Set $submodule -ordered "", $optionValue, $optionKey -bound $bound
             }
             "get" {
-                $options = Get-CompletionList $submodule -listKey "options"
-                
-                $bound = $PSBoundParameters
-                $bound.options = $options
-                
-                $value = Invoke-Get $submodule -bound $bound
-                
-                $result = ConvertTo-MapResult $value $submodule $options
-                $result | Write-Output
+                if (!$module) {
+                    $modules = Get-CompletionList $map
+                    write-verbose "modules: $($modules.Keys)"
+                    
+                    $m = @($modules.Keys)
+                }
+                else {
+                    $m = @($module)
+                }
+
+                $allresult = @()
+                foreach($module in $m) {
+                    $submodule = $map.$module
+                    if (!$submodule) {
+                        throw "module '$module' not found"
+                    }
+                    $options = Get-CompletionList $submodule -listKey "options"
+                    
+                    $bound = $PSBoundParameters
+                    $bound.options = $options
+                    
+                    $value = Invoke-Get $submodule -bound $bound
+                    
+                    $result = ConvertTo-MapResult $value $submodule $options
+                    # Write-Output $result
+                    $allresult += $result
+                }   
+
+                return $allresult
             }
             Default {
                 throw "command '$command' not supported"
