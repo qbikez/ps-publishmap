@@ -310,7 +310,7 @@ function qbuild {
             return
         }
         if ($module -eq "init") {
-            if (!$map) { $map = "./.build.map.ps1" }
+            if (!$map) { $map = find-fileUpwards ".build.map.ps1" }
             if ($map -is [string]) {
                 if ((test-path $map)) {
                     throw "map file '$map' already exists"
