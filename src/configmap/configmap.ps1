@@ -149,7 +149,7 @@ function Get-ModuleCommand($module, $commandKey = "exec") {
     if (!$module) { throw "module is NULL" }
     if ($module -is [scriptblock]) { return $module }
 
-    if ($module -is [System.Collections.IDictionary]) {
+    if ($module -is [System.Collections.IDictionary] -or $module -is [System.Collections.Hashtable]) {
         if (!$module.$commandKey) {
             throw "Command '$commandKey' not found"
         }
@@ -230,8 +230,10 @@ function Invoke-Module($map, $module, $bound) {
 
     @($targets) | % {
         Write-Verbose "running module '$($_.key)'"
-
-        Invoke-ModuleCommand -module $_.value -key $_.Key $bound
+        # FIXME: we already have the module in $_.value, we know ITs own key, but we don't want to search for this key inside this object
+        # we should pass null instead?
+        #Invoke-ModuleCommand -module $_.value -key $_.Key $bound
+        Invoke-ModuleCommand -module $_.value -key "exec" -bound $bound
     }
 }
 
@@ -446,7 +448,7 @@ function qconf {
                 $bound = $PSBoundParameters
                 $bound.key = $optionKey
                 $bound.value = $optionValue
-                Invoke-Set $submodule -ordered "",$optionValue,$optionKey -bound $bound
+                Invoke-Set $submodule -ordered "", $optionValue, $optionKey -bound $bound
             }
             "get" {
                 $options = Get-CompletionList $submodule -listKey "options"
@@ -479,7 +481,7 @@ function ConvertTo-MapResult($value, $module, $options, $validate = $true) {
     }
     else {
         $result = @{ 
-            Path = "$moduleName/$subPath"
+            Path  = "$moduleName/$subPath"
             Value = $value
         }
     }
