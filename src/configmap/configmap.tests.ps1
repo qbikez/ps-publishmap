@@ -315,3 +315,40 @@ Describe "qconf" {
         }
     }
 }
+
+Describe "unified" {
+    BeforeAll {
+
+        Mock Write-Host
+        $targets = @{
+            "write:simple" = {
+                param([string] $message)
+        
+                write-host "ECHO: '$message'"
+            }
+            "write:wrapped" = @{
+                exec = {
+                    param([string] $message)
+        
+                    write-host "ECHO: '$message'"
+                }
+            }
+        }
+    }
+    
+    It "should write message with scriptblock" {
+        qrun $targets "write:simple" -message "Hello, World!"
+        
+         Should -Invoke Write-Host -Exactly 1 -ParameterFilter { 
+                $Object -eq "ECHO: 'Hello, World!'"
+        }
+    }
+
+     It "should write message with wrapped scriptblock" {
+        qrun $targets "write:wrapped" -message "Hello, World!"
+        
+         Should -Invoke Write-Host -Exactly 1 -ParameterFilter { 
+                $Object -eq "ECHO: 'Hello, World!'"
+        }
+    }
+}

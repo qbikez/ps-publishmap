@@ -169,7 +169,7 @@ function Invoke-ModuleCommand($module, $key, $ordered = @(), $bound = @{}) {
         throw "Module '$key' of type $($command.GetType().Name) is not supported"
     }
     
-    if (!$bound) { $bound = @() }
+    if (!$bound) { $bound = @{} }
     if (!$bound.context) { $bound.context = @{} }
     if (!$bound.context.self) { $bound.context.self = $module }
 
@@ -198,22 +198,23 @@ function Get-ModuleCompletion($map, $commandName, $parameterName, $wordToComplet
     return $list.Keys | ? { $_.startswith($wordToComplete) }
 }
 
-function Get-ModuleDynamicParam($map, $key, $bound) {
+function Get-ModuleDynamicParam($map, $key, $command, $bound) {
     if (!$key) { return @() }
 
     if ($map -is [string]) {
         $mapFile = $map
         $map = . $mapFile
     }
+
     if (!$map) {
         throw "failed to load map from $mapFile"
     }
 
-    $bound = $PSBoundParameters
+    #$bound = $PSBoundParameters
 
     $selectedModule = Get-MapModule $map $key
     if (!$selectedModule) { return @() }
-    $command = Get-ModuleCommand $selectedModule
+    $command = Get-ModuleCommand $selectedModule $command
     if (!$command) { return @() }
     $p = Get-ScriptArgs $command
 
@@ -279,13 +280,14 @@ function qbuild {
                 }
             })]
         $module = $null,
+        $command = "exec",
         $map = "./.build.map.ps1"
     )
     DynamicParam {
         try {
             # ipmo configmap
             if (!$map) { $map = "./.build.map.ps1" }
-            return Get-ModuleDynamicParam $map $module $PSBoundParameters
+            return Get-ModuleDynamicParam $map $module $command $PSBoundParameters
         }
         catch {
             return "ERROR [dynamic]: $($_.Exception.Message) $($_.ScriptStackTrace)"
@@ -317,7 +319,22 @@ function qbuild {
             return
         }
 
-        Invoke-Module $map $module $PSBoundParameters
+        if ($map -is [string]) {
+            $map = . $map
+        }
+
+        $targets = Get-MapModules $map $module
+        write-verbose "running targets: $($targets.Key)"
+
+        @($targets) | % {
+            Write-Verbose "running module '$($_.key)'"
+            # FIXME: we already have the module in $_.value, we know ITs own key, but we don't want to search for this key inside this object
+            # we should pass null instead?
+            #Invoke-ModuleCommand -module $_.value -key $_.Key $bound
+            $bound = $PSBoundParameters
+            Invoke-ModuleCommand -module $_.value -key $command -bound $bound
+        }
+    
     }
 }
 
