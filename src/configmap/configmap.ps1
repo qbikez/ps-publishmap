@@ -272,7 +272,7 @@ function Invoke-Module($map, $module, $bound) {
     }
 }
 
-function qrun {
+function Invoke-QRun {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true, Position = 0)]
@@ -295,7 +295,7 @@ function qrun {
     }
 }
 
-function qbuild {
+function Invoke-QBuild {
     [CmdletBinding()]
     param(
         [ArgumentCompleter({
@@ -349,7 +349,7 @@ function qbuild {
                 throw "Map appears to be an object, not a file"
             }
 
-            init-buildMap -file $map
+            Initialize-BuildMap -file $map
 
             return
         }
@@ -371,7 +371,7 @@ function qbuild {
     }
 }
 
-function qconf {
+function Invoke-QConf {
     [CmdletBinding()]
     param(
         [ValidateSet("set", "get", "list", "help", "init")]
@@ -455,7 +455,7 @@ function qconf {
                 throw "Map appears to be an object, not a file"
             }
 
-            init-configmap -file $map
+            Initialize-ConfigMap -file $map
 
             return
         }
@@ -544,7 +544,7 @@ function ConvertTo-MapResult($value, $module, $options, $validate = $true) {
     return $result
 }
 
-function init-configmap([Parameter(Mandatory = $true)] $file) {
+function Initialize-ConfigMap([Parameter(Mandatory = $true)] $file) {
     if (Test-Path $file) {
         throw "map file '$file' already exists"
     }
@@ -560,7 +560,7 @@ function init-configmap([Parameter(Mandatory = $true)] $file) {
 }
 
 
-function init-buildMap([Parameter(Mandatory = $true)] $file) {
+function Initialize-BuildMap([Parameter(Mandatory = $true)] $file) {
     if (Test-Path $file) {
         throw "map file '$file' already exists"
     }
@@ -569,3 +569,7 @@ function init-buildMap([Parameter(Mandatory = $true)] $file) {
     Write-Host "Initializing buildmap file '$file'"
     $defaultConfig | Out-File $file
 }
+
+Set-Alias -Name "qrun" -Value "Invoke-QRun" -Force
+Set-Alias -Name "qbuild" -Value "Invoke-QBuild" -Force
+Set-Alias -Name "qconf" -Value "Invoke-QConf" -Force
