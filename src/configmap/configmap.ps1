@@ -472,6 +472,11 @@ function Invoke-QConf {
 
         switch ($command) {
             "set" {
+                $submodule = $map.$module
+                if (!$submodule) {
+                    throw "module '$module' not found"
+                }
+        
                 $optionKey = $value
                 $options = Get-CompletionList $subEntry -listKey "options"
                 $optionValue = $options.$optionKey
