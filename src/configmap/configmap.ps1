@@ -1,4 +1,36 @@
 $reservedKeys = @("options", "exec")
+
+function Import-ConfigMap {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        $map,
+        
+        [Parameter(Mandatory = $true)]
+        $defaultMapFile
+    )
+    
+    # Set default map file if null
+    if (!$map) { 
+        $map = $defaultMapFile 
+    }
+    
+    # Load map from file if it's a string path
+    if ($map -is [string]) {
+        if (!(Test-Path $map)) {
+            throw "map file '$map' not found"
+        }
+        $map = . $map
+    }
+    
+    # Validate that we have a loaded map
+    if (!$map) {
+        throw "failed to load map from $defaultMapFile"
+    }
+    
+    return $map
+}
 function Get-CompletionList($map,
     [switch][bool]$flatten = $true,
     $separator = ".", 
@@ -187,6 +219,7 @@ function Invoke-Get($module, $bound = @{}) {
 }
 
 function Get-ModuleCompletion($map, $commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters) {
+    # Note: This function doesn't have a default map file, so we handle the string case only
     if ($map -is [string]) {
         if (!(Test-Path $map)) {
             throw "map file '$map' not found"
@@ -222,6 +255,7 @@ function Get-ModuleDynamicParam($map, $key, $command, $bound) {
 }
 
 function Invoke-Module($map, $module, $bound) {
+    # Note: This function doesn't have a default map file, so we handle the string case only
     if ($map -is [string]) {
         $map = . $map
     }
@@ -273,6 +307,7 @@ function qbuild {
                     if (!(Test-Path $map)) {
                         return @("init", "help") | ? { $_.startswith($wordToComplete) }
                     }
+                    $map = Import-ConfigMap $map "./.build.map.ps1"
                     return Get-ModuleCompletion $map @PSBoundParameters
                 }
                 catch {
@@ -286,7 +321,7 @@ function qbuild {
     dynamicparam {
         try {
             # ipmo configmap
-            if (!$map) { $map = "./.build.map.ps1" }
+            $map = Import-ConfigMap $map "./.build.map.ps1"
             return Get-ModuleDynamicParam $map $module $command $PSBoundParameters
         }
         catch {
@@ -319,9 +354,7 @@ function qbuild {
             return
         }
 
-        if ($map -is [string]) {
-            $map = . $map
-        }
+        $map = Import-ConfigMap $map "./.build.map.ps1"
 
         $targets = Get-MapModules $map $module
         Write-Verbose "running targets: $($targets.Key)"
@@ -351,7 +384,7 @@ function qconf {
                         return @()
                     }
                     $map = $fakeBoundParameters.map
-                    if (!$map) { $map = "./.configuration.map.ps1" }
+                    $map = Import-ConfigMap $map "./.configuration.map.ps1"
                     
                     return Get-ModuleCompletion $map @PSBoundParameters
                 }
@@ -369,13 +402,7 @@ function qconf {
                     }
 
                     $map = $fakeBoundParameters.map
-                    if (!$map) { $map = "./.configuration.map.ps1" }
-                    if ($map -is [string]) {
-                        if (!(Test-Path $map)) {
-                            throw "map file '$map' not found"
-                        }
-                        $map = . $map
-                    }
+                    $map = Import-ConfigMap $map "./.configuration.map.ps1"
                     $module = $fakeBoundParameters.module
                     $entry = Get-MapModule $map $module
                     if (!$entry) {
@@ -400,13 +427,7 @@ function qconf {
             if ( !$module) {
                 return @()
             }
-            if (!$map) { $map = "./.configuration.map.ps1" }
-            if ($map -is [string]) {
-                if (!(Test-Path $map)) {
-                    throw "map file '$map' not found"
-                }
-                $map = . $map
-            }
+            $map = Import-ConfigMap $map "./.configuration.map.ps1"
             return Get-ModuleDynamicParam $map "$module.$command" $PSBoundParameters
         }
         catch {
@@ -439,15 +460,7 @@ function qconf {
             return
         }
 
-        if ($map -is [string]) {
-            if (!(Test-Path $map)) {
-                throw "map file '$map' not found"
-            }
-            $map = . $map
-        }
-        if (!$map) {
-            throw "Failed to load map"
-        }
+        $map = Import-ConfigMap $map "./.configuration.map.ps1"
 
         Write-Verbose "module=$module command=$command"
 
