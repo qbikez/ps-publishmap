@@ -8,12 +8,15 @@ function Import-ConfigMap {
         [Parameter(Mandatory = $true)]
         [ValidateScript({ $_ -is [string] -or $_ -is [System.Collections.IDictionary] -or $null -eq $_ })]
         $map,
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $false)]
         $defaultMapFile
     )
     
     # Set default map file if null
-    if (!$map) { 
+    if (!$map) {
+        if (!$defaultMapFile) {
+            throw "map is null and defaultMapFile is not provided"
+        }
         $map = $defaultMapFile 
     }
     
@@ -167,8 +170,8 @@ function Get-ScriptArgs {
 
 function Get-MapEntries(
     [ValidateScript({
-        $_ -is [System.Collections.IDictionary] -or $_ -is [array]
-    })]
+            $_ -is [System.Collections.IDictionary] -or $_ -is [array]
+        })]
     $map, 
     $keys, 
     [switch][bool]$flatten = $true
@@ -185,8 +188,8 @@ function Get-MapEntries(
 
 function Get-MapEntry(
     [ValidateScript({
-        $_ -is [System.Collections.IDictionary] -or $_ -is [array]
-    })]
+            $_ -is [System.Collections.IDictionary] -or $_ -is [array]
+        })]
     $map, 
     $key
 ) {
@@ -237,8 +240,8 @@ function Invoke-Get($entry, $bound = @{}) {
 
 function Get-EntryCompletion(
     [ValidateScript({
-        $_ -is [string] -or $_ -is [System.Collections.IDictionary]
-    })]
+            $_ -is [string] -or $_ -is [System.Collections.IDictionary]
+        })]
     $map, 
     $commandName, 
     $parameterName, 
@@ -259,26 +262,12 @@ function Get-EntryCompletion(
 }
 
 function Get-EntryDynamicParam(
-    [ValidateScript({
-        $_ -is [string] -or $_ -is [System.Collections.IDictionary]
-    })]
-    $map, 
+    [System.Collections.IDictionary] $map, 
     $key, 
     $command, 
     $bound
 ) {
     if (!$key) { return @() }
-
-    if ($map -is [string]) {
-        $mapFile = $map
-        $map = . $mapFile
-    }
-
-    if (!$map) {
-        throw "failed to load map from $mapFile"
-    }
-
-    #$bound = $PSBoundParameters
 
     $selectedEntry = Get-MapEntry $map $key
     if (!$selectedEntry) { return @() }
@@ -291,16 +280,13 @@ function Get-EntryDynamicParam(
 
 function Invoke-Entry(
     [ValidateScript({
-        $_ -is [string] -or $_ -is [System.Collections.IDictionary]
-    })]
+            $_ -is [string] -or $_ -is [System.Collections.IDictionary]
+        })]
     $map, 
     $entry, 
     $bound
 ) {
-    # Note: This function doesn't have a default map file, so we handle the string case only
-    if ($map -is [string]) {
-        $map = . $map
-    }
+    $map = Import-ConfigMap $map
 
     $targets = Get-MapEntries $map $entry
     Write-Verbose "running targets: $($targets.Key)"
@@ -319,11 +305,11 @@ function Invoke-QBuild {
                 try {
                     # ipmo configmap
                     $map = $fakeBoundParameters.map
-                    if (!$map) { $map = "./.build.map.ps1" }
+                    $map = $map ? $map : "./.build.map.ps1"
                     if (!(Test-Path $map)) {
                         return @("init", "help") | ? { $_.startswith($wordToComplete) }
                     }
-                    $map = Import-ConfigMap $map "./.build.map.ps1"
+                    $map = Import-ConfigMap $map
                     return Get-EntryCompletion $map @PSBoundParameters
                 }
                 catch {
@@ -336,7 +322,6 @@ function Invoke-QBuild {
     )
     dynamicparam {
         try {
-            # ipmo configmap
             $map = Import-ConfigMap $map "./.build.map.ps1"
             return Get-EntryDynamicParam $map $entry $command $PSBoundParameters    
         }
