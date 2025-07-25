@@ -39,20 +39,21 @@ function Get-CompletionList {
         [switch][bool]$flatten = $true,
         $separator = ".",
         $groupMarker = "*", 
-        $listKey = "list") 
+        $listKey = "list"
+    ) 
     
     $list = $map.$listKey ? $map.$listKey : $map
     $list = $list -is [scriptblock] ? (Invoke-Command -ScriptBlock $list) : $list
     
-    $r = switch ($list) {
+    $result = [ordered]@{}
+    
+    switch ($true) {
         { $list -is [System.Collections.IDictionary] } {
-            $result = [ordered]@{}
             foreach ($kvp in $list.GetEnumerator()) {
                 if ($kvp.key -in $reservedKeys -or $kvp.key -eq $listKey) {
                     continue
                 }
                 $module = $kvp.value
-                
                 if ($module.$listKey) {
                     if ($flatten) {
                         $result["$($kvp.key)$groupMarker"] = $module
@@ -60,7 +61,6 @@ function Get-CompletionList {
 
                     $submodules = Get-CompletionList $module -listKey $listKey -flatten:$flatten
                     foreach ($sub in $submodules.GetEnumerator()) {
-                        
                         $subKey = $sub.Key
                         if (!$flatten) {
                             $subKey = "$($kvp.key)$separator$($sub.Key)"
@@ -72,45 +72,33 @@ function Get-CompletionList {
                     $result[$kvp.key] = $module
                 }
             }
-
-            return $result
+            break
         }
         { $list -is [array] } {
-            $result = [ordered]@{}
-    
-
-            $submodules = $list | % { $r = [ordered]@{} } { $r[$_] = $_ } { $r }
-            if (!$submodules) {
-                return $result
+            $submodules = $list | ForEach-Object { 
+                $r = [ordered]@{} 
+            } { 
+                $r[$_] = $_ 
+            } { 
+                $r 
             }
-
-            foreach ($sub in $submodules.GetEnumerator()) {
-                if ($sub.key -in $reservedKeys -or $sub.key -eq $listKey) {
-                    continue
+            
+            if ($submodules) {
+                foreach ($sub in $submodules.GetEnumerator()) {
+                    if ($sub.key -in $reservedKeys -or $sub.key -eq $listKey) {
+                        continue
+                    }
+                    $result[$sub.key] = $sub.value
                 }
-                $result[$sub.key] = $sub.value
             }
-            return $result
+            break
         }
-
         default {
             throw "$($list.GetType().FullName) type not supported"
         }
-        # { $_ -is [System.Collections.IDictionary] } {
-        #     $submodules = $list
-        # }
     }
-
-    return $r
     
-    # if ($map -is [array]) {
-    #     $list = $map
-    #     $submodules = $list | % { $r = [ordered]@{} } { $r[$_] = $_ } { $r }
-    # }
-
-   
-
-    # throw "$($map.GetType().FullName) type not supported"
+    return $result
 }
 
 function Get-ValuesList($map) {
@@ -276,29 +264,6 @@ function Invoke-Module($map, $module, $bound) {
         # we should pass null instead?
         #Invoke-ModuleCommand -module $_.value -key $_.Key $bound
         Invoke-ModuleCommand -module $_.value -key "exec" -bound $bound
-    }
-}
-
-function Invoke-QRun {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory = $true, Position = 0)]
-        $map,
-        [ArgumentCompleter({
-                param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-                # ipmo configmap
-                return Get-ModuleCompletion $map @PSBoundParameters
-            })]
-        [Parameter(Mandatory = $true, Position = 1)]
-        $module = $null
-    )
-    dynamicparam {
-        # ipmo configmap
-        return Get-ModuleDynamicParam $map $module $PSBoundParameters
-    }
-
-    process {
-        Invoke-Module $map $module $PSBoundParameters
     }
 }
 
