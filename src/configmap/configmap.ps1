@@ -53,14 +53,14 @@ function Get-CompletionList {
                 if ($kvp.key -in $reservedKeys -or $kvp.key -eq $listKey) {
                     continue
                 }
-                $module = $kvp.value
-                if ($module.$listKey) {
+                $entry = $kvp.value
+                if ($entry.$listKey) {
                     if ($flatten) {
-                        $result["$($kvp.key)$groupMarker"] = $module
+                        $result["$($kvp.key)$groupMarker"] = $entry
                     }
 
-                    $submodules = Get-CompletionList $module -listKey $listKey -flatten:$flatten
-                    foreach ($sub in $submodules.GetEnumerator()) {
+                    $subEntries = Get-CompletionList $entry -listKey $listKey -flatten:$flatten
+                    foreach ($sub in $subEntries.GetEnumerator()) {
                         $subKey = $sub.Key
                         if (!$flatten) {
                             $subKey = "$($kvp.key)$separator$($sub.Key)"
@@ -69,13 +69,13 @@ function Get-CompletionList {
                     }
                 }
                 else {
-                    $result[$kvp.key] = $module
+                    $result[$kvp.key] = $entry
                 }
             }
             break
         }
         { $list -is [array] } {
-            $submodules = $list | ForEach-Object { 
+            $subEntries = $list | ForEach-Object { 
                 $r = [ordered]@{} 
             } { 
                 $r[$_] = $_ 
@@ -83,8 +83,8 @@ function Get-CompletionList {
                 $r 
             }
             
-            if ($submodules) {
-                foreach ($sub in $submodules.GetEnumerator()) {
+            if ($subEntries) {
+                foreach ($sub in $subEntries.GetEnumerator()) {
                     if ($sub.key -in $reservedKeys -or $sub.key -eq $listKey) {
                         continue
                     }
@@ -156,64 +156,64 @@ function Get-ScriptArgs {
     return $paramDictionary
 }
 
-function Get-MapModules($map, $keys, [switch][bool]$flatten = $true) {
+function Get-MapEntries($map, $keys, [switch][bool]$flatten = $true) {
     $list = Get-CompletionList $map -flatten:$flatten
     
     $found = $list.GetEnumerator() | ? { $_.key -in @($keys) }
 
     if (!$found) {
-        Write-Verbose "module '$keys' not found in ($($list.Keys))"
+        Write-Verbose "entry '$keys' not found in ($($list.Keys))"
     }
     return $found
 }
 
-function Get-MapModule($map, $key) {
-    return (Get-MapModules $map $key).Value
+function Get-MapEntry($map, $key) {
+    return (Get-MapEntries $map $key).Value
 }
 
-# TODO: key should be a hidden property of $module
-function Get-ModuleCommand($module, $commandKey = "exec") {
-    if (!$module) { throw "module is NULL" }
-    if ($module -is [scriptblock]) { return $module }
+# TODO: key should be a hidden property of $entry
+function Get-EntryCommand($entry, $commandKey = "exec") {
+    if (!$entry) { throw "entry is NULL" }
+    if ($entry -is [scriptblock]) { return $entry }
 
-    if ($module -is [System.Collections.IDictionary] -or $module -is [System.Collections.Hashtable]) {
-        if (!$module.$commandKey) {
+    if ($entry -is [System.Collections.IDictionary] -or $entry -is [System.Collections.Hashtable]) {
+        if (!$entry.$commandKey) {
             throw "Command '$commandKey' not found"
         }
-        return $module.$commandKey
+        return $entry.$commandKey
     }
 
-    throw "Module of type $($module.GetType().Name) is not supported"
+    throw "Entry of type $($entry.GetType().Name) is not supported"
 }
 
-function Invoke-ModuleCommand($module, $key, $ordered = @(), $bound = @{}) {
-    $command = Get-ModuleCommand $module $key
+function Invoke-EntryCommand($entry, $key, $ordered = @(), $bound = @{}) {
+    $command = Get-EntryCommand $entry $key
 
     if (!$command) {
         throw "Command '$key' not found"
     }
     if ($command -isnot [scriptblock]) {
-        throw "Module '$key' of type $($command.GetType().Name) is not supported"
+        throw "Entry '$key' of type $($command.GetType().Name) is not supported"
     }
     
     if (!$bound) { $bound = @{} }
     if (!$bound.context) { $bound.context = @{} }
-    if (!$bound.context.self) { $bound.context.self = $module }
+    if (!$bound.context.self) { $bound.context.self = $entry }
 
     return & $command @ordered @bound
 }
 
-function Invoke-Set($module, $bound = @{}) {
+function Invoke-Set($entry, $bound = @{}) {
     # use ordered parameters, just in case the handler has different parameter names
-    Invoke-ModuleCommand $module "set" -ordered @("", $bound.key, $bound.value) -bound $bound
+    Invoke-EntryCommand $entry "set" -ordered @("", $bound.key, $bound.value) -bound $bound
 }
 
-function Invoke-Get($module, $bound = @{}) {
+function Invoke-Get($entry, $bound = @{}) {
     # use ordered parameters, just in case the handler has different parameter names
-    Invoke-ModuleCommand $module "get" -ordered @("", $bound.options) -bound $bound
+    Invoke-EntryCommand $entry "get" -ordered @("", $bound.options) -bound $bound
 }
 
-function Get-ModuleCompletion($map, $commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters) {
+function Get-EntryCompletion($map, $commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters) {
     # Note: This function doesn't have a default map file, so we handle the string case only
     if ($map -is [string]) {
         if (!(Test-Path $map)) {
@@ -226,7 +226,7 @@ function Get-ModuleCompletion($map, $commandName, $parameterName, $wordToComplet
     return $list.Keys | ? { $_.startswith($wordToComplete) }
 }
 
-function Get-ModuleDynamicParam($map, $key, $command, $bound) {
+function Get-EntryDynamicParam($map, $key, $command, $bound) {
     if (!$key) { return @() }
 
     if ($map -is [string]) {
@@ -240,30 +240,27 @@ function Get-ModuleDynamicParam($map, $key, $command, $bound) {
 
     #$bound = $PSBoundParameters
 
-    $selectedModule = Get-MapModule $map $key
-    if (!$selectedModule) { return @() }
-    $command = Get-ModuleCommand $selectedModule $command
+    $selectedEntry = Get-MapEntry $map $key
+    if (!$selectedEntry) { return @() }
+    $command = Get-EntryCommand $selectedEntry $command
     if (!$command) { return @() }
     $p = Get-ScriptArgs $command
 
     return $p
 }
 
-function Invoke-Module($map, $module, $bound) {
+function Invoke-Entry($map, $entry, $bound) {
     # Note: This function doesn't have a default map file, so we handle the string case only
     if ($map -is [string]) {
         $map = . $map
     }
 
-    $targets = Get-MapModules $map $module
+    $targets = Get-MapEntries $map $entry
     Write-Verbose "running targets: $($targets.Key)"
 
     @($targets) | % {
-        Write-Verbose "running module '$($_.key)'"
-        # FIXME: we already have the module in $_.value, we know ITs own key, but we don't want to search for this key inside this object
-        # we should pass null instead?
-        #Invoke-ModuleCommand -module $_.value -key $_.Key $bound
-        Invoke-ModuleCommand -module $_.value -key "exec" -bound $bound
+        Write-Verbose "running entry '$($_.key)'"
+        Invoke-EntryCommand -entry $_.value -key "exec" -bound $bound
     }
 }
 
@@ -280,13 +277,13 @@ function Invoke-QBuild {
                         return @("init", "help") | ? { $_.startswith($wordToComplete) }
                     }
                     $map = Import-ConfigMap $map "./.build.map.ps1"
-                    return Get-ModuleCompletion $map @PSBoundParameters
+                    return Get-EntryCompletion $map @PSBoundParameters
                 }
                 catch {
-                    return "ERROR [-module]: $($_.Exception.Message) $($_.ScriptStackTrace)"
+                    return "ERROR [-entry]: $($_.Exception.Message) $($_.ScriptStackTrace)"
                 }
             })]
-        $module = $null,
+        $entry = $null,
         $command = "exec",
         $map = "./.build.map.ps1"
     )
@@ -294,7 +291,7 @@ function Invoke-QBuild {
         try {
             # ipmo configmap
             $map = Import-ConfigMap $map "./.build.map.ps1"
-            return Get-ModuleDynamicParam $map $module $command $PSBoundParameters
+            return Get-EntryDynamicParam $map $entry $command $PSBoundParameters    
         }
         catch {
             return "ERROR [dynamic]: $($_.Exception.Message) $($_.ScriptStackTrace)"
@@ -302,7 +299,7 @@ function Invoke-QBuild {
     }
 
     process {
-        if ($module -eq "help") {
+        if ($entry -eq "help") {
             Write-Host "QBUILD"
             Write-Host "A command line tool to manage build scripts"
             Write-Host ""
@@ -310,7 +307,7 @@ function Invoke-QBuild {
             Write-Host "qbuild <your-script-name>"
             return
         }
-        if ($module -eq "init") {
+        if ($entry -eq "init") {
             if (!$map) { $map = "./.build.map.ps1" }
             if ($map -is [string]) {
                 if ((Test-Path $map)) {
@@ -328,16 +325,16 @@ function Invoke-QBuild {
 
         $map = Import-ConfigMap $map "./.build.map.ps1"
 
-        $targets = Get-MapModules $map $module
+        $targets = Get-MapEntries $map $entry
         Write-Verbose "running targets: $($targets.Key)"
 
         @($targets) | % {
-            Write-Verbose "running module '$($_.key)'"
-            # FIXME: we already have the module in $_.value, we know ITs own key, but we don't want to search for this key inside this object
+            Write-Verbose "running entry '$($_.key)'"
+            # FIXME: we already have the entry in $_.value, we know ITs own key, but we don't want to search for this key inside this object
             # we should pass null instead?
-            #Invoke-ModuleCommand -module $_.value -key $_.Key $bound
+            #Invoke-EntryCommand -entry $_.value -key $_.Key $bound
             $bound = $PSBoundParameters
-            Invoke-ModuleCommand -module $_.value -key $command -bound $bound
+            Invoke-EntryCommand -entry $_.value -key $command -bound $bound
         }
     
     }
@@ -358,13 +355,13 @@ function Invoke-QConf {
                     $map = $fakeBoundParameters.map
                     $map = Import-ConfigMap $map "./.configuration.map.ps1"
                     
-                    return Get-ModuleCompletion $map @PSBoundParameters
+                                        return Get-EntryCompletion $map @PSBoundParameters
                 }
                 catch {
-                    return "ERROR [-module]: $($_.Exception.Message) $($_.ScriptStackTrace)"
+                    return "ERROR [-entry]: $($_.Exception.Message) $($_.ScriptStackTrace)"
                 }
-            })] 
-        $module = $null,
+            })]
+        $entry = $null,
         
         [ArgumentCompleter({
                 param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
@@ -375,10 +372,10 @@ function Invoke-QConf {
 
                     $map = $fakeBoundParameters.map
                     $map = Import-ConfigMap $map "./.configuration.map.ps1"
-                    $module = $fakeBoundParameters.module
-                    $entry = Get-MapModule $map $module
+                    $entry = $fakeBoundParameters.entry
+                    $entry = Get-MapEntry $map $entry
                     if (!$entry) {
-                        throw "module '$module' not found"
+                        throw "entry '$entry' not found"
                     }
                     $options = Get-CompletionList $entry -listKey "options"
                     return $options.Keys | ? { $_.startswith($wordToComplete) }
@@ -392,15 +389,15 @@ function Invoke-QConf {
     )
 
     ## we need dynamic parameters for commands that have custom parameter list
-    ## this assumes that -module and -command are already provided
+    ## this assumes that -entry and -command are already provided
     dynamicparam {
         # ipmo configmap
         try {
-            if ( !$module) {
+            if ( !$entry) {
                 return @()
             }
             $map = Import-ConfigMap $map "./.configuration.map.ps1"
-            return Get-ModuleDynamicParam $map "$module.$command" $PSBoundParameters
+            return Get-EntryDynamicParam $map "$entry.$command" $PSBoundParameters
         }
         catch {
             return "ERROR [dynamic]: $($_.Exception.Message) $($_.ScriptStackTrace)"
@@ -413,7 +410,7 @@ function Invoke-QConf {
             Write-Host "A command line tool to manage configuration maps"
             Write-Host ""
             Write-Host "Usage:"
-            Write-Host "qconf -module <module> -command <command> -value <value>"
+            Write-Host "qconf -entry <entry> -command <command> -value <value>"
             return
         }
         if ($command -eq "init") {
@@ -434,33 +431,33 @@ function Invoke-QConf {
 
         $map = Import-ConfigMap $map "./.configuration.map.ps1"
 
-        Write-Verbose "module=$module command=$command"
+        Write-Verbose "entry=$entry command=$command"
 
-        $submodule = $map.$module
-        if (!$submodule) {
-            throw "module '$module' not found"
+        $subEntry = $map.$entry
+        if (!$subEntry) {
+            throw "entry '$entry' not found"
         }
 
         switch ($command) {
             "set" {
                 $optionKey = $value
-                $options = Get-CompletionList $submodule -listKey "options"
+                $options = Get-CompletionList $subEntry -listKey "options"
                 $optionValue = $options.$optionKey
 
                 $bound = $PSBoundParameters
                 $bound.key = $optionKey
                 $bound.value = $optionValue
-                Invoke-Set $submodule -ordered "", $optionValue, $optionKey -bound $bound
+                Invoke-Set $subEntry -ordered "", $optionValue, $optionKey -bound $bound
             }
             "get" {
-                $options = Get-CompletionList $submodule -listKey "options"
+                $options = Get-CompletionList $subEntry -listKey "options"
                 
                 $bound = $PSBoundParameters
                 $bound.options = $options
                 
-                $value = Invoke-Get $submodule -bound $bound
+                $value = Invoke-Get $subEntry -bound $bound
                 
-                $result = ConvertTo-MapResult $value $submodule $options
+                $result = ConvertTo-MapResult $value $subEntry $options
                 $result | Write-Output
             }
             default {
@@ -471,11 +468,11 @@ function Invoke-QConf {
     }
 }
 
-function ConvertTo-MapResult($value, $module, $options, $validate = $true) {
+function ConvertTo-MapResult($value, $entry, $options, $validate = $true) {
     $result = $null
     if ($value -is [Hashtable]) {
         $hash = @{
-            Path = "$moduleName/$subPath"
+            Path = "$entryName/$subPath"
         }
         $hash += $value
         
@@ -483,7 +480,7 @@ function ConvertTo-MapResult($value, $module, $options, $validate = $true) {
     }
     else {
         $result = @{ 
-            Path  = "$moduleName/$subPath"
+            Path  = "$entryName/$subPath"
             Value = $value
         }
     }
@@ -494,14 +491,14 @@ function ConvertTo-MapResult($value, $module, $options, $validate = $true) {
     $result.Options = $options.keys
 
     $isvalid = "?"
-    if ($validate -and $module.validate) {
+    if ($validate -and $entry.validate) {
         if (!$result.Active) {
-            Write-Host "no active option found for $moduleName/$subPath"
+            Write-Host "no active option found for $entryName/$subPath"
             $isvalid = $null
         }
         else {
             $optionvalue = $options.$($result.Active)
-            $isvalid = Invoke-ModuleCommand $module validate -ordered @($path, $optionvalue, $result.Active)
+            $isvalid = Invoke-EntryCommand $entry validate -ordered @($path, $optionvalue, $result.Active)
         }
     }
 

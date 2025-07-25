@@ -189,9 +189,9 @@ Describe "map execuction" {
         }
     ) {
         It "<name> => exec-mock without args" {
-            $module = Get-MapModule $map "build"
+            $entry = Get-MapEntry $map "build"
 
-            Invoke-ModuleCommand $module "build" -context @{ a = 1 }
+            Invoke-EntryCommand $entry "build" -context @{ a = 1 }
             Should -Invoke exec-mock
         }
     }
@@ -210,7 +210,7 @@ Describe "map execuction" {
         It "<name> => exec-mock" {
             $result = Get-CompletionList $map
 
-            Invoke-ModuleCommand $result.build -bound @{ context = @{ a = 1 } }
+            Invoke-EntryCommand $result.build -bound @{ context = @{ a = 1 } }
             Should -Invoke exec-mock -ParameterFilter {
                 $context | Should -MatchObject @{ a = 1 }
                 return $true
@@ -296,21 +296,21 @@ Describe "qconf" {
             $list.Keys | Should -Be @("db")
         }
         It "should return options list" {
-            $entry = Get-MapModule $targets "db"
+            $entry = Get-MapEntry $targets "db"
             $entry | Should -Not -BeNullOrEmpty
             $options = Get-CompletionList $entry -listKey "options"
             $options.Keys | Should -Be @("local", "remote")
         }
         It "invoke options" {
-            $r = Invoke-ModuleCommand $targets.db "options"
+            $r = Invoke-EntryCommand $targets.db "options"
             $r.Keys | Should -Be @("local", "remote")
         }
         It "invoke get" {
-            $r = Invoke-ModuleCommand $targets.db "get"
+            $r = Invoke-EntryCommand $targets.db "get"
             $r | Should -Be "my_value"
         }
         It "invoke set" {
-            $r = Invoke-ModuleCommand $targets.db "set" -bound @{ "key" = "key1"; "value" = "value2" }
+            $r = Invoke-EntryCommand $targets.db "set" -bound @{ "key" = "key1"; "value" = "value2" }
             Should -Invoke Set-Conf -ParameterFilter { $key -eq "key1" -and $value -eq "value2" }
         }
     }
