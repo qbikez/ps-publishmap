@@ -4,10 +4,10 @@ $helpersPath = (Split-Path -parent $MyInvocation.MyCommand.Definition)
 
 Export-ModuleMember `
     -Function `
-    Get-CompletionList, Get-ValuesList, `
-    Get-MapEntries, Get-MapEntry, Get-EntryCommand, `
-    Get-ScriptArgs, Invoke-EntryCommand, `
-    Get-EntryCompletion, `
-    Invoke-QBuild, Invoke-QConf, Invoke-QRun `
+    Import-ConfigMap, Get-CompletionList, Get-ValuesList, Get-ScriptArgs, `
+    Get-MapEntries, Get-MapEntry, Get-EntryCommand, Invoke-EntryCommand, `
+    Invoke-Set, Invoke-Get, Get-EntryCompletion, Get-EntryDynamicParam, `
+    Invoke-Entry, Invoke-QBuild, Invoke-QConf, ConvertTo-MapResult, `
+    Initialize-ConfigMap, Initialize-BuildMap `
     -Alias *
     

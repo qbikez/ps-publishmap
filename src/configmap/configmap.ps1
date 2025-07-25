@@ -1,11 +1,12 @@
+#requires -version 7.0
+
 $reservedKeys = @("options", "exec")
 
 function Import-ConfigMap {
     [OutputType([hashtable])]
     param(
         [Parameter(Mandatory = $true)]
-        [AllowNull()]
-        [AllowEmptyString()]
+        [ValidateScript({ $_ -is [string] -or $_ -is [System.Collections.IDictionary] -or $null -eq $_ })]
         $map,
         [Parameter(Mandatory = $true)]
         $defaultMapFile
@@ -35,6 +36,9 @@ function Import-ConfigMap {
 function Get-CompletionList {
     [OutputType([System.Collections.Specialized.OrderedDictionary])]
     param(
+        [ValidateScript({
+            $_ -is [System.Collections.IDictionary] -or $_ -is [array] -or $_ -is [scriptblock] -or $_ -is [string]
+        })]
         $map,
         [switch][bool]$flatten = $true,
         $separator = ".",
@@ -45,10 +49,11 @@ function Get-CompletionList {
     $list = $map.$listKey ? $map.$listKey : $map
     $list = $list -is [scriptblock] ? (Invoke-Command -ScriptBlock $list) : $list
     
-    $result = [ordered]@{}
     
-    switch ($true) {
+    $r = switch ($true) {
         { $list -is [System.Collections.IDictionary] } {
+            $result = [ordered]@{}
+    
             foreach ($kvp in $list.GetEnumerator()) {
                 if ($kvp.key -in $reservedKeys -or $kvp.key -eq $listKey) {
                     continue
@@ -72,9 +77,10 @@ function Get-CompletionList {
                     $result[$kvp.key] = $entry
                 }
             }
-            break
+            return $result
         }
         { $list -is [array] } {
+            $result = [ordered]@{}
             $subEntries = $list | ForEach-Object { 
                 $r = [ordered]@{} 
             } { 
@@ -91,17 +97,22 @@ function Get-CompletionList {
                     $result[$sub.key] = $sub.value
                 }
             }
-            break
+            return $result
         }
         default {
             throw "$($list.GetType().FullName) type not supported"
         }
     }
-    
-    return $result
+
+    return $r
 }
 
-function Get-ValuesList($map) {
+function Get-ValuesList(
+    [ValidateScript({
+        $_ -is [System.Collections.IDictionary] -and $_.options
+    })]
+    $map
+) {
     if (!$map.options) {
         throw "map doesn't have 'options' entry"
     }
