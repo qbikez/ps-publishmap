@@ -103,6 +103,7 @@ VSCode tasks are configured for running individual test files with Pester integr
 - **PSScriptAnalyzer** settings defined in `PSScriptAnalyzerSettings.psd1`
 - Powershell: allow specific aliases like `cd`, `%`, `select`, `where`, `pushd`, `popd`, `?` and dont try to replace them
 - CI/CD via AppVeyor with automatic testing and deployment
+- avoid commenting obvious things
 
 ## File Patterns
 
