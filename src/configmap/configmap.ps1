@@ -188,7 +188,7 @@ function Invoke-Get($module, $bound = @{}) {
 
 function Get-ModuleCompletion($map, $commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters) {
     if ($map -is [string]) {
-        if (!(test-path $map)) {
+        if (!(Test-Path $map)) {
             throw "map file '$map' not found"
         }
         $map = . $map
@@ -227,7 +227,7 @@ function Invoke-Module($map, $module, $bound) {
     }
 
     $targets = Get-MapModules $map $module
-    write-verbose "running targets: $($targets.Key)"
+    Write-Verbose "running targets: $($targets.Key)"
 
     @($targets) | % {
         Write-Verbose "running module '$($_.key)'"
@@ -251,7 +251,7 @@ function qrun {
         [Parameter(Mandatory = $true, Position = 1)]
         $module = $null
     )
-    DynamicParam {
+    dynamicparam {
         # ipmo configmap
         return Get-ModuleDynamicParam $map $module $PSBoundParameters
     }
@@ -270,7 +270,7 @@ function qbuild {
                     # ipmo configmap
                     $map = $fakeBoundParameters.map
                     if (!$map) { $map = "./.build.map.ps1" }
-                    if (!(test-path $map)) {
+                    if (!(Test-Path $map)) {
                         return @("init", "help") | ? { $_.startswith($wordToComplete) }
                     }
                     return Get-ModuleCompletion $map @PSBoundParameters
@@ -283,7 +283,7 @@ function qbuild {
         $command = "exec",
         $map = "./.build.map.ps1"
     )
-    DynamicParam {
+    dynamicparam {
         try {
             # ipmo configmap
             if (!$map) { $map = "./.build.map.ps1" }
@@ -300,13 +300,13 @@ function qbuild {
             Write-Host "A command line tool to manage build scripts"
             Write-Host ""
             Write-Host "Usage:"
-            write-host "qbuild <your-script-name>"
+            Write-Host "qbuild <your-script-name>"
             return
         }
         if ($module -eq "init") {
             if (!$map) { $map = "./.build.map.ps1" }
             if ($map -is [string]) {
-                if ((test-path $map)) {
+                if ((Test-Path $map)) {
                     throw "map file '$map' already exists"
                 }
             }
@@ -324,7 +324,7 @@ function qbuild {
         }
 
         $targets = Get-MapModules $map $module
-        write-verbose "running targets: $($targets.Key)"
+        Write-Verbose "running targets: $($targets.Key)"
 
         @($targets) | % {
             Write-Verbose "running module '$($_.key)'"
@@ -371,7 +371,7 @@ function qconf {
                     $map = $fakeBoundParameters.map
                     if (!$map) { $map = "./.configuration.map.ps1" }
                     if ($map -is [string]) {
-                        if (!(test-path $map)) {
+                        if (!(Test-Path $map)) {
                             throw "map file '$map' not found"
                         }
                         $map = . $map
@@ -394,7 +394,7 @@ function qconf {
 
     ## we need dynamic parameters for commands that have custom parameter list
     ## this assumes that -module and -command are already provided
-    DynamicParam {
+    dynamicparam {
         # ipmo configmap
         try {
             if ( !$module) {
@@ -402,7 +402,7 @@ function qconf {
             }
             if (!$map) { $map = "./.configuration.map.ps1" }
             if ($map -is [string]) {
-                if (!(test-path $map)) {
+                if (!(Test-Path $map)) {
                     throw "map file '$map' not found"
                 }
                 $map = . $map
@@ -420,13 +420,13 @@ function qconf {
             Write-Host "A command line tool to manage configuration maps"
             Write-Host ""
             Write-Host "Usage:"
-            write-host "qconf -module <module> -command <command> -value <value>"
+            Write-Host "qconf -module <module> -command <command> -value <value>"
             return
         }
         if ($command -eq "init") {
             if (!$map) { $map = "./.configuration.map.ps1" }
             if ($map -is [string]) {
-                if ((test-path $map)) {
+                if ((Test-Path $map)) {
                     throw "map file '$map' already exists"
                 }
             }
@@ -440,7 +440,7 @@ function qconf {
         }
 
         if ($map -is [string]) {
-            if (!(test-path $map)) {
+            if (!(Test-Path $map)) {
                 throw "map file '$map' not found"
             }
             $map = . $map
@@ -478,7 +478,7 @@ function qconf {
                 $result = ConvertTo-MapResult $value $submodule $options
                 $result | Write-Output
             }
-            Default {
+            default {
                 throw "command '$command' not supported"
             }
         }
@@ -511,7 +511,7 @@ function ConvertTo-MapResult($value, $module, $options, $validate = $true) {
     $isvalid = "?"
     if ($validate -and $module.validate) {
         if (!$result.Active) {
-            write-host "no active option found for $moduleName/$subPath"
+            Write-Host "no active option found for $moduleName/$subPath"
             $isvalid = $null
         }
         else {
@@ -532,27 +532,27 @@ function ConvertTo-MapResult($value, $module, $options, $validate = $true) {
 }
 
 function init-configmap([Parameter(Mandatory = $true)] $file) {
-    if (test-path $file) {
+    if (Test-Path $file) {
         throw "map file '$file' already exists"
     }
 
-    $defaultConfig = get-content $PSScriptRoot/samples/_default/.configuration.map.ps1
-    write-host "Initializing configmap file '$file'"
+    $defaultConfig = Get-Content $PSScriptRoot/samples/_default/.configuration.map.ps1
+    Write-Host "Initializing configmap file '$file'"
     $defaultConfig | Out-File $file
 
-    $fullPath = (get-item $file).FullName
+    $fullPath = (Get-Item $file).FullName
     $dir = Split-Path $fullPath -Parent
-    $defaultUtils = get-content $PSScriptRoot/samples/_default/.config-utils.ps1
+    $defaultUtils = Get-Content $PSScriptRoot/samples/_default/.config-utils.ps1
     $defaultUtils | Out-File (Join-Path $dir ".config-utils.ps1")
 }
 
 
 function init-buildMap([Parameter(Mandatory = $true)] $file) {
-    if (test-path $file) {
+    if (Test-Path $file) {
         throw "map file '$file' already exists"
     }
 
-    $defaultConfig = get-content $PSScriptRoot/samples/_default/.build.map.ps1
-    write-host "Initializing buildmap file '$file'"
+    $defaultConfig = Get-Content $PSScriptRoot/samples/_default/.build.map.ps1
+    Write-Host "Initializing buildmap file '$file'"
     $defaultConfig | Out-File $file
 }

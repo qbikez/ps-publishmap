@@ -1,19 +1,19 @@
-BeforeDiscovery {
+﻿BeforeDiscovery {
     function Should-MatchObject ($ActualValue, [hashtable]$ExpectedValue, [switch] $Negate, [string] $Because) {
         <#
         .SYNOPSIS
             Asserts if hashtable/objects contains the same keys and values
         .EXAMPLE
             @{ a = 1 } | Should -MatchObject @{ a = 1 }
-    
+
             Checks if object matches the other one. This will pass.
-    
+
         .EXAMPLE
             @{ a = 1, b = 2 } | Should -MatchObject @{ a = 1 }
-    
+
             Checks if object matches the other one. Additional keys on the actual value are ignored.
         #>
-    
+
         $diff = [ordered]@{}
         foreach ($kvp in $ExpectedValue.GetEnumerator()) {
             $key = $kvp.Key
@@ -54,7 +54,7 @@ BeforeDiscovery {
             }
         }
     }
-    
+
     Add-ShouldOperator -Name MatchObject `
         -InternalName 'Should-MatchObject' `
         -Test ${function:Should-MatchObject} `
@@ -127,7 +127,7 @@ Describe "map parsing" {
             if (!$flatten) {
                 $flatten = $keys
             }
-            
+
             $list.Keys | Should -Be $Flatten
         }
         It '<name> => tree keys' {
@@ -135,7 +135,7 @@ Describe "map parsing" {
             if (!$tree) {
                 $tree = $keys
             }
-            
+
             $list.Keys | Should -Be $Tree
         }
     }
@@ -176,7 +176,7 @@ Describe "map parsing" {
 Describe "map execuction" {
     BeforeEach {
         function exec-mock($context) { "real" }
-        Mock exec-mock { param($context) write-host $context }
+        Mock exec-mock { param($context) Write-Host $context }
     }
     Describe 'exec without args' -ForEach @(
         @{
@@ -226,31 +226,31 @@ Describe "qbuild" {
         }
         Mock Invoke-Build {
             param($ctx, [bool][switch]$noRestore)
-        
+
             $bound = $PSBoundParameters
-            write-host "build script body"
-            write-host "ctx=$($ctx | convertto-json)"
-            write-host "noRestore=$noRestore"
-            write-host "bound=$($bound | ConvertTo-Json)"
+            Write-Host "build script body"
+            Write-Host "ctx=$($ctx | ConvertTo-Json)"
+            Write-Host "noRestore=$noRestore"
+            Write-Host "bound=$($bound | ConvertTo-Json)"
         }
         $targets = @{
             "build" = {
                 param($ctx, [bool][switch]$noRestore)
-        
+
                 Invoke-Build @PSBoundParameters
             }
         }
     }
-    
+
     Describe "script custom parameters" {
         It "should return parameters" {
-        
+
             $parameters = Get-ScriptArgs $targets.build
             $parameters.Keys | Should -Be @("ctx", "noRestore")
         }
 
         It "should invoke with correct parameters" {
-            qrun $targets "build" -NoRestore
+            qbuild -map $targets "build" -NoRestore
             Should -Invoke Invoke-Build -Times 1 -ParameterFilter { $noRestore -eq $true }
         }
     }
@@ -273,7 +273,7 @@ Describe "qconf" {
                             "connectionString" = "localconnstr"
                         }
                     }
-                }   
+                }
                 set     = {
                     param($key, $value)
 
@@ -285,7 +285,7 @@ Describe "qconf" {
             }
         }
     }
-    
+
     Describe "set custom parameters" {
         It "should return parameters" {
             $parameters = Get-ScriptArgs $targets.db.set
@@ -293,7 +293,7 @@ Describe "qconf" {
         }
         It "should return top-level completion list" {
             $list = Get-CompletionList $targets
-            $list.Keys | Should -be @("db")
+            $list.Keys | Should -Be @("db")
         }
         It "should return options list" {
             $entry = Get-MapModule $targets "db"
@@ -310,7 +310,7 @@ Describe "qconf" {
             $r | Should -Be "my_value"
         }
         It "invoke set" {
-            $r = Invoke-ModuleCommand $targets.db "set" -bound @{ "key" = "key1"; "value" = "value2" } 
+            $r = Invoke-ModuleCommand $targets.db "set" -bound @{ "key" = "key1"; "value" = "value2" }
             Should -Invoke Set-Conf -ParameterFilter { $key -eq "key1" -and $value -eq "value2" }
         }
     }
@@ -321,34 +321,84 @@ Describe "unified" {
 
         Mock Write-Host
         $targets = @{
-            "write:simple" = {
+            "write:simple"  = {
                 param([string] $message)
-        
-                write-host "ECHO: '$message'"
+
+                Write-Host "SIMPLE: '$message'"
             }
             "write:wrapped" = @{
-                exec = {
+                exec  = {
                     param([string] $message)
-        
-                    write-host "ECHO: '$message'"
+
+                    Write-Host "WRAPPED: '$message'"
+                }
+
+                other = {
+                    param([string] $message)
+
+                    Write-Host "OTHER: '$message'"
+                }
+            }
+            "write:custom"  = @{
+                go = {
+                    param([string] $message)
+                    return "CUSTOM: '$message'"
+                }
+            }
+            "write:getset"  = @{
+                go  = {
+                    param([string] $message)
+                    return "GO: '$message'"
+                }
+                get = {
+                    param([string] $message)
+                    return "GET: '$message'"
+                }
+                set = {
+                    param([string] $message)
+                    Write-Host "SET: '$message'"
+                }
+            }
+
+            "write:options" = {
+                options = {
+                    return @{
+                        "option1" = "value1"
+                        "option2" = "value2"
+                    }
+                }
+                get = {
+                    param([string] $message)
+                    return "GET: '$message'"
+                }
+                set = {
+                    param([string] $value, [string] $key)
+                    Write-Host "SET: '$key' to '$value'"
                 }
             }
         }
     }
-    
+
     It "should write message with scriptblock" {
-        qrun $targets "write:simple" -message "Hello, World!"
-        
-         Should -Invoke Write-Host -Exactly 1 -ParameterFilter { 
-                $Object -eq "ECHO: 'Hello, World!'"
+        qbuild -map $targets "write:simple" -message "Hello, World!"
+
+        Should -Invoke Write-Host -Exactly 1 -ParameterFilter {
+            $Object -eq "SIMPLE: 'Hello, World!'"
         }
     }
 
-     It "should write message with wrapped scriptblock" {
-        qrun $targets "write:wrapped" -message "Hello, World!"
-        
-         Should -Invoke Write-Host -Exactly 1 -ParameterFilter { 
-                $Object -eq "ECHO: 'Hello, World!'"
+    It "should write message with wrapped scriptblock" {
+        qbuild -map $targets "write:wrapped" -command "exec" -message "Hello, World!"
+
+        Should -Invoke Write-Host -Exactly 1 -ParameterFilter {
+            $Object -eq "WRAPPED: 'Hello, World!'"
+        }
+    }
+    It "should handle ordered parameters" {
+        qbuild -map $targets "write:wrapped" "exec" -message "Hello, World!"
+
+        Should -Invoke Write-Host -Exactly 1 -ParameterFilter {
+            $Object -eq "WRAPPED: 'Hello, World!'"
         }
     }
 }
