@@ -36,9 +36,7 @@ function Import-ConfigMap {
 function Get-CompletionList {
     [OutputType([System.Collections.Specialized.OrderedDictionary])]
     param(
-        [ValidateScript({
-            $_ -is [System.Collections.IDictionary] -or $_ -is [array] -or $_ -is [scriptblock] -or $_ -is [string]
-        })]
+        [ValidateScript({ $_ -is [System.Collections.IDictionary] -or $_ -is [array] -or $_ -is [scriptblock] -or $_ -is [string] })]
         $map,
         [switch][bool]$flatten = $true,
         $separator = ".",
@@ -109,8 +107,8 @@ function Get-CompletionList {
 
 function Get-ValuesList(
     [ValidateScript({
-        $_ -is [System.Collections.IDictionary] -and $_.options
-    })]
+            $_ -is [System.Collections.IDictionary] -and $_.options
+        })]
     $map
 ) {
     if (!$map.options) {
@@ -167,7 +165,14 @@ function Get-ScriptArgs {
     return $paramDictionary
 }
 
-function Get-MapEntries($map, $keys, [switch][bool]$flatten = $true) {
+function Get-MapEntries(
+    [ValidateScript({
+        $_ -is [System.Collections.IDictionary] -or $_ -is [array]
+    })]
+    $map, 
+    $keys, 
+    [switch][bool]$flatten = $true
+) {
     $list = Get-CompletionList $map -flatten:$flatten
     
     $found = $list.GetEnumerator() | ? { $_.key -in @($keys) }
@@ -178,7 +183,13 @@ function Get-MapEntries($map, $keys, [switch][bool]$flatten = $true) {
     return $found
 }
 
-function Get-MapEntry($map, $key) {
+function Get-MapEntry(
+    [ValidateScript({
+        $_ -is [System.Collections.IDictionary] -or $_ -is [array]
+    })]
+    $map, 
+    $key
+) {
     return (Get-MapEntries $map $key).Value
 }
 
@@ -224,7 +235,17 @@ function Invoke-Get($entry, $bound = @{}) {
     Invoke-EntryCommand $entry "get" -ordered @("", $bound.options) -bound $bound
 }
 
-function Get-EntryCompletion($map, $commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters) {
+function Get-EntryCompletion(
+    [ValidateScript({
+        $_ -is [string] -or $_ -is [System.Collections.IDictionary]
+    })]
+    $map, 
+    $commandName, 
+    $parameterName, 
+    $wordToComplete, 
+    $commandAst, 
+    $fakeBoundParameters
+) {
     # Note: This function doesn't have a default map file, so we handle the string case only
     if ($map -is [string]) {
         if (!(Test-Path $map)) {
@@ -237,7 +258,15 @@ function Get-EntryCompletion($map, $commandName, $parameterName, $wordToComplete
     return $list.Keys | ? { $_.startswith($wordToComplete) }
 }
 
-function Get-EntryDynamicParam($map, $key, $command, $bound) {
+function Get-EntryDynamicParam(
+    [ValidateScript({
+        $_ -is [string] -or $_ -is [System.Collections.IDictionary]
+    })]
+    $map, 
+    $key, 
+    $command, 
+    $bound
+) {
     if (!$key) { return @() }
 
     if ($map -is [string]) {
@@ -260,7 +289,14 @@ function Get-EntryDynamicParam($map, $key, $command, $bound) {
     return $p
 }
 
-function Invoke-Entry($map, $entry, $bound) {
+function Invoke-Entry(
+    [ValidateScript({
+        $_ -is [string] -or $_ -is [System.Collections.IDictionary]
+    })]
+    $map, 
+    $entry, 
+    $bound
+) {
     # Note: This function doesn't have a default map file, so we handle the string case only
     if ($map -is [string]) {
         $map = . $map
@@ -366,7 +402,7 @@ function Invoke-QConf {
                     $map = $fakeBoundParameters.map
                     $map = Import-ConfigMap $map "./.configuration.map.ps1"
                     
-                                        return Get-EntryCompletion $map @PSBoundParameters
+                    return Get-EntryCompletion $map @PSBoundParameters
                 }
                 catch {
                     return "ERROR [-entry]: $($_.Exception.Message) $($_.ScriptStackTrace)"
