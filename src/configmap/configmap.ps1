@@ -571,6 +571,5 @@ function Initialize-BuildMap([Parameter(Mandatory = $true)] $file) {
     $defaultConfig | Out-File $file
 }
 
-Set-Alias -Name "qrun" -Value "Invoke-QRun" -Force
 Set-Alias -Name "qbuild" -Value "Invoke-QBuild" -Force
 Set-Alias -Name "qconf" -Value "Invoke-QConf" -Force
