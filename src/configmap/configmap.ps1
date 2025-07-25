@@ -41,69 +41,76 @@ function Get-CompletionList {
         $groupMarker = "*", 
         $listKey = "list") 
     
-    $result = [ordered]@{}
+    $list = $map.$listKey ? $map.$listKey : $map
+    $list = $list -is [scriptblock] ? (Invoke-Command -ScriptBlock $list) : $list
     
-    $l = $map
-    if ($map.$listKey) {
-        $l = $map.$listKey
-    }
-
-    if ($l -is [scriptblock]) {
-        $l = Invoke-Command -ScriptBlock $l
-    }
-    
-    if ($l -is [System.Collections.IDictionary]) {
-        foreach ($kvp in $l.GetEnumerator()) {
-            if ($kvp.key -in $reservedKeys -or $kvp.key -eq $listKey) {
-                continue
-            }
-            $module = $kvp.value
-            if ($module.$listKey) {
-                if ($flatten) {
-                    $result["$($kvp.key)$groupMarker"] = $module
+    $r = switch ($list) {
+        { $list -is [System.Collections.IDictionary] } {
+            $result = [ordered]@{}
+            foreach ($kvp in $list.GetEnumerator()) {
+                if ($kvp.key -in $reservedKeys -or $kvp.key -eq $listKey) {
+                    continue
                 }
-
-                $submodules = Get-CompletionList $module -listKey $listKey -flatten:$flatten
-                foreach ($sub in $submodules.GetEnumerator()) {
-                    
-                    $subKey = $sub.Key
-                    if (!$flatten) {
-                        $subKey = "$($kvp.key)$separator$($sub.Key)"
+                $module = $kvp.value
+                
+                if ($module.$listKey) {
+                    if ($flatten) {
+                        $result["$($kvp.key)$groupMarker"] = $module
                     }
-                    $result[$subKey] = $sub.value
+
+                    $submodules = Get-CompletionList $module -listKey $listKey -flatten:$flatten
+                    foreach ($sub in $submodules.GetEnumerator()) {
+                        
+                        $subKey = $sub.Key
+                        if (!$flatten) {
+                            $subKey = "$($kvp.key)$separator$($sub.Key)"
+                        }
+                        $result[$subKey] = $sub.value
+                    }
+                }
+                else {
+                    $result[$kvp.key] = $module
                 }
             }
-            else {
-                $singleKey = "$($kvp.key)"
-                $result.$singleKey = $module
-            }
-        }
 
-        return $result
-    }
-    elseif ($l -is [array]) {
-        $submodules = $l | % { $r = [ordered]@{} } { $r[$_] = $_ } { $r }
-    }
-    elseif ($l -is [System.Collections.IDictionary]) {
-        $submodules = $l
-    }
+            return $result
+        }
+        { $list -is [array] } {
+            $result = [ordered]@{}
     
-    if ($map -is [array]) {
-        $l = $map
-        $submodules = $l | % { $r = [ordered]@{} } { $r[$_] = $_ } { $r }
-    }
 
-    if ($submodules) {
-        foreach ($sub in $submodules.GetEnumerator()) {
-            if ($sub.key -in $reservedKeys -or $sub.key -eq $listKey) {
-                continue
+            $submodules = $list | % { $r = [ordered]@{} } { $r[$_] = $_ } { $r }
+            if (!$submodules) {
+                return $result
             }
-            $result[$sub.key] = $sub.value
+
+            foreach ($sub in $submodules.GetEnumerator()) {
+                if ($sub.key -in $reservedKeys -or $sub.key -eq $listKey) {
+                    continue
+                }
+                $result[$sub.key] = $sub.value
+            }
+            return $result
         }
-        return $result
+
+        default {
+            throw "$($list.GetType().FullName) type not supported"
+        }
+        # { $_ -is [System.Collections.IDictionary] } {
+        #     $submodules = $list
+        # }
     }
 
-    throw "$($map.GetType().FullName) type not supported"
+    return $r
+    
+    # if ($map -is [array]) {
+    #     $list = $map
+    #     $submodules = $list | % { $r = [ordered]@{} } { $r[$_] = $_ } { $r }
+    # }
+
+   
+
+    # throw "$($map.GetType().FullName) type not supported"
 }
 
 function Get-ValuesList($map) {
