@@ -8,6 +8,7 @@
         'PSAvoidUsingCmdletAliases' = @{
             'Whitelist' = @('cd','%','select','where','pushd','popd','gi','Increment-Version')
         }
+        'PSAvoidUsingWriteHost' = @()
     }
     ExcludeRules=@(
      

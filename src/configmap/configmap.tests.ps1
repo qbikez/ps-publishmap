@@ -320,6 +320,7 @@ Describe "unified" {
     BeforeAll {
 
         Mock Write-Host
+
         $targets = @{
             "write:simple"  = {
                 param([string] $message)
@@ -394,6 +395,7 @@ Describe "unified" {
             $Object -eq "WRAPPED: 'Hello, World!'"
         }
     }
+
     It "should handle ordered parameters" {
         qbuild -map $targets "write:wrapped" "exec" -message "Hello, World!"
 

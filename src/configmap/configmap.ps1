@@ -1,12 +1,12 @@
 $reservedKeys = @("options", "exec")
 
 function Import-ConfigMap {
+    [OutputType([hashtable])]
     param(
         [Parameter(Mandatory = $true)]
         [AllowNull()]
         [AllowEmptyString()]
         $map,
-        
         [Parameter(Mandatory = $true)]
         $defaultMapFile
     )
@@ -31,16 +31,16 @@ function Import-ConfigMap {
     
     return $map
 }
-function Get-CompletionList($map,
-    [switch][bool]$flatten = $true,
-    $separator = ".", 
-    $groupMarker = "*", 
-    $listKey = "list") {
-    
-    if (!$map) {
-        throw "map is null"
-    }
 
+function Get-CompletionList {
+    [OutputType([System.Collections.Specialized.OrderedDictionary])]
+    param(
+        $map,
+        [switch][bool]$flatten = $true,
+        $separator = ".",
+        $groupMarker = "*", 
+        $listKey = "list") 
+    
     $result = [ordered]@{}
     
     $l = $map
