@@ -124,7 +124,17 @@ function Write-MapHelp {
     
     Write-Host "Available build scripts:"
     foreach ($name in $scripts.Keys) {
-        Write-Host "  $name"
+        $script = $scripts[$name]
+        $entry = Get-EntryCommand $script
+        $args = Get-ScriptArgs $entry
+        $argList = $args.Keys | % { "-$($_)" }
+        $argList = $argList -join " "
+        
+        if ($argList) {
+            Write-Host "  $name $argList"
+        } else {
+            Write-Host "  $name"
+        }
     }
     Write-Host ""
     Write-Host "Run a script with: $commandName <script-name>"
