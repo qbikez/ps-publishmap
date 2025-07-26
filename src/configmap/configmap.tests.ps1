@@ -123,7 +123,7 @@ Describe "map parsing" {
         }
     ) {
         It '<name> => flatten keys' {
-            $list = (Get-CompletionList $map -flatten:$true)
+            $list = (Get-CompletionList -map $map -flatten:$true)
             if (!$flatten) {
                 $flatten = $keys
             }
@@ -131,7 +131,7 @@ Describe "map parsing" {
             $list.Keys | Should -Be $Flatten
         }
         It '<name> => tree keys' {
-            $list = (Get-CompletionList $map -flatten:$false)
+            $list = (Get-CompletionList -map $map -flatten:$false)
             if (!$tree) {
                 $tree = $keys
             }

@@ -39,18 +39,21 @@ function Import-ConfigMap {
 function Get-CompletionList {
     [OutputType([System.Collections.Specialized.OrderedDictionary])]
     param(
-        [ValidateScript({ $_ -is [System.Collections.IDictionary] -or $_ -is [array] -or $_ -is [scriptblock] -or $_ -is [string] })]
+        [ValidateScript({ 
+            # the function do not suppurt strings, but ValidateScript iterates over the array, so for string[] we'll get string items here.
+            # see: https://github.com/PowerShell/PowerShell/issues/6185
+            $_ -is [System.Collections.IDictionary] -or $_ -is [array] -or $_ -is [scriptblock] -or $_ -is [string]
+        })]
         $map,
         [switch][bool]$flatten = $true,
         $separator = ".",
         $groupMarker = "*", 
         $listKey = "list"
-    ) 
+    )
     
     $list = $map.$listKey ? $map.$listKey : $map
     $list = $list -is [scriptblock] ? (Invoke-Command -ScriptBlock $list) : $list
-    
-    
+        
     $r = switch ($true) {
         { $list -is [System.Collections.IDictionary] } {
             $result = [ordered]@{}
@@ -100,12 +103,30 @@ function Get-CompletionList {
             }
             return $result
         }
+        { $list -is [string] } {
+            throw "string type not supported"
+        }
         default {
             throw "$($list.GetType().FullName) type not supported"
         }
     }
 
     return $r
+}
+
+function Get-EntryCompletion(
+    [ValidateScript({
+            $_ -is [System.Collections.IDictionary]
+        })]
+    $map, 
+    $commandName, 
+    $parameterName, 
+    $wordToComplete, 
+    $commandAst, 
+    $fakeBoundParameters
+) {
+    $list = Get-CompletionList $map
+    return $list.Keys | ? { $_.startswith($wordToComplete) }
 }
 
 function Get-ValuesList(
@@ -119,6 +140,23 @@ function Get-ValuesList(
     }
 
     return Get-CompletionList $map.options
+}
+
+function Get-EntryDynamicParam(
+    [System.Collections.IDictionary] $map, 
+    $key, 
+    $command, 
+    $bound
+) {
+    if (!$key) { return @() }
+
+    $selectedEntry = Get-MapEntry $map $key
+    if (!$selectedEntry) { return @() }
+    $command = Get-EntryCommand $selectedEntry $command
+    if (!$command) { return @() }
+    $p = Get-ScriptArgs $command
+
+    return $p
 }
 
 function Get-ScriptArgs {
@@ -228,56 +266,6 @@ function Invoke-EntryCommand($entry, $key, $ordered = @(), $bound = @{}) {
     return & $command @ordered @bound
 }
 
-function Invoke-Set($entry, $bound = @{}) {
-    # use ordered parameters, just in case the handler has different parameter names
-    Invoke-EntryCommand $entry "set" -ordered @("", $bound.key, $bound.value) -bound $bound
-}
-
-function Invoke-Get($entry, $bound = @{}) {
-    # use ordered parameters, just in case the handler has different parameter names
-    Invoke-EntryCommand $entry "get" -ordered @("", $bound.options) -bound $bound
-}
-
-function Get-EntryCompletion(
-    [ValidateScript({
-            $_ -is [string] -or $_ -is [System.Collections.IDictionary]
-        })]
-    $map, 
-    $commandName, 
-    $parameterName, 
-    $wordToComplete, 
-    $commandAst, 
-    $fakeBoundParameters
-) {
-    # Note: This function doesn't have a default map file, so we handle the string case only
-    if ($map -is [string]) {
-        if (!(Test-Path $map)) {
-            throw "map file '$map' not found"
-        }
-        $map = . $map
-    }
-
-    $list = Get-CompletionList $map
-    return $list.Keys | ? { $_.startswith($wordToComplete) }
-}
-
-function Get-EntryDynamicParam(
-    [System.Collections.IDictionary] $map, 
-    $key, 
-    $command, 
-    $bound
-) {
-    if (!$key) { return @() }
-
-    $selectedEntry = Get-MapEntry $map $key
-    if (!$selectedEntry) { return @() }
-    $command = Get-EntryCommand $selectedEntry $command
-    if (!$command) { return @() }
-    $p = Get-ScriptArgs $command
-
-    return $p
-}
-
 function Invoke-Entry(
     [ValidateScript({
             $_ -is [string] -or $_ -is [System.Collections.IDictionary]
@@ -295,6 +283,16 @@ function Invoke-Entry(
         Write-Verbose "running entry '$($_.key)'"
         Invoke-EntryCommand -entry $_.value -key "exec" -bound $bound
     }
+}
+
+function Invoke-Set($entry, $bound = @{}) {
+    # use ordered parameters, just in case the handler has different parameter names
+    Invoke-EntryCommand $entry "set" -ordered @("", $bound.key, $bound.value) -bound $bound
+}
+
+function Invoke-Get($entry, $bound = @{}) {
+    # use ordered parameters, just in case the handler has different parameter names
+    Invoke-EntryCommand $entry "get" -ordered @("", $bound.options) -bound $bound
 }
 
 function Invoke-QBuild {
