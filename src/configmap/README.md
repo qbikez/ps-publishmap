@@ -36,39 +36,36 @@ ConfigMap is a PowerShell module that extends publishmap functionality to provid
 
 ## Sample Map File
 
-Here's a comprehensive example of a build map file (`.build.map.ps1`):
+Here's a sample build map file (`.build.map.ps1`):
 
 ```powershell
 @{
-    "clean" = @{
-        exec = {
-            Write-Host "Cleaning build artifacts..."
-            Remove-Item "bin", "obj" -Recurse -Force -ErrorAction SilentlyContinue
-        }
-        description = "Remove build artifacts"
+    # Simple script block - just PowerShell code
+    "clean" = {
+        Remove-Item "bin", "obj" -Recurse -Force -ErrorAction SilentlyContinue
     }
     
+    # Command object with exec and description
     "restore" = @{
         exec = {
-            Write-Host "Restoring packages..."
             dotnet restore
         }
         description = "Restore NuGet packages"
     }
     
+    # Command with parameters
     "build" = @{
         exec = {
             param([string]$Configuration = "Debug")
-            Write-Host "Building project in $Configuration mode..."
             dotnet build --configuration $Configuration --no-restore
         }
         description = "Build the project"
     }
     
+    # Command with multiple parameters including switches
     "test" = @{
         exec = {
             param([switch]$Coverage, [string]$Filter)
-            Write-Host "Running tests..."
             $args = @("test", "--no-build")
             if ($Coverage) { $args += "--collect:`"XPlat Code Coverage`"" }
             if ($Filter) { $args += "--filter", $Filter }
@@ -77,23 +74,19 @@ Here's a comprehensive example of a build map file (`.build.map.ps1`):
         description = "Run unit tests"
     }
     
+    # Advanced command with typed parameters and validation
     "deploy" = @{
         exec = {
-            param([string]$Environment = "staging", [switch]$Force)
-            Write-Host "Deploying to $Environment environment..."
+            param(
+                [ValidateSet("dev", "staging", "prod")]$Environment = "dev",
+                [switch]$Force,
+                [int]$Timeout = 300
+            )
+            Write-Host "Deploying to $Environment environment (timeout: ${Timeout}s)..."
             if ($Force) { Write-Host "Force deployment enabled" }
             # Deployment logic here
         }
         description = "Deploy to specified environment"
-    }
-    
-    "package" = @{
-        exec = {
-            param([string]$Version = "1.0.0")
-            Write-Host "Creating package version $Version..."
-            dotnet pack --configuration Release -p:PackageVersion=$Version
-        }
-        description = "Create NuGet package"
     }
 }
 ```
@@ -116,8 +109,7 @@ qbuild build
 # Commands with parameters
 qbuild build -Configuration Release
 qbuild test -Coverage -Filter "Category=Unit"
-qbuild deploy -Environment production -Force
-qbuild package -Version "1.2.3"
+qbuild deploy -Environment prod -Force -Timeout 600
 ```
 
 ## Autocompletion
@@ -126,17 +118,17 @@ ConfigMap provides rich tab completion for `qbuild` commands:
 
 ### Command Completion
 ```powershell
-qbuild <TAB>              # Shows: build, test, clean, deploy, package, etc.
+qbuild <TAB>              # Shows: clean, restore, build, test, deploy
 qbuild bu<TAB>            # Completes to: build
 qbuild de<TAB>            # Completes to: deploy
 ```
 
 ### Parameter Completion
 ```powershell
-qbuild build -<TAB>                # Shows: Configuration
-qbuild test -<TAB>                 # Shows: Coverage, Filter
-qbuild deploy -<TAB>               # Shows: Environment, Force
-qbuild package -<TAB>              # Shows: Version
+qbuild build -<TAB>                     # Shows: Configuration
+qbuild test -<TAB>                      # Shows: Coverage, Filter
+qbuild deploy -<TAB>                    # Shows: Environment, Force, Timeout
+qbuild deploy -Environment <TAB>        # Shows: dev, staging, prod
 ```
 
 ### Setup Autocompletion
