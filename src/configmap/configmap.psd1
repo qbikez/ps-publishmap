@@ -109,7 +109,7 @@
             # LicenseUri = ''
 
             # A URL to the main website for this project.
-            # ProjectUri = ''
+            ProjectUri = 'https://github.com/qbikez/ps-publishmap/tree/master/src/configmap'
 
             # A URL to an icon representing this module.
             # IconUri = ''
@@ -164,3 +164,8 @@ Initial release of ConfigMap module providing:
     # Default prefix for commands exported from this module. Override the default prefix using Import-Module -Prefix.
     # DefaultCommandPrefix = ''
 }
+
+
+
+
+
