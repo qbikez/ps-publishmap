@@ -3,10 +3,12 @@
 $reservedKeys = @("options", "exec", "list")
 
 function Import-ConfigMap {
-    [OutputType([hashtable])]
+    [OutputType([System.Collections.IDictionary])]
     param(
-        [Parameter(Mandatory = $true)]
-        [ValidateScript({ $_ -is [string] -or $_ -is [System.Collections.IDictionary] -or $null -eq $_ })]
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        # somehow validateScript is throwing an error when $map is null
+        # [ValidateScript({ $null -eq $_ -or $_ -is [string] -or $_ -is [System.Collections.IDictionary] })]
         $map,
         [Parameter(Mandatory = $false)]
         $fallback
@@ -34,6 +36,10 @@ function Import-ConfigMap {
     if (!$map) {
         throw "failed to load map from $fallback"
         return $null
+    }
+
+    if ($map -isnot [System.Collections.IDictionary]) {
+        throw "map is not a dictionary"
     }
     
     return $map
@@ -269,15 +275,18 @@ function Get-ScriptArgs {
         return $dynParam
     }
 
-    $parameters = $func.AST.ParamBlock.Parameters
-
     # Add parameter to parameter dictionary and return the object
     $paramDictionary = New-Object `
         -Type System.Management.Automation.RuntimeDefinedParameterDictionary
     
-    foreach ($param in $parameters) {
-        $dynParam = Get-SingleArg $param
-        $paramDictionary.Add($dynParam.Name, $dynParam)
+    # Check if ParamBlock exists before accessing Parameters
+    if ($func.AST.ParamBlock -and $func.AST.ParamBlock.Parameters) {
+        $parameters = $func.AST.ParamBlock.Parameters
+        
+        foreach ($param in $parameters) {
+            $dynParam = Get-SingleArg $param
+            $paramDictionary.Add($dynParam.Name, $dynParam)
+        }
     }
     
     return $paramDictionary
@@ -396,16 +405,10 @@ function Invoke-QBuild {
         $map = "./.build.map.ps1"
     )
     dynamicparam {
-        try {
             $map = Import-ConfigMap $map -fallback "./.build.map.ps1"
             $result = Get-EntryDynamicParam $map $entry $command $PSBoundParameters
             Write-Debug "Dynamic parameters for entry '$entry': $($result.Keys -join ', ')"
             return $result
-        }
-        catch {
-            Write-Debug "Dynamic parameter error: $($_.Exception.Message)"
-            return @{}
-        }
     }
 
     process {
