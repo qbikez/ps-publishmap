@@ -43,10 +43,10 @@ function Get-CompletionList {
     [OutputType([System.Collections.Specialized.OrderedDictionary])]
     param(
         [ValidateScript({ 
-            # the function do not suppurt strings, but ValidateScript iterates over the array, so for string[] we'll get string items here.
-            # see: https://github.com/PowerShell/PowerShell/issues/6185
-            $_ -is [System.Collections.IDictionary] -or $_ -is [array] -or $_ -is [scriptblock] -or $_ -is [string]
-        })]
+                # the function do not suppurt strings, but ValidateScript iterates over the array, so for string[] we'll get string items here.
+                # see: https://github.com/PowerShell/PowerShell/issues/6185
+                $_ -is [System.Collections.IDictionary] -or $_ -is [array] -or $_ -is [scriptblock] -or $_ -is [string]
+            })]
         $map,
         [switch][bool]$flatten = $true,
         $separator = ".",
@@ -422,19 +422,28 @@ function Invoke-QBuild {
             return
         }
         if ($entry -eq "init") {
-            if (!$map) { $map = "./.build.map.ps1" }
-            if ($map -is [string]) {
+            $loadedMap = Import-ConfigMap $map -ErrorAction Ignore
+            if (!$loadedMap) {
+                if ($map -isnot [string]) {
+                    throw "Map appears to be an object, not a file"
+                }
                 if ((Test-Path $map)) {
+                   throw "map file '$map' already exists"
+                }
+
+                Initialize-BuildMap -file $map
+
+                return
+            } else {
+                $completionList = Get-CompletionList $loadedMap
+                if ($completionList.Keys -notcontains "init") {
                     throw "map file '$map' already exists"
                 }
+                else {
+                    # continue with executing "init" command
+                }
             }
-            else {
-                throw "Map appears to be an object, not a file"
-            }
-
-            Initialize-BuildMap -file $map
-
-            return
+             
         }
 
         $map = Import-ConfigMap $map -fallback "./.build.map.ps1" -ErrorAction Ignore
