@@ -154,7 +154,7 @@ function Write-MapHelp {
         $paddedName = $name.PadRight($maxNameLength)
         
         # Get description
-        $description = "No description available"
+        $description = ""
         if ($script -is [System.Collections.IDictionary] -and $script.description) {
             $description = $script.description
         }
@@ -405,10 +405,15 @@ function Invoke-QBuild {
         $map = "./.build.map.ps1"
     )
     dynamicparam {
+        try {
             $map = Import-ConfigMap $map -fallback "./.build.map.ps1"
             $result = Get-EntryDynamicParam $map $entry $command $PSBoundParameters
             Write-Debug "Dynamic parameters for entry '$entry': $($result.Keys -join ', ')"
             return $result
+        }
+        catch {
+            return "ERROR [dynamic]: $($_.Exception.Message) $($_.ScriptStackTrace)"
+        }
     }
 
     process {
