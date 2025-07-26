@@ -200,7 +200,7 @@ Creates a `.configuration.map.ps1` file with sample configuration entries.
 @{
     "database" = @{
         get = { return $env:DATABASE_URL }
-        set = { param($context, $value, $key) 
+        set = { param($_context, $value, $key) 
             $env:DATABASE_URL = $value
             Write-Host "Database URL set to: $value"
         }
@@ -213,7 +213,7 @@ Creates a `.configuration.map.ps1` file with sample configuration entries.
     
     "api" = @{
         get = { return $env:API_ENDPOINT }
-        set = { param($context, $value, $key)
+        set = { param($_context, $value, $key)
             $env:API_ENDPOINT = $value
         }
         validate = { param($path, $value, $key)

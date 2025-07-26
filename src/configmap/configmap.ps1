@@ -282,6 +282,9 @@ function Get-ScriptArgs {
         $parameters = $func.AST.ParamBlock.Parameters
         
         foreach ($param in $parameters) {
+            if ("$($param.Name)" -eq '$_context') {
+                continue
+            }
             $dynParam = Get-SingleArg $param
             $paramDictionary.Add($dynParam.Name, $dynParam)
         }
@@ -344,8 +347,8 @@ function Invoke-EntryCommand($entry, $key, $ordered = @(), $bound = @{}) {
     }
     
     if (!$bound) { $bound = @{} }
-    if (!$bound.context) { $bound.context = @{} }
-    if (!$bound.context.self) { $bound.context.self = $entry }
+    if (!$bound._context) { $bound._context = @{} }
+    if (!$bound._context.self) { $bound._context.self = $entry }
 
     return & $command @ordered @bound
 }

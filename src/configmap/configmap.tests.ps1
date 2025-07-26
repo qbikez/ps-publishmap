@@ -175,14 +175,15 @@ Describe "map parsing" {
 
 Describe "map execuction" {
     BeforeEach {
-        function exec-mock($context) { "real" }
-        Mock exec-mock { param($context) Write-Host $context }
+        function exec-mock($_context) { "real" }
+        Mock exec-mock { param($_context) Write-Host $_context }
     }
     Describe 'exec without args' -ForEach @(
         @{
             Name = "simple scriptblock"
             Map  = @{
                 "build" = {
+                    param($_context)
                     exec-mock
                 }
             }
@@ -190,6 +191,8 @@ Describe "map execuction" {
     ) {
         It "<name> => exec-mock without args" {
             $entry = Get-MapEntry $map "build"
+            $s = Get-EntryCommand $entry
+            $p = Get-ScriptArgs $s
 
             Invoke-EntryCommand $entry "build" -context @{ a = 1 }
             Should -Invoke exec-mock
@@ -200,9 +203,9 @@ Describe "map execuction" {
             Name = "scriptblock with param"
             Map  = @{
                 "build" = {
-                    param($context)
+                    param($_context)
 
-                    exec-mock $context
+                    exec-mock $_context
                 }
             }
         }
@@ -210,9 +213,9 @@ Describe "map execuction" {
         It "<name> => exec-mock" {
             $result = Get-CompletionList $map
 
-            Invoke-EntryCommand $result.build -bound @{ context = @{ a = 1 } }
+            Invoke-EntryCommand $result.build -bound @{ _context = @{ a = 1 } }
             Should -Invoke exec-mock -ParameterFilter {
-                $context | Should -MatchObject @{ a = 1 }
+                $_context | Should -MatchObject @{ a = 1 }
                 return $true
             }
         }
