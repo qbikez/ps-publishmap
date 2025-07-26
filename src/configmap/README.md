@@ -78,34 +78,22 @@ Here's a comprehensive example of a build map file (`.build.map.ps1`):
     }
     
     "deploy" = @{
-        list = @{
-            "staging" = {
-                param([switch]$Force)
-                Write-Host "Deploying to staging environment..."
-                if ($Force) { Write-Host "Force deployment enabled" }
-                # Deployment logic here
-            }
-            "production" = {
-                Write-Host "Deploying to production environment..."
-                # Production deployment logic
-            }
+        exec = {
+            param([string]$Environment = "staging", [switch]$Force)
+            Write-Host "Deploying to $Environment environment..."
+            if ($Force) { Write-Host "Force deployment enabled" }
+            # Deployment logic here
         }
-        description = "Deploy to environments"
+        description = "Deploy to specified environment"
     }
     
-    "docker" = @{
-        list = @{
-            "build" = {
-                param([string]$Tag = "latest")
-                Write-Host "Building Docker image with tag: $Tag"
-                docker build -t "myapp:$Tag" .
-            }
-            "run" = {
-                param([int]$Port = 8080)
-                Write-Host "Running Docker container on port $Port"
-                docker run -p "${Port}:80" myapp:latest
-            }
+    "package" = @{
+        exec = {
+            param([string]$Version = "1.0.0")
+            Write-Host "Creating package version $Version..."
+            dotnet pack --configuration Release -p:PackageVersion=$Version
         }
+        description = "Create NuGet package"
     }
 }
 ```
@@ -113,7 +101,6 @@ Here's a comprehensive example of a build map file (`.build.map.ps1`):
 ### Advanced Map Features
 
 - **Parameters**: Commands can accept typed parameters with defaults
-- **Nested Commands**: Use `list` property to create hierarchical commands
 - **Script Blocks**: Direct PowerShell execution with full language support
 - **Command Objects**: Structured entries with `exec`, `description`, and other properties
 - **Dynamic Execution**: Commands are evaluated at runtime with current context
@@ -129,11 +116,8 @@ qbuild build
 # Commands with parameters
 qbuild build -Configuration Release
 qbuild test -Coverage -Filter "Category=Unit"
-
-# Nested commands
-qbuild deploy staging -Force
-qbuild docker build -Tag "v1.2.3"
-qbuild docker run -Port 3000
+qbuild deploy -Environment production -Force
+qbuild package -Version "1.2.3"
 ```
 
 ## Autocompletion
@@ -142,18 +126,17 @@ ConfigMap provides rich tab completion for `qbuild` commands:
 
 ### Command Completion
 ```powershell
-qbuild <TAB>              # Shows: build, test, clean, deploy, docker, etc.
+qbuild <TAB>              # Shows: build, test, clean, deploy, package, etc.
 qbuild bu<TAB>            # Completes to: build
-qbuild deploy <TAB>       # Shows: staging, production
-qbuild docker <TAB>       # Shows: build, run
+qbuild de<TAB>            # Completes to: deploy
 ```
 
 ### Parameter Completion
 ```powershell
 qbuild build -<TAB>                # Shows: Configuration
 qbuild test -<TAB>                 # Shows: Coverage, Filter
-qbuild deploy staging -<TAB>       # Shows: Force
-qbuild docker build -<TAB>         # Shows: Tag
+qbuild deploy -<TAB>               # Shows: Environment, Force
+qbuild package -<TAB>              # Shows: Version
 ```
 
 ### Setup Autocompletion
