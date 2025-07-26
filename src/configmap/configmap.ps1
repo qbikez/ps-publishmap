@@ -159,16 +159,14 @@ function Write-MapHelp {
             $description = $script.description
         }
         
-        # Show parameters if any
-        $paramInfo = ""
-        if ($args.Count -gt 0) {
-            $argList = $args.Keys | % { "-$($_)" }
-            $paramInfo = " " + ($argList -join " ")
-        }
-        
+        $argList = $args.Keys | % { "-$($_)" }
+        $paramInfo = ($argList -join " ")
+                
         Write-Host "    " -NoNewline
         Write-Host "$paddedName" -ForegroundColor Green -NoNewline
-        Write-Host "$paramInfo" -ForegroundColor DarkGray -NoNewline
+        if ($paramInfo) {
+            Write-Host " [$paramInfo]" -ForegroundColor DarkGray -NoNewline
+        }
         Write-Host "  $description" -ForegroundColor White
     }
     
