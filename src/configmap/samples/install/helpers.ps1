@@ -64,7 +64,7 @@ function parse-packageEntry($entry) {
 }
 
 function install-mygroup($group) {
-    $submodules = get-completionlist $group
+    $submodules = Get-CompletionList $group
 
     write-verbose "installing group: $($submodules.Keys)" -verbose
     foreach($kvp in $submodules.GetEnumerator()) {

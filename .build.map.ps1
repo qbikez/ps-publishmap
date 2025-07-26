@@ -85,12 +85,16 @@
     
     "push" = @{
         exec = {
-            param([switch]$NewVersion)
+            param([switch]$NewVersion, [string]$path = $null)
             
             Write-Host "Running push/publish workflow..."
             $args = @(".")
             if ($NewVersion) {
                 $args += "-newversion"
+            }
+            if ($path) {
+                $args += "-path"
+                $args += $path
             }
             & "scripts\lib\push.ps1" @args
         }

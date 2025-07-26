@@ -22,7 +22,7 @@ Describe "install" {
         $list = Get-CompletionList $modules
         $target = $list["telnet"]
         
-        Invoke-ModuleCommand $target "telnet"
+        Invoke-EntryCommand $target "exec"
         Should -Invoke install-mypackage
     }
 
@@ -30,6 +30,6 @@ Describe "install" {
         $list = Get-CompletionList $modules
         $target = $list["core*"]
         
-        Invoke-ModuleCommand $target "core*"
+        Invoke-EntryCommand $target "exec"
     }
 }

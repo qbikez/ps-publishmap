@@ -30,8 +30,8 @@ foreach ($kvp in $dependencies.GetEnumerator()) {
     }.GetNewClosure()
 
     $parsed.$group.exec = {
-        param($ctx)
-        install-mygroup $ctx.self
+        param($context)
+        install-mygroup $context.self
     }
 
 }
