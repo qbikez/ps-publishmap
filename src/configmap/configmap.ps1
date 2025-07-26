@@ -117,6 +117,32 @@ function Get-CompletionList {
     return $r
 }
 
+function Write-MapHelp {
+    param([System.Collections.IDictionary]$map, $invocation)
+    $commandName = $invocation.Statement
+    $scripts = Get-CompletionList $map
+    
+    Write-Host "Available build scripts:"
+    foreach ($name in $scripts.Keys) {
+        Write-Host "  $name"
+    }
+    Write-Host ""
+    Write-Host "Run a script with: $commandName <script-name>"
+}
+
+function Write-Help {
+    param($invocation, [string]$mapPath)
+    $commandName = $invocation.Statement
+    
+    Write-Host "No build map file found at '$mapPath'"
+    Write-Host ""
+    Write-Host "To create a new build map file, run:"
+    Write-Host "  $commandName init"
+    Write-Host ""
+    Write-Host "This will create a sample $mapPath file with basic build scripts."
+}
+
+
 function Get-EntryCompletion(
     [ValidateScript({
             $_ -is [System.Collections.IDictionary]
@@ -361,13 +387,13 @@ function Invoke-QBuild {
             $invocation = $MyInvocation
             $commandName = $invocation.Statement
             
-            Write-Host "No build map file found at '.build.map.ps1'"
-            Write-Host ""
-            Write-Host "To create a new build map file, run:"
-            Write-Host "  $($commandName) init"
-            Write-Host ""
-            Write-Host "This will create a sample .build.map.ps1 file with basic build scripts."
-            Write-Host "You can then customize it to add your own build tasks."
+            Write-Help -invocation $invocation -mapPath "./.build.map.ps1"
+            return
+        }
+
+        # If no entry is provided, list all available scripts
+        if (-not $entry) {           
+            Write-MapHelp -map $map -invocation $MyInvocation
             return
         }
 
