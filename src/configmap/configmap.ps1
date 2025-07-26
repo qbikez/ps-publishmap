@@ -1,6 +1,6 @@
 #requires -version 7.0
 
-$reservedKeys = @("options", "exec")
+$reservedKeys = @("options", "exec", "list")
 
 function Import-ConfigMap {
     [OutputType([hashtable])]
@@ -122,22 +122,57 @@ function Write-MapHelp {
     $commandName = $invocation.Statement
     $scripts = Get-CompletionList $map
     
-    Write-Host "Available build scripts:"
-    foreach ($name in $scripts.Keys) {
-        $script = $scripts[$name]
+    # Calculate max command name length for alignment
+    $maxNameLength = ($scripts.Keys | Measure-Object -Property Length -Maximum).Maximum
+    $maxNameLength = [Math]::Max($maxNameLength, 12) # Minimum width
+    
+    Write-Host ""
+    Write-Host "$($commandName.ToUpper())" -ForegroundColor Cyan
+    Write-Host "A command line tool to manage build scripts" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "USAGE:" -ForegroundColor Yellow
+    Write-Host "    $commandName <COMMAND> [OPTIONS]" -ForegroundColor White
+    Write-Host ""
+    Write-Host "COMMANDS:" -ForegroundColor Yellow
+    
+    # Sort scripts alphabetically
+    $sortedScripts = $scripts.GetEnumerator() | Sort-Object Name
+    
+    foreach ($item in $sortedScripts) {
+        $name = $item.Name
+        $script = $item.Value
         $entry = Get-EntryCommand $script
         $args = Get-ScriptArgs $entry
-        $argList = $args.Keys | % { "-$($_)" }
-        $argList = $argList -join " "
         
-        if ($argList) {
-            Write-Host "  $name $argList"
-        } else {
-            Write-Host "  $name"
+        # Format command name with proper padding
+        $paddedName = $name.PadRight($maxNameLength)
+        
+        # Get description
+        $description = "No description available"
+        if ($script -is [System.Collections.IDictionary] -and $script.description) {
+            $description = $script.description
         }
+        
+        # Show parameters if any
+        $paramInfo = ""
+        if ($args.Count -gt 0) {
+            $argList = $args.Keys | % { "-$($_)" }
+            $paramInfo = " " + ($argList -join " ")
+        }
+        
+        Write-Host "    " -NoNewline
+        Write-Host "$paddedName" -ForegroundColor Green -NoNewline
+        Write-Host "$paramInfo" -ForegroundColor DarkGray -NoNewline
+        Write-Host "  $description" -ForegroundColor White
     }
+    
     Write-Host ""
-    Write-Host "Run a script with: $commandName <script-name>"
+    Write-Host "EXAMPLES:" -ForegroundColor Yellow
+    Write-Host "    $commandName build" -ForegroundColor White
+    Write-Host "    $commandName test" -ForegroundColor White
+    Write-Host "    $commandName list" -ForegroundColor White
+    Write-Host ""
+    Write-Host "Use '$commandName help' for more information about this tool." -ForegroundColor Gray
 }
 
 function Write-Help {
