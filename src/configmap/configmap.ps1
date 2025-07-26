@@ -226,9 +226,12 @@ function Get-EntryDynamicParam(
 
     $selectedEntry = Get-MapEntry $map $key
     if (!$selectedEntry) { return @() }
-    $command = Get-EntryCommand $selectedEntry $command
-    if (!$command) { return @() }
-    $p = Get-ScriptArgs $command
+    
+    # Use the command parameter to determine which command to extract, defaulting to "exec"
+    $commandKey = $command ? $command : "exec"
+    $entryCommand = Get-EntryCommand $selectedEntry $commandKey
+    if (!$entryCommand) { return @() }
+    $p = Get-ScriptArgs $entryCommand
 
     return $p
 }
@@ -395,10 +398,13 @@ function Invoke-QBuild {
     dynamicparam {
         try {
             $map = Import-ConfigMap $map -fallback "./.build.map.ps1"
-            return Get-EntryDynamicParam $map $entry $command $PSBoundParameters    
+            $result = Get-EntryDynamicParam $map $entry $command $PSBoundParameters
+            Write-Debug "Dynamic parameters for entry '$entry': $($result.Keys -join ', ')"
+            return $result
         }
         catch {
-            return "ERROR [dynamic]: $($_.Exception.Message) $($_.ScriptStackTrace)"
+            Write-Debug "Dynamic parameter error: $($_.Exception.Message)"
+            return @{}
         }
     }
 

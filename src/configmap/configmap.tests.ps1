@@ -404,3 +404,65 @@ Describe "unified" {
         }
     }
 }
+
+Describe "qbuild dynamic parameters" {
+    BeforeAll {
+        Mock Write-Host
+        
+        $buildTargets = @{
+            "push:short" = {
+                param([switch]$NewVersion, [string]$path = $null)
+                    
+                Write-Host "Running push/publish workflow with args: NewVersion=$NewVersion, path=$path"
+            }
+            
+            "push:exec"  = @{
+                exec        = {
+                    param([switch]$NewVersion, [string]$path = $null)
+                    
+                    Write-Host "Running push/publish workflow with args: NewVersion=$NewVersion, path=$path"
+                }
+                description = "Push/publish module (runs tests first)"
+            }
+        }
+    }
+
+    It "should recognize <EntryType> command parameters" -TestCases @(
+        @{ EntryType = "push:short";  }
+        @{ EntryType = "push:exec"; }
+    ) {
+        param($EntryType)
+        $entry = Get-MapEntry $buildTargets $EntryType
+        $scriptBlock = Get-EntryCommand $entry
+
+        $parameters = Get-ScriptArgs $ScriptBlock
+        $parameters.Keys | Should -Contain "NewVersion"
+        $parameters.Keys | Should -Contain "path"
+    }
+
+    It "should handle <EntryType> command with -path parameter" -TestCases @(
+        @{ EntryType = "push:short" }
+        @{ EntryType = "push:exec" }
+    ) {
+        param($EntryType)
+        
+        qbuild -map $buildTargets $EntryType -path ".\src\configmap\"
+
+        Should -Invoke Write-Host -ParameterFilter {
+            $Object -eq "Running push/publish workflow with args: NewVersion=False, path=.\src\configmap\"
+        }
+    }
+
+    It "should handle <EntryType> command with -NewVersion and -path parameters" -TestCases @(
+        @{ EntryType = "push:short" }
+        @{ EntryType = "push:exec" }
+    ) {
+        param($EntryType)
+        
+        qbuild -map $buildTargets $EntryType -NewVersion -path ".\src\configmap\"
+
+        Should -Invoke Write-Host -ParameterFilter {
+            $Object -eq "Running push/publish workflow with args: NewVersion=True, path=.\src\configmap\"
+        }
+    }
+}
