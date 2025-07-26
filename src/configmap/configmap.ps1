@@ -344,7 +344,7 @@ function Invoke-QBuild {
                     $map = $fakeBoundParameters.map
                     $map = $map ? $map : "./.build.map.ps1"
                     if (!(Test-Path $map)) {
-                        return @("init", "help") | ? { $_.startswith($wordToComplete) }
+                        return @("init", "help", "list") | ? { $_.startswith($wordToComplete) }
                     }
                     $map = Import-ConfigMap $map
                     return Get-EntryCompletion $map @PSBoundParameters
@@ -374,6 +374,16 @@ function Invoke-QBuild {
             Write-Host ""
             Write-Host "Usage:"
             Write-Host "qbuild <your-script-name>"
+            return
+        }
+        if ($entry -eq "list") {
+            $map = Import-ConfigMap $map -fallback "./.build.map.ps1" -ErrorAction Ignore
+            if (!$map) {
+                $invocation = $MyInvocation
+                Write-Help -invocation $invocation -mapPath "./.build.map.ps1"
+                return
+            }
+            Write-MapHelp -map $map -invocation $MyInvocation
             return
         }
         if ($entry -eq "init") {
