@@ -85,18 +85,16 @@
     
     "push" = @{
         exec = {
-            param([switch]$NewVersion, [string]$path = $null)
+            param([string]$path = $null, [switch]$NewVersion)
             
             Write-Host "Running push/publish workflow..."
-            $args = @(".")
-            if ($NewVersion) {
-                $args += "-newversion"
-            }
-            if ($path) {
-                $args += "-path"
-                $args += $path
-            }
-            & "scripts\lib\push.ps1" @args
+            $a = @{
+                Verbose = $true
+                path = $path ? $path : "."
+                newversion = $NewVersion
+                }
+            
+            & "$psscriptroot\scripts\lib\push.ps1" @a
         }
         description = "Push/publish module (runs tests first)"
     }
