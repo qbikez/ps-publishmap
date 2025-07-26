@@ -9,28 +9,31 @@ function Import-ConfigMap {
         [ValidateScript({ $_ -is [string] -or $_ -is [System.Collections.IDictionary] -or $null -eq $_ })]
         $map,
         [Parameter(Mandatory = $false)]
-        $defaultMapFile
+        $fallback
     )
     
     # Set default map file if null
     if (!$map) {
-        if (!$defaultMapFile) {
+        if (!$fallback) {
             throw "map is null and defaultMapFile is not provided"
+            return $null
         }
-        $map = $defaultMapFile 
+        $map = $fallback 
     }
     
     # Load map from file if it's a string path
     if ($map -is [string]) {
         if (!(Test-Path $map)) {
             throw "map file '$map' not found"
+            return $null
         }
         $map = . $map
     }
     
     # Validate that we have a loaded map
     if (!$map) {
-        throw "failed to load map from $defaultMapFile"
+        throw "failed to load map from $fallback"
+        return $null
     }
     
     return $map
@@ -320,7 +323,7 @@ function Invoke-QBuild {
     )
     dynamicparam {
         try {
-            $map = Import-ConfigMap $map "./.build.map.ps1"
+            $map = Import-ConfigMap $map -fallback "./.build.map.ps1"
             return Get-EntryDynamicParam $map $entry $command $PSBoundParameters    
         }
         catch {
@@ -353,7 +356,20 @@ function Invoke-QBuild {
             return
         }
 
-        $map = Import-ConfigMap $map "./.build.map.ps1"
+        $map = Import-ConfigMap $map -fallback "./.build.map.ps1" -ErrorAction Ignore
+        if (!$map) {
+            $invocation = $MyInvocation
+            $commandName = $invocation.Statement
+            
+            Write-Host "No build map file found at '.build.map.ps1'"
+            Write-Host ""
+            Write-Host "To create a new build map file, run:"
+            Write-Host "  $($commandName) init"
+            Write-Host ""
+            Write-Host "This will create a sample .build.map.ps1 file with basic build scripts."
+            Write-Host "You can then customize it to add your own build tasks."
+            return
+        }
 
         $targets = Get-MapEntries $map $entry
         Write-Verbose "running targets: $($targets.Key)"
@@ -383,7 +399,7 @@ function Invoke-QConf {
                         return @()
                     }
                     $map = $fakeBoundParameters.map
-                    $map = Import-ConfigMap $map "./.configuration.map.ps1"
+                    $map = Import-ConfigMap $map -fallback "./.configuration.map.ps1"
                     
                     return Get-EntryCompletion $map @PSBoundParameters
                 }
@@ -401,7 +417,7 @@ function Invoke-QConf {
                     }
 
                     $map = $fakeBoundParameters.map
-                    $map = Import-ConfigMap $map "./.configuration.map.ps1"
+                    $map = Import-ConfigMap $map -fallback "./.configuration.map.ps1"
                     $entry = $fakeBoundParameters.entry
                     $entry = Get-MapEntry $map $entry
                     if (!$entry) {
@@ -426,7 +442,7 @@ function Invoke-QConf {
             if ( !$entry) {
                 return @()
             }
-            $map = Import-ConfigMap $map "./.configuration.map.ps1"
+            $map = Import-ConfigMap $map -fallback"./.configuration.map.ps1"
             return Get-EntryDynamicParam $map "$entry.$command" $PSBoundParameters
         }
         catch {
@@ -459,7 +475,7 @@ function Invoke-QConf {
             return
         }
 
-        $map = Import-ConfigMap $map "./.configuration.map.ps1"
+        $map = Import-ConfigMap $map -fallback "./.configuration.map.ps1"
 
         Write-Verbose "entry=$entry command=$command"
 
