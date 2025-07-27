@@ -72,7 +72,35 @@ function Get-CompletionList {
                     continue
                 }
                 $entry = $kvp.value
+                
+                # Check for explicit 'list' key first
                 if ($entry.$listKey) {
+                    if ($flatten) {
+                        $result["$($kvp.key)$groupMarker"] = $entry
+                    }
+
+                    $subEntries = Get-CompletionList $entry -listKey $listKey -flatten:$flatten
+                    foreach ($sub in $subEntries.GetEnumerator()) {
+                        $subKey = $sub.Key
+                        if (!$flatten) {
+                            $subKey = "$($kvp.key)$separator$($sub.Key)"
+                        }
+                        $result[$subKey] = $sub.value
+                    }
+                }
+                # Check for direct nested structure (hashtable containing only other hashtables or scriptblocks, no command keys)
+                elseif ($entry -is [System.Collections.IDictionary] -and !$entry.exec -and !$entry.get -and !$entry.set -and !$entry.options -and !$entry.description) {
+                    $hasNestedCommands = $false
+                    foreach ($subKvp in $entry.GetEnumerator()) {
+                        if ($subKvp.Value -is [System.Collections.IDictionary] -or $subKvp.Value -is [scriptblock]) {
+                            $hasNestedCommands = $true
+                            break
+                        }
+                    }
+                    if (!$hasNestedCommands) { 
+                        $result[$kvp.key] = $entry
+                        continue
+                    }
                     if ($flatten) {
                         $result["$($kvp.key)$groupMarker"] = $entry
                     }
@@ -306,14 +334,32 @@ function Get-MapEntries(
     $keys, 
     [switch][bool]$flatten = $true
 ) {
-    $list = Get-CompletionList $map -flatten:$flatten
-    
-    $found = $list.GetEnumerator() | ? { $_.key -in @($keys) }
+    # Handle hierarchical paths by using Get-MapEntry directly
+    $results = @()
+    foreach ($key in @($keys)) {
+        if ($key -and $key.Contains('.')) {
+            $entry = Get-MapEntry $map $key
+            if ($entry) {
+                $results += [PSCustomObject]@{
+                    Key = $key
+                    Value = $entry
+                }
+            }
+        } else {
+            # Use original logic for non-hierarchical keys
+            $list = Get-CompletionList $map -flatten:$flatten
+            $found = $list.GetEnumerator() | ? { $_.key -eq $key }
+            if ($found) {
+                $results += $found
+            }
+        }
+    }
 
-    if (!$found) {
+    if (!$results) {
+        $list = Get-CompletionList $map -flatten:$flatten
         Write-Verbose "entry '$keys' not found in ($($list.Keys))"
     }
-    return $found
+    return $results
 }
 
 function Get-MapEntry(
@@ -323,6 +369,27 @@ function Get-MapEntry(
     $map, 
     $key
 ) {
+    # Handle hierarchical paths with dot notation
+    if ($key -and $key.Contains('.')) {
+        $parts = $key -split '\.'
+        $current = $map
+        
+        foreach ($part in $parts) {
+            if ($current -is [System.Collections.IDictionary]) {
+                $current = $current[$part]
+                if (!$current) {
+                    Write-Verbose "Path part '$part' not found in hierarchical path '$key'"
+                    return $null
+                }
+            } else {
+                Write-Verbose "Cannot navigate deeper - current object is not a dictionary"
+                return $null
+            }
+        }
+        return $current
+    }
+    
+    # Fall back to original behavior for non-hierarchical keys
     return (Get-MapEntries $map $key).Value
 }
 
