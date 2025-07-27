@@ -6,6 +6,176 @@ BeforeAll {
     Import-Module $PSScriptRoot\configmap.psm1
 }
 
+Describe "Test-IsParentEntry" {
+    It "should identify scriptblock as leaf" {
+        $entry = { Write-Host "Command" }
+        $result = Test-IsParentEntry $entry
+        $result.IsParent | Should -Be $false
+        $result.HasExplicitList | Should -Be $false
+    }
+
+    It "should identify command object with exec as leaf" {
+        $entry = @{
+            exec = { Write-Host "Command" }
+            description = "A command"
+        }
+        $result = Test-IsParentEntry $entry
+        $result.IsParent | Should -Be $false
+        $result.HasExplicitList | Should -Be $false
+    }
+
+    It "should identify explicit list as parent" {
+        $entry = @{
+            list = @{
+                "cmd1" = { Write-Host "Command 1" }
+                "cmd2" = { Write-Host "Command 2" }
+            }
+        }
+        $result = Test-IsParentEntry $entry
+        $result.IsParent | Should -Be $true
+        $result.HasExplicitList | Should -Be $true
+    }
+
+    It "should identify direct nested structure as parent" {
+        $entry = @{
+            "subcmd1" = { Write-Host "Sub command 1" }
+            "subcmd2" = @{
+                exec = { Write-Host "Sub command 2" }
+            }
+        }
+        $result = Test-IsParentEntry $entry
+        $result.IsParent | Should -Be $true
+        $result.HasExplicitList | Should -Be $false
+    }
+
+    It "should identify data object as leaf" {
+        $entry = @{
+            name = "test"
+            value = 42
+            items = @("a", "b", "c")
+        }
+        $result = Test-IsParentEntry $entry
+        $result.IsParent | Should -Be $false
+        $result.HasExplicitList | Should -Be $false
+    }
+
+    It "should identify mixed command object as leaf when exec is present" {
+        $entry = @{
+            exec = { Write-Host "Main command" }
+            "subcmd" = { Write-Host "This should not make it a parent" }
+        }
+        $result = Test-IsParentEntry $entry
+        $result.IsParent | Should -Be $false
+        $result.HasExplicitList | Should -Be $false
+    }
+}
+
+Describe "hierarchical key functions" {
+    Describe "Test-IsHierarchicalKey" {
+        It "should identify hierarchical key with default separator" {
+            Test-IsHierarchicalKey "parent.child" | Should -Be $true
+        }
+
+        It "should identify non-hierarchical key" {
+            Test-IsHierarchicalKey "simple" | Should -Be $false
+        }
+
+        It "should handle custom separator" {
+            Test-IsHierarchicalKey "parent/child" "/" | Should -Be $true
+            Test-IsHierarchicalKey "parent.child" "/" | Should -Be $false
+        }
+
+        It "should handle empty or null keys" {
+            Test-IsHierarchicalKey "" | Should -Be $false
+            Test-IsHierarchicalKey $null | Should -Be $false
+        }
+    }
+
+    Describe "Split-HierarchicalKey" {
+        It "should split key with default separator" {
+            $parts = Split-HierarchicalKey "parent.child.grandchild"
+            $parts | Should -Be @("parent", "child", "grandchild")
+        }
+
+        It "should split key with custom separator" {
+            $parts = Split-HierarchicalKey "parent/child/grandchild" "/"
+            $parts | Should -Be @("parent", "child", "grandchild")
+        }
+
+        It "should handle single part key" {
+            $parts = Split-HierarchicalKey "simple"
+            $parts | Should -Be @("simple")
+        }
+
+        It "should handle empty key" {
+            $parts = Split-HierarchicalKey ""
+            $parts | Should -Be @()
+        }
+
+        It "should handle special regex characters in separator" {
+            $parts = Split-HierarchicalKey "parent*child*grandchild" "*"
+            $parts | Should -Be @("parent", "child", "grandchild")
+        }
+    }
+
+    Describe "Resolve-HierarchicalPath" {
+        BeforeAll {
+            $testMap = @{
+                "parent" = @{
+                    "child" = @{
+                        "grandchild" = "found"
+                    }
+                    "simple" = "parent-simple"
+                }
+                "root" = "root-value"
+            }
+        }
+
+        It "should resolve deep hierarchical path" {
+            $result = Resolve-HierarchicalPath $testMap "parent.child.grandchild"
+            $result | Should -Be "found"
+        }
+
+        It "should resolve shallow hierarchical path" {
+            $result = Resolve-HierarchicalPath $testMap "parent.simple"
+            $result | Should -Be "parent-simple"
+        }
+
+        It "should return null for non-hierarchical key" {
+            $result = Resolve-HierarchicalPath $testMap "root"
+            $result | Should -Be $null
+        }
+
+        It "should return null for non-existent path" {
+            $result = Resolve-HierarchicalPath $testMap "parent.nonexistent"
+            $result | Should -Be $null
+        }
+
+        It "should handle custom separator" {
+            $customMap = @{
+                "parent" = @{
+                    "child" = @{
+                        "grandchild" = "found-with-slash"
+                    }
+                }
+            }
+            # Test with correct custom separator
+            $result = Resolve-HierarchicalPath $customMap "parent/child/grandchild" "/"
+            $result | Should -Be "found-with-slash"
+            
+            # Test with wrong separator (should return null because not identified as hierarchical)
+            $result2 = Resolve-HierarchicalPath $customMap "parent.child.grandchild" "/"
+            $result2 | Should -Be $null
+        }
+
+        It "should return intermediate objects" {
+            $result = Resolve-HierarchicalPath $testMap "parent.child"
+            $result | Should -Not -Be $null
+            $result.grandchild | Should -Be "found"
+        }
+    }
+}
+
 Describe "map parsing" {
 
     Describe '<name>' -ForEach @(

@@ -2,6 +2,152 @@
 
 $reservedKeys = @("options", "exec", "list")
 
+function Test-IsParentEntry {
+    <#
+    .SYNOPSIS
+        Determines if an entry is a parent container (has nested commands) or a leaf (executable command)
+    .PARAMETER Entry
+        The map entry to test
+    .PARAMETER ListKey
+        The key used to identify nested lists (default: "list")
+    .OUTPUTS
+        [PSCustomObject] with IsParent (bool) and HasExplicitList (bool) properties
+    #>
+    param(
+        $Entry,
+        $ListKey = "list"
+    )
+    
+    # If entry is not a hashtable, it's a leaf (scriptblock or other)
+    if ($Entry -isnot [System.Collections.IDictionary]) {
+        return [PSCustomObject]@{
+            IsParent = $false
+            HasExplicitList = $false
+        }
+    }
+    
+    # Check for explicit list key (traditional nested structure)
+    if ($Entry.$ListKey) {
+        return [PSCustomObject]@{
+            IsParent = $true
+            HasExplicitList = $true
+        }
+    }
+    
+    # Check if entry has command keys (exec, get, set, options, description)
+    $hasCommandKeys = $Entry.exec -or $Entry.get -or $Entry.set -or $Entry.options -or $Entry.description
+    if ($hasCommandKeys) {
+        return [PSCustomObject]@{
+            IsParent = $false
+            HasExplicitList = $false
+        }
+    }
+    
+    # Check if entry contains nested commands (hashtables or scriptblocks)
+    $hasNestedCommands = $false
+    foreach ($subKvp in $Entry.GetEnumerator()) {
+        if ($subKvp.Key -in $reservedKeys -or $subKvp.Key -eq $ListKey) {
+            continue
+        }
+        if ($subKvp.Value -is [System.Collections.IDictionary] -or $subKvp.Value -is [scriptblock]) {
+            $hasNestedCommands = $true
+            break
+        }
+    }
+    
+    return [PSCustomObject]@{
+        IsParent = $hasNestedCommands
+        HasExplicitList = $false
+    }
+}
+
+function Test-IsHierarchicalKey {
+    <#
+    .SYNOPSIS
+        Tests if a key contains hierarchical path separators
+    .PARAMETER Key
+        The key to test
+    .PARAMETER Separator
+        The separator character(s) to look for (default: ".")
+    .OUTPUTS
+        [bool] - True if the key contains the separator
+    #>
+    param(
+        [string]$Key,
+        [string]$Separator = "."
+    )
+    
+    return $Key -and $Key.Contains($Separator)
+}
+
+function Split-HierarchicalKey {
+    <#
+    .SYNOPSIS
+        Splits a hierarchical key into its component parts
+    .PARAMETER Key
+        The hierarchical key to split
+    .PARAMETER Separator
+        The separator character(s) to split on (default: ".")
+    .OUTPUTS
+        [string[]] - Array of key parts
+    #>
+    param(
+        [string]$Key,
+        [string]$Separator = "."
+    )
+    
+    if ([string]::IsNullOrEmpty($Key)) {
+        return @()
+    }
+    
+    # Escape special regex characters in separator for -split operator
+    $escapedSeparator = [regex]::Escape($Separator)
+    return $Key -split $escapedSeparator
+}
+
+function Resolve-HierarchicalPath {
+    <#
+    .SYNOPSIS
+        Resolves a hierarchical path through a nested map structure
+    .PARAMETER Map
+        The root map to navigate
+    .PARAMETER Key
+        The hierarchical key to resolve
+    .PARAMETER Separator
+        The separator character(s) used in the key (default: ".")
+    .OUTPUTS
+        The resolved entry, or $null if not found
+    #>
+    param(
+        [System.Collections.IDictionary]$Map,
+        [string]$Key,
+        [string]$Separator = "."
+    )
+    
+    if (!(Test-IsHierarchicalKey $Key $Separator)) {
+        # Not a hierarchical key, return null to indicate non-hierarchical handling needed
+        return $null
+    }
+    
+    $parts = Split-HierarchicalKey $Key $Separator
+    $current = $Map
+    
+    foreach ($part in $parts) {
+        if ($current -is [System.Collections.IDictionary]) {
+            $current = $current[$part]
+            if (!$current) {
+                Write-Verbose "Path part '$part' not found in hierarchical path '$Key'"
+                return $null
+            }
+        } else {
+            Write-Verbose "Cannot navigate deeper - current object is not a dictionary"
+            return $null
+        }
+    }
+    
+    return $current
+}
+
 function Import-ConfigMap {
     [OutputType([System.Collections.IDictionary])]
     param(
@@ -72,39 +218,15 @@ function Get-CompletionList {
                     continue
                 }
                 $entry = $kvp.value
+                $entryInfo = Test-IsParentEntry $entry $listKey
                 
-                # Check for explicit 'list' key first
-                if ($entry.$listKey) {
+                if ($entryInfo.IsParent) {
+                    # Add parent marker in flattened mode
                     if ($flatten) {
                         $result["$($kvp.key)$groupMarker"] = $entry
                     }
 
-                    $subEntries = Get-CompletionList $entry -listKey $listKey -flatten:$flatten
-                    foreach ($sub in $subEntries.GetEnumerator()) {
-                        $subKey = $sub.Key
-                        if (!$flatten) {
-                            $subKey = "$($kvp.key)$separator$($sub.Key)"
-                        }
-                        $result[$subKey] = $sub.value
-                    }
-                }
-                # Check for direct nested structure (hashtable containing only other hashtables or scriptblocks, no command keys)
-                elseif ($entry -is [System.Collections.IDictionary] -and !$entry.exec -and !$entry.get -and !$entry.set -and !$entry.options -and !$entry.description) {
-                    $hasNestedCommands = $false
-                    foreach ($subKvp in $entry.GetEnumerator()) {
-                        if ($subKvp.Value -is [System.Collections.IDictionary] -or $subKvp.Value -is [scriptblock]) {
-                            $hasNestedCommands = $true
-                            break
-                        }
-                    }
-                    if (!$hasNestedCommands) { 
-                        $result[$kvp.key] = $entry
-                        continue
-                    }
-                    if ($flatten) {
-                        $result["$($kvp.key)$groupMarker"] = $entry
-                    }
-
+                    # Get nested entries and add them with appropriate prefixes
                     $subEntries = Get-CompletionList $entry -listKey $listKey -flatten:$flatten
                     foreach ($sub in $subEntries.GetEnumerator()) {
                         $subKey = $sub.Key
@@ -115,6 +237,7 @@ function Get-CompletionList {
                     }
                 }
                 else {
+                    # It's a leaf entry (executable command)
                     $result[$kvp.key] = $entry
                 }
             }
@@ -338,13 +461,14 @@ function Get-MapEntries(
         })]
     $map, 
     $keys, 
-    [switch][bool]$flatten = $true
+    [switch][bool]$flatten = $true,
+    $separator = "."
 ) {
     # Handle hierarchical paths by using Get-MapEntry directly
     $results = @()
     foreach ($key in @($keys)) {
-        if ($key -and $key.Contains('.')) {
-            $entry = Get-MapEntry $map $key
+        if (Test-IsHierarchicalKey $key $separator) {
+            $entry = Get-MapEntry $map $key $separator
             if ($entry) {
                 $results += [PSCustomObject]@{
                     Key = $key
@@ -373,26 +497,13 @@ function Get-MapEntry(
             $_ -is [System.Collections.IDictionary] -or $_ -is [array]
         })]
     $map, 
-    $key
+    $key,
+    $separator = "."
 ) {
-    # Handle hierarchical paths with dot notation
-    if ($key -and $key.Contains('.')) {
-        $parts = $key -split '\.'
-        $current = $map
-        
-        foreach ($part in $parts) {
-            if ($current -is [System.Collections.IDictionary]) {
-                $current = $current[$part]
-                if (!$current) {
-                    Write-Verbose "Path part '$part' not found in hierarchical path '$key'"
-                    return $null
-                }
-            } else {
-                Write-Verbose "Cannot navigate deeper - current object is not a dictionary"
-                return $null
-            }
-        }
-        return $current
+    # Handle hierarchical paths using the new resolution function
+    $hierarchicalResult = Resolve-HierarchicalPath $map $key $separator
+    if ($null -ne $hierarchicalResult) {
+        return $hierarchicalResult
     }
     
     # Fall back to original behavior for non-hierarchical keys
