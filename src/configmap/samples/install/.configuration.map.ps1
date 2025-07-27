@@ -18,8 +18,8 @@ foreach ($kvp in $dependencies.GetEnumerator()) {
     foreach ($item in $list) {
         $package = parse-packageEntry $item
         $package.exec = {
-            param($ctx)
-            install-mypackage $ctx.self
+            param($_context)
+            install-mypackage $_context.self
         }
         $submodules[$package.name] = $package
     }

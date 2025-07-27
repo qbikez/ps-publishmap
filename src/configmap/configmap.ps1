@@ -125,7 +125,7 @@ function Get-CompletionList {
 
 function Write-MapHelp {
     param([System.Collections.IDictionary]$map, $invocation)
-    $commandName = $invocation.Statement
+    $commandName = $invocation.InvocationName
     $scripts = Get-CompletionList $map
     
     # Calculate max command name length for alignment
@@ -147,8 +147,13 @@ function Write-MapHelp {
     foreach ($item in $sortedScripts) {
         $name = $item.Name
         $script = $item.Value
-        $entry = Get-EntryCommand $script
-        $args = Get-ScriptArgs $entry
+        try {
+            $entry = Get-EntryCommand $script
+        }
+        catch {
+            $entry = $null
+        }
+        $args = $entry ? (Get-ScriptArgs $entry) : @{}
         
         # Format command name with proper padding
         $paddedName = $name.PadRight($maxNameLength)
@@ -322,18 +327,26 @@ function Get-MapEntry(
 }
 
 # TODO: key should be a hidden property of $entry
-function Get-EntryCommand($entry, $commandKey = "exec") {
+function Get-EntryCommand(
+    [ValidateScript({
+            $_ -is [System.Collections.IDictionary] -or $_ -is [array] -or $_ -is [scriptblock]
+        })]
+    $entry, 
+    $commandKey = "exec"
+) {
     if (!$entry) { throw "entry is NULL" }
     if ($entry -is [scriptblock]) { return $entry }
 
     if ($entry -is [System.Collections.IDictionary] -or $entry -is [System.Collections.Hashtable]) {
         if (!$entry.$commandKey) {
             throw "Command '$commandKey' not found"
+            return $null
         }
         return $entry.$commandKey
     }
 
     throw "Entry of type $($entry.GetType().Name) is not supported"
+    return $null
 }
 
 function Invoke-EntryCommand($entry, $key, $ordered = @(), $bound = @{}) {
@@ -443,13 +456,14 @@ function Invoke-QBuild {
                     throw "Map appears to be an object, not a file"
                 }
                 if ((Test-Path $map)) {
-                   throw "map file '$map' already exists"
+                    throw "map file '$map' already exists"
                 }
 
                 Initialize-BuildMap -file $map
 
                 return
-            } else {
+            }
+            else {
                 $completionList = Get-CompletionList $loadedMap
                 if ($completionList.Keys -notcontains "init") {
                     throw "map file '$map' already exists"
