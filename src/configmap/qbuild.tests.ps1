@@ -268,5 +268,89 @@ Describe "hierarchical" {
             $Object -eq "SIMPLE: 'Hello, World!'"
         }
     }
+}
 
+Describe "hierarchical completion" {
+    BeforeAll {
+        $targets = @{
+            "parent" = @{
+                "write:simple"  = {
+                    param([string] $message)
+                    Write-Host "SIMPLE: '$message'"
+                }
+                "write:wrapped" = @{
+                    exec  = {
+                        param([string] $message)
+                        Write-Host "WRAPPED: '$message'"
+                    }
+                }
+                "other:command" = {
+                    Write-Host "Other command"
+                }
+            }
+            "regular" = {
+                Write-Host "Regular command"
+            }
+            "another" = @{
+                "nested:cmd" = {
+                    Write-Host "Nested command"
+                }
+            }
+        }
+    }
+
+    It "should complete partial parent name 'paren' to show all parent.* commands" {
+        $completions = Get-EntryCompletion $targets $null $null "paren" $null @{}
+        
+        $completions | Should -Contain "parent.write:simple"
+        $completions | Should -Contain "parent.write:wrapped" 
+        $completions | Should -Contain "parent.other:command"
+        $completions | Should -Contain "parent*"
+    }
+
+    It "should complete 'parent.' to show all parent child commands" {
+        $completions = Get-EntryCompletion $targets $null $null "parent." $null @{}
+        
+        $completions | Should -Contain "parent.write:simple"
+        $completions | Should -Contain "parent.write:wrapped"
+        $completions | Should -Contain "parent.other:command"
+        $completions | Should -Not -Contain "regular"
+        $completions | Should -Not -Contain "another.nested:cmd"
+    }
+
+    It "should complete 'parent.write' to show only matching write commands" {
+        $completions = Get-EntryCompletion $targets $null $null "parent.write" $null @{}
+        
+        $completions | Should -Contain "parent.write:simple"
+        $completions | Should -Contain "parent.write:wrapped"
+        $completions | Should -Not -Contain "parent.other:command"
+        $completions | Should -Not -Contain "regular"
+    }
+
+    It "should complete regular commands normally" {
+        $completions = Get-EntryCompletion $targets $null $null "reg" $null @{}
+        
+        $completions | Should -Contain "regular"
+        $completions | Should -Not -Contain "parent.write:simple"
+    }
+
+    It "should complete partial parent names to multiple parent groups" {
+        $completions = Get-EntryCompletion $targets $null $null "" $null @{}
+        
+        $completions | Should -Contain "parent.write:simple"
+        $completions | Should -Contain "another.nested:cmd"
+        $completions | Should -Contain "regular"
+        $completions | Should -Contain "parent*"
+        $completions | Should -Contain "another*"
+    }
+
+    It "should handle empty completion to show all available commands" {
+        $completions = Get-EntryCompletion $targets $null $null "" $null @{}
+        
+        # Should contain both hierarchical and flat commands
+        $completions.Count | Should -BeGreaterThan 5
+        $completions | Should -Contain "regular"
+        $completions | Should -Contain "parent.write:simple"
+        $completions | Should -Contain "another.nested:cmd"
+    }
 }

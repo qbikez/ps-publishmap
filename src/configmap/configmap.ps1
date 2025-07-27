@@ -236,8 +236,14 @@ function Get-EntryCompletion(
     $commandAst, 
     $fakeBoundParameters
 ) {
-    $list = Get-CompletionList $map
-    return $list.Keys | ? { $_.startswith($wordToComplete) }
+    # For hierarchical completion, we need both flattened and tree structures
+    $flatList = Get-CompletionList $map -flatten:$true
+    $treeList = Get-CompletionList $map -flatten:$false
+    
+    # Combine both lists and remove duplicates
+    $allKeys = @($flatList.Keys) + @($treeList.Keys) | Sort-Object -Unique
+    
+    return $allKeys | ? { $_.startswith($wordToComplete) }
 }
 
 function Get-ValuesList(
