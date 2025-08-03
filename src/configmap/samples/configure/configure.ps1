@@ -148,7 +148,7 @@ function invoke-modulecommand($moduleAndPath, $command, [object] $additionalOpts
                 $isvalid = "?"
                 if ($validate -and $module.validate) {
                     if (!$result.Active) {
-                        write-host "no active option found for $moduleName/$subPath"
+                        write-warning "no active option found for $moduleName/$subPath"
                         $isvalid = $null
                     }
                     else {

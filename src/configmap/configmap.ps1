@@ -624,17 +624,22 @@ function Invoke-QConf {
                 }
 
                 foreach ($entry in @($entries)) {
-                    $subEntry = $map.$entry
+                    try {
+                        $subEntry = $map.$entry
 
-                    $options = Get-CompletionList $subEntry -listKey "options" -reservedKeys $languages.conf.reservedKeys
+                        $options = Get-CompletionList $subEntry -listKey "options" -reservedKeys $languages.conf.reservedKeys
                 
-                    $bound = $PSBoundParameters
-                    $bound.options = $options
+                        $bound = $PSBoundParameters
+                        $bound.options = $options
                 
-                    $value = Invoke-Get $subEntry -bound $bound
+                        $value = Invoke-Get $subEntry -bound $bound
                 
-                    $result = ConvertTo-MapResult $value $entry $subEntry $options
-                    $result | Write-Output
+                        $result = ConvertTo-MapResult $value $entry $subEntry $options
+                        $result | Write-Output
+                    }
+                    catch {
+                        Write-Error "Error getting value for entry '$entry': $($_.Exception.Message)"
+                    }
                 }
             }
             default {
@@ -670,7 +675,7 @@ function ConvertTo-MapResult($value, $entryName, $entry, $options, $validate = $
     $isvalid = "?"
     if ($validate -and $entry.validate) {
         if (!$result.Active) {
-            Write-Host "no active option found for $entryName/$subPath"
+            Write-Warning "no active option found for $entryName/$subPath"
             $isvalid = $null
         }
         else {
