@@ -89,6 +89,11 @@ Describe "hierarchical key functions" {
             Test-IsHierarchicalKey "" | Should -Be $false
             Test-IsHierarchicalKey $null | Should -Be $false
         }
+
+        It "should identify deep hierarchical keys" {
+            Test-IsHierarchicalKey "level1.level2.level3.level4.level5" | Should -Be $true
+            Test-IsHierarchicalKey "a.b.c.d.e.f.g.h.i.j" | Should -Be $true
+        }
     }
 
     Describe "Split-HierarchicalKey" {
@@ -115,6 +120,16 @@ Describe "hierarchical key functions" {
         It "should handle special regex characters in separator" {
             $parts = Split-HierarchicalKey "parent*child*grandchild" "*"
             $parts | Should -Be @("parent", "child", "grandchild")
+        }
+
+        It "should split deep hierarchical keys" {
+            $parts = Split-HierarchicalKey "level1.level2.level3.level4.level5"
+            $parts | Should -Be @("level1", "level2", "level3", "level4", "level5")
+        }
+
+        It "should split very deep hierarchical keys" {
+            $parts = Split-HierarchicalKey "a.b.c.d.e.f.g.h.i.j"
+            $parts | Should -Be @("a", "b", "c", "d", "e", "f", "g", "h", "i", "j")
         }
     }
 
@@ -172,6 +187,67 @@ Describe "hierarchical key functions" {
             $result = Resolve-HierarchicalPath $testMap "parent.child"
             $result | Should -Not -Be $null
             $result.grandchild | Should -Be "found"
+        }
+
+        It "should resolve deep hierarchical paths" {
+            $deepMap = @{
+                "level1" = @{
+                    "level2" = @{
+                        "level3" = @{
+                            "level4" = @{
+                                "level5" = @{
+                                    "command" = "deep-command"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            $result = Resolve-HierarchicalPath $deepMap "level1.level2.level3.level4.level5.command"
+            $result | Should -Be "deep-command"
+        }
+
+        It "should resolve very deep hierarchical paths (10 levels)" {
+            $veryDeepMap = @{
+                "a" = @{
+                    "b" = @{
+                        "c" = @{
+                            "d" = @{
+                                "e" = @{
+                                    "f" = @{
+                                        "g" = @{
+                                            "h" = @{
+                                                "i" = @{
+                                                    "j" = "very-deep-command"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            $result = Resolve-HierarchicalPath $veryDeepMap "a.b.c.d.e.f.g.h.i.j"
+            $result | Should -Be "very-deep-command"
+        }
+
+        It "should return null for broken deep paths" {
+            $deepMap = @{
+                "level1" = @{
+                    "level2" = @{
+                        "level3" = @{
+                            "level4" = "terminal-value"
+                        }
+                    }
+                }
+            }
+            
+            $result = Resolve-HierarchicalPath $deepMap "level1.level2.level3.level4.level5"
+            $result | Should -Be $null
         }
     }
 }
@@ -231,6 +307,54 @@ Describe "map parsing" {
             }
             Flatten = @("db", "secrets*", "connectionString", "keyVault")
             Tree    = @("db", "secrets.connectionString", "secrets.keyVault")
+        }
+        @{
+            Name    = "deep nesting (5 levels)"
+            Map     = [ordered]@{
+                "level1" = @{
+                    "level2" = @{
+                        "level3" = @{
+                            "level4" = @{
+                                "level5" = @{
+                                    exec = { Write-Host "Deep command" }
+                                }
+                                "another5" = { Write-Host "Another deep" }
+                            }
+                            "alt4" = { Write-Host "Alternative path" }
+                        }
+                    }
+                }
+                "simple" = { Write-Host "Simple command" }
+            }
+            Flatten = @("level1*", "level2*", "level3*", "level4*", "level5", "another5", "alt4", "simple")
+            Tree    = @("level1.level2.level3.level4.level5", "level1.level2.level3.level4.another5", "level1.level2.level3.alt4", "simple")
+        }
+        @{
+            Name    = "very deep nesting (10 levels)"
+            Map     = [ordered]@{
+                "a" = @{
+                    "b" = @{
+                        "c" = @{
+                            "d" = @{
+                                "e" = @{
+                                    "f" = @{
+                                        "g" = @{
+                                            "h" = @{
+                                                "i" = @{
+                                                    "j" = { Write-Host "Very deep command" }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                "root" = { Write-Host "Root command" }
+            }
+            Flatten = @("a*", "b*", "c*", "d*", "e*", "f*", "g*", "h*", "i*", "j", "root")
+            Tree    = @("a.b.c.d.e.f.g.h.i.j", "root")
         }
     ) {
         It '<name> => flatten keys' {
@@ -578,5 +702,175 @@ Describe "qbuild dynamic parameters" {
         Should -Invoke Write-Host -ParameterFilter {
             $Object -eq "Running push/publish workflow with args: NewVersion=True, path=.\src\configmap\"
         }
+    }
+}
+
+Describe "deep hierarchical execution" {
+    BeforeEach {
+        Mock Write-Host
+    }
+
+    Describe "deep nesting commands" {
+        BeforeAll {
+            $deepMap = @{
+                "level1" = @{
+                    "level2" = @{
+                        "level3" = @{
+                            "level4" = @{
+                                "level5" = {
+                                    param([string]$message = "default")
+                                    Write-Host "Deep level 5: $message"
+                                }
+                            }
+                        }
+                    }
+                }
+                "root" = {
+                    Write-Host "Root command"
+                }
+            }
+        }
+
+        It "should execute deep hierarchical commands" {
+            qbuild -map $deepMap "level1.level2.level3.level4.level5" -message "test"
+            
+            Should -Invoke Write-Host -Exactly 1 -ParameterFilter {
+                $Object -eq "Deep level 5: test"
+            }
+        }
+
+        It "should get deep hierarchical entry" {
+            $entry = Get-MapEntry $deepMap "level1.level2.level3.level4.level5"
+            $entry | Should -Not -BeNullOrEmpty
+            $entry | Should -BeOfType [ScriptBlock]
+        }
+
+        It "should extract parameters from deep commands" {
+            $entry = Get-MapEntry $deepMap "level1.level2.level3.level4.level5"
+            $parameters = Get-ScriptArgs $entry
+            $parameters.Keys | Should -Contain "message"
+        }
+    }
+
+    Describe "very deep nesting commands (10 levels)" {
+        BeforeAll {
+            $veryDeepMap = @{
+                "a" = @{
+                    "b" = @{
+                        "c" = @{
+                            "d" = @{
+                                "e" = @{
+                                    "f" = @{
+                                        "g" = @{
+                                            "h" = @{
+                                                "i" = @{
+                                                    "j" = {
+                                                        param([string]$message = "deep", [int]$count = 1)
+                                                        Write-Host "Very deep command: message=$message, count=$count"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        It "should execute very deep hierarchical commands" {
+            qbuild -map $veryDeepMap "a.b.c.d.e.f.g.h.i.j" -message "test" -count 5
+            
+            Should -Invoke Write-Host -Exactly 1 -ParameterFilter {
+                $Object -eq "Very deep command: message=test, count=5"
+            }
+        }
+
+        It "should get very deep hierarchical entry" {
+            $entry = Get-MapEntry $veryDeepMap "a.b.c.d.e.f.g.h.i.j"
+            $entry | Should -Not -BeNullOrEmpty
+            $entry | Should -BeOfType [ScriptBlock]
+        }
+
+        It "should extract parameters from very deep commands" {
+            $entry = Get-MapEntry $veryDeepMap "a.b.c.d.e.f.g.h.i.j"
+            $parameters = Get-ScriptArgs $entry
+            $parameters.Keys | Should -Contain "message"
+            $parameters.Keys | Should -Contain "count"
+        }
+    }
+
+    Describe "mixed depth hierarchical commands" {
+        BeforeAll {
+            $mixedMap = [ordered]@{
+                "build" = { 
+                    Write-Host "build command" 
+                }
+                "build:exec" = [ordered]@{
+                    exec = { 
+                        Write-Host "build:exec command" 
+                    }
+                    description = "Build command"
+                }
+                "db" = [ordered]@{
+                    exec = {
+                        write-host "db top-level exec"
+                    }
+                    "migrate" = {
+                        Write-Host "db.migrate command"
+                    }
+                    "migrate:exec" = [ordered]@{
+                        exec = {
+                            Write-Host "db.migrate:exec command"
+                        }
+                        description = "Migrate command"
+                    }
+                    "init" = {
+                        Write-Host "db.init command"
+                    }
+                    "init:exec" = [ordered]@{
+                        exec = {
+                            Write-Host "db.init:exec command"
+                        }
+                    }
+                }                
+            }
+        }
+
+        It "should return expected completionlist" {
+            $flatList = Get-CompletionList $mixedMap -flatten:$false
+            $flatList.Keys | Should -Be @(
+                "build"
+                "build:exec"
+                "db.migrate"
+                "db.migrate:exec"
+                "db.init"
+                "db.init:exec"
+            )
+        }
+
+        # It "should handle mixed depth commands in tree completion" {
+        #     $treeList = Get-CompletionList $mixedMap -flatten:$false
+        #     $treeList.Keys | Should -Contain "shallow"
+        #     $treeList.Keys | Should -Contain "medium.sub"
+        #     $treeList.Keys | Should -Contain "deep.level2.level3.level4.level5"
+        # }
+
+        # It "should execute shallow command" {
+        #     qbuild -map $mixedMap "shallow"
+        #     Should -Invoke Write-Host -ParameterFilter { $Object -eq "Shallow command" }
+        # }
+
+        # It "should execute medium depth command" {
+        #     qbuild -map $mixedMap "medium.sub"
+        #     Should -Invoke Write-Host -ParameterFilter { $Object -eq "Medium depth command" }
+        # }
+
+        # It "should execute deep command" {
+        #     qbuild -map $mixedMap "deep.level2.level3.level4.level5"
+        #     Should -Invoke Write-Host -ParameterFilter { $Object -eq "Deep command" }
+        # }
     }
 }

@@ -2,151 +2,6 @@
 
 $reservedKeys = @("options", "exec", "list")
 
-function Test-IsParentEntry {
-    <#
-    .SYNOPSIS
-        Determines if an entry is a parent container (has nested commands) or a leaf (executable command)
-    .PARAMETER Entry
-        The map entry to test
-    .PARAMETER ListKey
-        The key used to identify nested lists (default: "list")
-    .OUTPUTS
-        [PSCustomObject] with IsParent (bool) and HasExplicitList (bool) properties
-    #>
-    param(
-        $Entry,
-        $ListKey = "list"
-    )
-    
-    # If entry is not a hashtable, it's a leaf (scriptblock or other)
-    if ($Entry -isnot [System.Collections.IDictionary]) {
-        return [PSCustomObject]@{
-            IsParent = $false
-            HasExplicitList = $false
-        }
-    }
-    
-    # Check for explicit list key (traditional nested structure)
-    if ($Entry.$ListKey) {
-        return [PSCustomObject]@{
-            IsParent = $true
-            HasExplicitList = $true
-        }
-    }
-    
-    # Check if entry has command keys (exec, get, set, options, description)
-    $hasCommandKeys = $Entry.exec -or $Entry.get -or $Entry.set -or $Entry.options -or $Entry.description
-    if ($hasCommandKeys) {
-        return [PSCustomObject]@{
-            IsParent = $false
-            HasExplicitList = $false
-        }
-    }
-    
-    # Check if entry contains nested commands (hashtables or scriptblocks)
-    $hasNestedCommands = $false
-    foreach ($subKvp in $Entry.GetEnumerator()) {
-        if ($subKvp.Key -in $reservedKeys -or $subKvp.Key -eq $ListKey) {
-            continue
-        }
-        if ($subKvp.Value -is [System.Collections.IDictionary] -or $subKvp.Value -is [scriptblock]) {
-            $hasNestedCommands = $true
-            break
-        }
-    }
-    
-    return [PSCustomObject]@{
-        IsParent = $hasNestedCommands
-        HasExplicitList = $false
-    }
-}
-
-function Test-IsHierarchicalKey {
-    <#
-    .SYNOPSIS
-        Tests if a key contains hierarchical path separators
-    .PARAMETER Key
-        The key to test
-    .PARAMETER Separator
-        The separator character(s) to look for (default: ".")
-    .OUTPUTS
-        [bool] - True if the key contains the separator
-    #>
-    param(
-        [string]$Key,
-        [string]$Separator = "."
-    )
-    
-    return $Key -and $Key.Contains($Separator)
-}
-
-function Split-HierarchicalKey {
-    <#
-    .SYNOPSIS
-        Splits a hierarchical key into its component parts
-    .PARAMETER Key
-        The hierarchical key to split
-    .PARAMETER Separator
-        The separator character(s) to split on (default: ".")
-    .OUTPUTS
-        [string[]] - Array of key parts
-    #>
-    param(
-        [string]$Key,
-        [string]$Separator = "."
-    )
-    
-    if ([string]::IsNullOrEmpty($Key)) {
-        return @()
-    }
-    
-    # Escape special regex characters in separator for -split operator
-    $escapedSeparator = [regex]::Escape($Separator)
-    return $Key -split $escapedSeparator
-}
-
-function Resolve-HierarchicalPath {
-    <#
-    .SYNOPSIS
-        Resolves a hierarchical path through a nested map structure
-    .PARAMETER Map
-        The root map to navigate
-    .PARAMETER Key
-        The hierarchical key to resolve
-    .PARAMETER Separator
-        The separator character(s) used in the key (default: ".")
-    .OUTPUTS
-        The resolved entry, or $null if not found
-    #>
-    param(
-        [System.Collections.IDictionary]$Map,
-        [string]$Key,
-        [string]$Separator = "."
-    )
-    
-    if (!(Test-IsHierarchicalKey $Key $Separator)) {
-        # Not a hierarchical key, return null to indicate non-hierarchical handling needed
-        return $null
-    }
-    
-    $parts = Split-HierarchicalKey $Key $Separator
-    $current = $Map
-    
-    foreach ($part in $parts) {
-        if ($current -is [System.Collections.IDictionary]) {
-            $current = $current[$part]
-            if (!$current) {
-                Write-Verbose "Path part '$part' not found in hierarchical path '$Key'"
-                return $null
-            }
-        } else {
-            Write-Verbose "Cannot navigate deeper - current object is not a dictionary"
-            return $null
-        }
-    }
-    
-    return $current
-}
 
 function Import-ConfigMap {
     [OutputType([System.Collections.IDictionary])]
@@ -191,7 +46,24 @@ function Import-ConfigMap {
     return $map
 }
 
+
 function Get-CompletionList {
+    <#
+    .SYNOPSIS
+        Gets a flattened or hierarchical list of commands from a configuration map
+    .PARAMETER map
+        The configuration map to process. Can be a dictionary, array, scriptblock or string
+    .PARAMETER flatten 
+        If true, flattens hierarchical commands into a single level. If false, maintains hierarchy with separators
+    .PARAMETER separator
+        The separator to use between parent and child command names when not flattened
+    .PARAMETER groupMarker
+        The marker to append to parent command names when flattened
+    .PARAMETER listKey
+        The key used to identify nested command lists
+    .OUTPUTS
+        [System.Collections.Specialized.OrderedDictionary] containing the processed command list
+    #>
     [OutputType([System.Collections.Specialized.OrderedDictionary])]
     param(
         [ValidateScript({ 
@@ -273,80 +145,6 @@ function Get-CompletionList {
 
     return $r
 }
-
-function Write-MapHelp {
-    param([System.Collections.IDictionary]$map, $invocation)
-    $commandName = $invocation.InvocationName
-    $scripts = Get-CompletionList $map
-    
-    # Calculate max command name length for alignment
-    $maxNameLength = ($scripts.Keys | Measure-Object -Property Length -Maximum).Maximum
-    $maxNameLength = [Math]::Max($maxNameLength, 12) # Minimum width
-    
-    Write-Host ""
-    Write-Host "$($commandName.ToUpper())" -ForegroundColor Cyan
-    Write-Host "A command line tool to manage build scripts" -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "USAGE:" -ForegroundColor Yellow
-    Write-Host "    $commandName <COMMAND> [OPTIONS]" -ForegroundColor White
-    Write-Host ""
-    Write-Host "COMMANDS:" -ForegroundColor Yellow
-    
-    # Sort scripts alphabetically
-    $sortedScripts = $scripts.GetEnumerator() | Sort-Object Name
-    
-    foreach ($item in $sortedScripts) {
-        $name = $item.Name
-        $script = $item.Value
-        try {
-            $entry = Get-EntryCommand $script
-        }
-        catch {
-            $entry = $null
-        }
-        $args = $entry ? (Get-ScriptArgs $entry) : @{}
-        
-        # Format command name with proper padding
-        $paddedName = $name.PadRight($maxNameLength)
-        
-        # Get description
-        $description = ""
-        if ($script -is [System.Collections.IDictionary] -and $script.description) {
-            $description = $script.description
-        }
-        
-        $argList = $args.Keys | % { "-$($_)" }
-        $paramInfo = ($argList -join " ")
-                
-        Write-Host "    " -NoNewline
-        Write-Host "$paddedName" -ForegroundColor Green -NoNewline
-        if ($paramInfo) {
-            Write-Host " [$paramInfo]" -ForegroundColor DarkGray -NoNewline
-        }
-        Write-Host "  $description" -ForegroundColor White
-    }
-    
-    Write-Host ""
-    Write-Host "EXAMPLES:" -ForegroundColor Yellow
-    Write-Host "    $commandName build" -ForegroundColor White
-    Write-Host "    $commandName test" -ForegroundColor White
-    Write-Host "    $commandName list" -ForegroundColor White
-    Write-Host ""
-    Write-Host "Use '$commandName help' for more information about this tool." -ForegroundColor Gray
-}
-
-function Write-Help {
-    param($invocation, [string]$mapPath)
-    $commandName = $invocation.Statement
-    
-    Write-Host "No build map file found at '$mapPath'"
-    Write-Host ""
-    Write-Host "To create a new build map file, run:"
-    Write-Host "  $commandName init"
-    Write-Host ""
-    Write-Host "This will create a sample $mapPath file with basic build scripts."
-}
-
 
 function Get-EntryCompletion(
     [ValidateScript({
@@ -550,24 +348,24 @@ function Invoke-EntryCommand($entry, $key, $ordered = @(), $bound = @{}) {
     return & $command @ordered @bound
 }
 
-function Invoke-Entry(
-    [ValidateScript({
-            $_ -is [string] -or $_ -is [System.Collections.IDictionary]
-        })]
-    $map, 
-    $entry, 
-    $bound
-) {
-    $map = Import-ConfigMap $map
+# function Invoke-Entry(
+#     [ValidateScript({
+#             $_ -is [string] -or $_ -is [System.Collections.IDictionary]
+#         })]
+#     $map, 
+#     $entry, 
+#     $bound
+# ) {
+#     $map = Import-ConfigMap $map
 
-    $targets = Get-MapEntries $map $entry
-    Write-Verbose "running targets: $($targets.Key)"
+#     $targets = Get-MapEntries $map $entry
+#     Write-Verbose "running targets: $($targets.Key)"
 
-    @($targets) | % {
-        Write-Verbose "running entry '$($_.key)'"
-        Invoke-EntryCommand -entry $_.value -key "exec" -bound $bound
-    }
-}
+#     @($targets) | % {
+#         Write-Verbose "running entry '$($_.key)'"
+#         Invoke-EntryCommand -entry $_.value -key "exec" -bound $bound
+#     }
+# }
 
 function Invoke-Set($entry, $bound = @{}) {
     # use ordered parameters, just in case the handler has different parameter names
@@ -892,6 +690,233 @@ function Initialize-BuildMap([Parameter(Mandatory = $true)] $file) {
     Write-Host "Initializing buildmap file '$file'"
     $defaultConfig | Out-File $file
 }
+
+#region hierarchy
+
+function Test-IsParentEntry {
+    <#
+    .SYNOPSIS
+        Determines if an entry is a parent container (has nested commands) or a leaf (executable command)
+    .PARAMETER Entry
+        The map entry to test
+    .PARAMETER ListKey
+        The key used to identify nested lists (default: "list")
+    .OUTPUTS
+        [PSCustomObject] with IsParent (bool) and HasExplicitList (bool) properties
+    #>
+    param(
+        $Entry,
+        $ListKey = "list"
+    )
+    
+    # If entry is not a hashtable, it's a leaf (scriptblock or other)
+    if ($Entry -isnot [System.Collections.IDictionary]) {
+        return [PSCustomObject]@{
+            IsParent = $false
+            HasExplicitList = $false
+        }
+    }
+    
+    # Check for explicit list key (traditional nested structure)
+    if ($Entry.$ListKey) {
+        return [PSCustomObject]@{
+            IsParent = $true
+            HasExplicitList = $true
+        }
+    }
+    
+    # # Check if entry has command keys (exec, get, set, options, description)
+    # $hasCommandKeys = $Entry.exec -or $Entry.get -or $Entry.set -or $Entry.options -or $Entry.description
+    # if ($hasCommandKeys) {
+    #     return [PSCustomObject]@{
+    #         IsParent = $false
+    #         HasExplicitList = $false
+    #     }
+    # }
+    
+    # Check if entry contains nested commands (hashtables or scriptblocks)
+    $hasNestedCommands = $false
+    foreach ($subKvp in $Entry.GetEnumerator()) {
+        if ($subKvp.Key -in $reservedKeys -or $subKvp.Key -eq $ListKey) {
+            continue
+        }
+        if ($subKvp.Value -is [System.Collections.IDictionary] -or $subKvp.Value -is [scriptblock]) {
+            $hasNestedCommands = $true
+            break
+        }
+    }
+    
+    return [PSCustomObject]@{
+        IsParent = $hasNestedCommands
+        HasExplicitList = $false
+    }
+}
+
+function Test-IsHierarchicalKey {
+    <#
+    .SYNOPSIS
+        Tests if a key contains hierarchical path separators
+    .PARAMETER Key
+        The key to test
+    .PARAMETER Separator
+        The separator character(s) to look for (default: ".")
+    .OUTPUTS
+        [bool] - True if the key contains the separator
+    #>
+    param(
+        [string]$Key,
+        [string]$Separator = "."
+    )
+    
+    return $Key -and $Key.Contains($Separator)
+}
+
+function Split-HierarchicalKey {
+    <#
+    .SYNOPSIS
+        Splits a hierarchical key into its component parts
+    .PARAMETER Key
+        The hierarchical key to split
+    .PARAMETER Separator
+        The separator character(s) to split on (default: ".")
+    .OUTPUTS
+        [string[]] - Array of key parts
+    #>
+    param(
+        [string]$Key,
+        [string]$Separator = "."
+    )
+    
+    if ([string]::IsNullOrEmpty($Key)) {
+        return @()
+    }
+    
+    # Escape special regex characters in separator for -split operator
+    $escapedSeparator = [regex]::Escape($Separator)
+    return $Key -split $escapedSeparator
+}
+
+function Resolve-HierarchicalPath {
+    <#
+    .SYNOPSIS
+        Resolves a hierarchical path through a nested map structure
+    .PARAMETER Map
+        The root map to navigate
+    .PARAMETER Key
+        The hierarchical key to resolve
+    .PARAMETER Separator
+        The separator character(s) used in the key (default: ".")
+    .OUTPUTS
+        The resolved entry, or $null if not found
+    #>
+    param(
+        [System.Collections.IDictionary]$Map,
+        [string]$Key,
+        [string]$Separator = "."
+    )
+    
+    if (!(Test-IsHierarchicalKey $Key $Separator)) {
+        # Not a hierarchical key, return null to indicate non-hierarchical handling needed
+        return $null
+    }
+    
+    $parts = Split-HierarchicalKey $Key $Separator
+    $current = $Map
+    
+    foreach ($part in $parts) {
+        if ($current -is [System.Collections.IDictionary]) {
+            $current = $current[$part]
+            if (!$current) {
+                Write-Verbose "Path part '$part' not found in hierarchical path '$Key'"
+                return $null
+            }
+        } else {
+            Write-Verbose "Cannot navigate deeper - current object is not a dictionary"
+            return $null
+        }
+    }
+    
+    return $current
+}
+
+#endregion
+
+#region help
+function Write-MapHelp {
+    param([System.Collections.IDictionary]$map, $invocation)
+    $commandName = $invocation.InvocationName
+    $scripts = Get-CompletionList $map
+    
+    # Calculate max command name length for alignment
+    $maxNameLength = ($scripts.Keys | Measure-Object -Property Length -Maximum).Maximum
+    $maxNameLength = [Math]::Max($maxNameLength, 12) # Minimum width
+    
+    Write-Host ""
+    Write-Host "$($commandName.ToUpper())" -ForegroundColor Cyan
+    Write-Host "A command line tool to manage build scripts" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "USAGE:" -ForegroundColor Yellow
+    Write-Host "    $commandName <COMMAND> [OPTIONS]" -ForegroundColor White
+    Write-Host ""
+    Write-Host "COMMANDS:" -ForegroundColor Yellow
+    
+    # Sort scripts alphabetically
+    $sortedScripts = $scripts.GetEnumerator() | Sort-Object Name
+    
+    foreach ($item in $sortedScripts) {
+        $name = $item.Name
+        $script = $item.Value
+        try {
+            $entry = Get-EntryCommand $script
+        }
+        catch {
+            $entry = $null
+        }
+        $args = $entry ? (Get-ScriptArgs $entry) : @{}
+        
+        # Format command name with proper padding
+        $paddedName = $name.PadRight($maxNameLength)
+        
+        # Get description
+        $description = ""
+        if ($script -is [System.Collections.IDictionary] -and $script.description) {
+            $description = $script.description
+        }
+        
+        $argList = $args.Keys | % { "-$($_)" }
+        $paramInfo = ($argList -join " ")
+                
+        Write-Host "    " -NoNewline
+        Write-Host "$paddedName" -ForegroundColor Green -NoNewline
+        if ($paramInfo) {
+            Write-Host " [$paramInfo]" -ForegroundColor DarkGray -NoNewline
+        }
+        Write-Host "  $description" -ForegroundColor White
+    }
+    
+    Write-Host ""
+    Write-Host "EXAMPLES:" -ForegroundColor Yellow
+    Write-Host "    $commandName build" -ForegroundColor White
+    Write-Host "    $commandName test" -ForegroundColor White
+    Write-Host "    $commandName list" -ForegroundColor White
+    Write-Host ""
+    Write-Host "Use '$commandName help' for more information about this tool." -ForegroundColor Gray
+}
+
+function Write-Help {
+    param($invocation, [string]$mapPath)
+    $commandName = $invocation.Statement
+    
+    Write-Host "No build map file found at '$mapPath'"
+    Write-Host ""
+    Write-Host "To create a new build map file, run:"
+    Write-Host "  $commandName init"
+    Write-Host ""
+    Write-Host "This will create a sample $mapPath file with basic build scripts."
+}
+
+#endregion
+
 
 Set-Alias -Name "qbuild" -Value "Invoke-QBuild" -Force
 Set-Alias -Name "qconf" -Value "Invoke-QConf" -Force
