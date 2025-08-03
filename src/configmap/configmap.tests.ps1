@@ -59,13 +59,13 @@ Describe "Test-IsParentEntry" {
         $result.HasExplicitList | Should -Be $false
     }
 
-    It "should identify mixed command object as leaf when exec is present" {
+    It "should identify mixed command object as parent when exec and subcommand is present" {
         $entry = @{
             exec = { Write-Host "Main command" }
             "subcmd" = { Write-Host "This should not make it a parent" }
         }
         $result = Test-IsParentEntry $entry
-        $result.IsParent | Should -Be $false
+        $result.IsParent | Should -Be $true
         $result.HasExplicitList | Should -Be $false
     }
 }

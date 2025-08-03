@@ -714,15 +714,6 @@ function Test-IsParentEntry {
         }
     }
     
-    # # Check if entry has command keys (exec, get, set, options, description)
-    # $hasCommandKeys = $Entry.exec -or $Entry.get -or $Entry.set -or $Entry.options -or $Entry.description
-    # if ($hasCommandKeys) {
-    #     return [PSCustomObject]@{
-    #         IsParent = $false
-    #         HasExplicitList = $false
-    #     }
-    # }
-    
     # Check if entry contains nested commands (hashtables or scriptblocks)
     $hasNestedCommands = $false
     foreach ($subKvp in $Entry.GetEnumerator()) {
@@ -739,106 +730,6 @@ function Test-IsParentEntry {
         IsParent        = $hasNestedCommands
         HasExplicitList = $false
     }
-}
-
-function Test-IsHierarchicalKey {
-    <#
-    .SYNOPSIS
-        Tests if a key contains hierarchical path separators
-    .PARAMETER Key
-        The key to test
-    .PARAMETER Separator
-        The separator character(s) to look for (default: ".")
-    .OUTPUTS
-        [bool] - True if the key contains the separator
-    #>
-    param(
-        [string]$Key,
-        [string]$Separator = "."
-    )
-    
-    return $Key -and $Key.Contains($Separator)
-}
-
-function Split-HierarchicalKey {
-    <#
-    .SYNOPSIS
-        Splits a hierarchical key into its component parts
-    .PARAMETER Key
-        The hierarchical key to split
-    .PARAMETER Separator
-        The separator character(s) to split on (default: ".")
-    .OUTPUTS
-        [string[]] - Array of key parts
-    #>
-    param(
-        [string]$Key,
-        [string]$Separator = "."
-    )
-    
-    if ([string]::IsNullOrEmpty($Key)) {
-        return @()
-    }
-    
-    # Escape special regex characters in separator for -split operator
-    $escapedSeparator = [regex]::Escape($Separator)
-    return $Key -split $escapedSeparator
-}
-
-function Resolve-HierarchicalPath {
-    <#
-    .SYNOPSIS
-        Resolves a hierarchical path through a nested map structure
-    .PARAMETER Map
-        The root map to navigate
-    .PARAMETER Key
-        The hierarchical key to resolve
-    .PARAMETER Separator
-        The separator character(s) used in the key (default: ".")
-    .OUTPUTS
-        The resolved entry, or $null if not found
-    #>
-    param(
-        [System.Collections.IDictionary]$Map,
-        [string]$Key,
-        [string]$Separator = "."
-    )
-    
-    if (!(Test-IsHierarchicalKey $Key $Separator)) {
-        # Not a hierarchical key, return null to indicate non-hierarchical handling needed
-        return $null
-    }
-    
-    $parts = Split-HierarchicalKey $Key $Separator
-    
-    function Resolve-RecursivePath {
-        param(
-            [System.Collections.IDictionary]$CurrentMap,
-            [string[]]$RemainingParts
-        )
-        
-        if ($RemainingParts.Length -eq 0) {
-            return $CurrentMap
-        }
-        
-        $currentPart = $RemainingParts[0]
-        $nextParts = $RemainingParts[1..$RemainingParts.Length]
-        
-        if (!($CurrentMap -is [System.Collections.IDictionary])) {
-            Write-Verbose "Cannot navigate deeper - current object is not a dictionary"
-            return $null
-        }
-        
-        $nextLevel = $CurrentMap[$currentPart]
-        if (!$nextLevel) {
-            Write-Verbose "Path part '$currentPart' not found in hierarchical path '$Key'"
-            return $null
-        }
-        
-        return Resolve-RecursivePath -CurrentMap $nextLevel -RemainingParts $nextParts
-    }
-    
-    return Resolve-RecursivePath -CurrentMap $Map -RemainingParts $parts
 }
 
 #endregion
