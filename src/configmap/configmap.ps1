@@ -14,11 +14,15 @@ function Get-MapLanguage {
     return $languages.$language
 }
 
-function Import-ConfigMap {
+# in order to make imports from the map file work globally, we have to call dot-source from top-level scope. 
+# hence this pattern: 
+# $map = Resolve-ConfigMap $map | % { . $_ } | Validate-ConfigMap
+function Resolve-ConfigMap {
     [OutputType([System.Collections.IDictionary])]
     param(
         [Parameter(Mandatory = $false)]
         [AllowNull()]
+        [string]
         # somehow validateScript is throwing an error when $map is null
         # [ValidateScript({ $null -eq $_ -or $_ -is [string] -or $_ -is [System.Collections.IDictionary] })]
         $map,
@@ -41,12 +45,20 @@ function Import-ConfigMap {
             throw "map file '$map' not found"
             return $null
         }
-        $map = . $map
+        return $map
     }
     
+    return $map
+}
+
+function Validate-ConfigMap {
+    param(
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+        $map
+    )
     # Validate that we have a loaded map
     if (!$map) {
-        throw "failed to load map from $fallback"
+        throw "failed to load map"
         return $null
     }
 
@@ -381,8 +393,8 @@ function Invoke-QBuild {
                     if (!(Test-Path $map)) {
                         return @("init", "help", "list") | ? { $_.startswith($wordToComplete) }
                     }
-                    $map = Import-ConfigMap $map
-                    return Get-EntryCompletion $map @PSBoundParameters
+                    $map = Resolve-ConfigMap $map | % { . $_ } | Validate-ConfigMap
+                    return Get-EntryCompletion $map -language "build" @PSBoundParameters
                 }
                 catch {
                     return "ERROR [-entry]: $($_.Exception.Message) $($_.ScriptStackTrace)"
@@ -394,7 +406,7 @@ function Invoke-QBuild {
     )
     dynamicparam {
         try {
-            $map = Import-ConfigMap $map -fallback "./.build.map.ps1"
+            $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" | % { . $_ } | Validate-ConfigMap
             $result = Get-EntryDynamicParam $map $entry $command $PSBoundParameters
             Write-Debug "Dynamic parameters for entry '$entry': $($result.Keys -join ', ')"
             return $result
@@ -414,7 +426,7 @@ function Invoke-QBuild {
             return
         }
         if ($entry -eq "list") {
-            $map = Import-ConfigMap $map -fallback "./.build.map.ps1" -ErrorAction Ignore
+            $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" | % { . $_ }
             if (!$map) {
                 $invocation = $MyInvocation
                 Write-Help -invocation $invocation -mapPath "./.build.map.ps1"
@@ -424,7 +436,7 @@ function Invoke-QBuild {
             return
         }
         if ($entry -eq "init") {
-            $loadedMap = Import-ConfigMap $map -ErrorAction Ignore
+            $loadedMap = Resolve-ConfigMap $map -ErrorAction Ignore | % { . $_ }
             if (!$loadedMap) {
                 if ($map -isnot [string]) {
                     throw "Map appears to be an object, not a file"
@@ -449,7 +461,7 @@ function Invoke-QBuild {
              
         }
 
-        $map = Import-ConfigMap $map -fallback "./.build.map.ps1" -ErrorAction Ignore
+        $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" -ErrorAction Ignore | % { . $_ }
         if (!$map) {
             $invocation = $MyInvocation
             $commandName = $invocation.Statement
@@ -488,13 +500,14 @@ function Invoke-QConf {
         [ArgumentCompleter({
                 param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
                 try {
-                    if ($fakeBoundParameters.command -in @("init", "help")) {
-                        return @()
-                    }
+                    # ipmo configmap
                     $map = $fakeBoundParameters.map
-                    $map = Import-ConfigMap $map -fallback "./.configuration.map.ps1"
-                    
-                    return Get-EntryCompletion $map @PSBoundParameters
+                    $map = $map ? $map : "./.configuration.map.ps1"
+                    if (!(Test-Path $map)) {
+                        return @("init", "help", "list") | ? { $_.startswith($wordToComplete) }
+                    }
+                    $map = Resolve-ConfigMap $map | % { . $_ } | Validate-ConfigMap
+                    return Get-EntryCompletion $map -language "conf" @PSBoundParameters
                 }
                 catch {
                     return "ERROR [-entry]: $($_.Exception.Message) $($_.ScriptStackTrace)"
@@ -510,7 +523,7 @@ function Invoke-QConf {
                     }
 
                     $map = $fakeBoundParameters.map
-                    $map = Import-ConfigMap $map -fallback "./.configuration.map.ps1"
+                    $map = Resolve-ConfigMap $map -fallback "./.configuration.map.ps1" | % { . $_ } | Validate-ConfigMap
                     $entry = $fakeBoundParameters.entry
                     $entry = Get-MapEntry $map $entry
                     if (!$entry) {
@@ -535,7 +548,7 @@ function Invoke-QConf {
             if ( !$entry) {
                 return @()
             }
-            $map = Import-ConfigMap $map -fallback"./.configuration.map.ps1"
+            $map = Resolve-ConfigMap $map -fallback "./.configuration.map.ps1" | % { . $_ } | Validate-ConfigMap
             return Get-EntryDynamicParam $map "$entry.$command" $PSBoundParameters
         }
         catch {
@@ -568,7 +581,12 @@ function Invoke-QConf {
             return
         }
 
-        $map = Import-ConfigMap $map -fallback "./.configuration.map.ps1"
+        $map = Resolve-ConfigMap $map -fallback "./.configuration.map.ps1" | % { . $_ } | Validate-ConfigMap
+
+        if (-not $entry) {           
+            Write-MapHelp -map $map -invocation $MyInvocation -language "conf"
+            return
+        }
 
         Write-Verbose "entry=$entry command=$command"
 
