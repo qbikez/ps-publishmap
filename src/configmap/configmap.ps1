@@ -1,7 +1,18 @@
 #requires -version 7.0
 
-$reservedKeys = @("options", "exec", "list")
+$languages = @{
+    "build" = @{
+        reservedKeys = @("exec", "list")
+    }
+    "conf" = @{
+        reservedKeys = @("options", "exec", "list", "get", "set", "validate")
+    }
+}
 
+function Get-MapLanguage {
+    param([ValidateSet("build", "conf")]$language)
+    return $languages.$language
+}
 
 function Import-ConfigMap {
     [OutputType([System.Collections.IDictionary])]
@@ -61,6 +72,8 @@ function Get-CompletionList {
         The marker to append to parent command names when flattened
     .PARAMETER listKey
         The key used to identify nested command lists
+    .PARAMETER reservedKeys
+        Array of reserved keys that should be skipped during processing
     .OUTPUTS
         [System.Collections.Specialized.OrderedDictionary] containing the processed command list
     #>
@@ -75,10 +88,15 @@ function Get-CompletionList {
         [switch][bool]$flatten = $false,
         [switch][bool]$leafsOnly = $false,
         $separator = ".",
-        $groupMarker = "*", 
-        $listKey = "list"
+        $groupMarker = $null, 
+        $listKey = "list",
+        $reservedKeys = $null
     )
     
+    if (!$groupMarker) {
+        $groupMarker = $flatten ? "*" : ""
+    }
+
     $list = $map.$listKey ? $map.$listKey : $map
     $list = $list -is [scriptblock] ? (Invoke-Command -ScriptBlock $list) : $list
         
@@ -91,32 +109,27 @@ function Get-CompletionList {
                     continue
                 }
                 $entry = $kvp.value
-                $entryInfo = Test-IsParentEntry $entry $listKey
+                $entryInfo = Test-IsParentEntry $entry $listKey -reservedKeys $reservedKeys
                 
-                if ($entryInfo.IsParent) {
-                    # Add parent marker in flattened mode
-                    if (!$leafsOnly) {
-                        $result["$($kvp.key)"] = $entry
-                    }
-                    if ($flatten) {
-                        $result["$($kvp.key)$groupMarker"] = $entry
-                    }
-                    
-                    # Get nested entries and add them with appropriate prefixes
-                    $subEntries = Get-CompletionList $entry -listKey $listKey -flatten:$flatten -leafsOnly:$leafsOnly
-                    foreach ($sub in $subEntries.GetEnumerator()) {
-                        $subKey = $sub.Key
-                        if (!$flatten) {
-                            $subKey = "$($kvp.key)$separator$($sub.Key)"
-                        }
-                        $result[$subKey] = $sub.value
-                    }
+                if (!$entryInfo.IsParent) {
+                    $result["$($kvp.key)"] = $entry
+                    continue
                 }
-                else {
-                    # It's a leaf entry (executable command)
-                    $result[$kvp.key] = $entry
+
+                # Add parent marker
+                if (!$leafsOnly) {
+                    $result["$($kvp.key)$groupMarker"] = $entry
+                }
+                    
+                # Get nested entries and add them with appropriate prefixes
+                $subEntries = Get-CompletionList $entry -listKey $listKey -flatten:$flatten -leafsOnly:$leafsOnly -reservedKeys $reservedKeys
+                
+                foreach ($sub in $subEntries.GetEnumerator()) {
+                    $subKey = $flatten ? $sub.Key : "$($kvp.key)$separator$($sub.Key)"
+                    $result[$subKey] = $sub.value
                 }
             }
+
             return $result
         }
         { $list -is [array] } {
@@ -155,6 +168,8 @@ function Get-EntryCompletion(
             $_ -is [System.Collections.IDictionary]
         })]
     $map, 
+    [ValidateSet("build", "conf")]
+    $language,
     $commandName, 
     $parameterName, 
     $wordToComplete, 
@@ -162,26 +177,13 @@ function Get-EntryCompletion(
     $fakeBoundParameters
 ) {
     # For hierarchical completion, we need both flattened and tree structures
-    $flatList = Get-CompletionList $map -flatten:$true
-    $treeList = Get-CompletionList $map -flatten:$false
+    $flatList = Get-CompletionList $map -flatten:$true -reservedKeys $languages.$language.reservedKeys
+    $treeList = Get-CompletionList $map -flatten:$false -reservedKeys $languages.$language.reservedKeys
     
     # Combine both lists and remove duplicates
     $allKeys = @($flatList.Keys) + @($treeList.Keys) | Sort-Object -Unique
     
     return $allKeys | ? { $_.startswith($wordToComplete) }
-}
-
-function Get-ValuesList(
-    [ValidateScript({
-            $_ -is [System.Collections.IDictionary] -and $_.options
-        })]
-    $map
-) {
-    if (!$map.options) {
-        throw "map doesn't have 'options' entry"
-    }
-
-    return Get-CompletionList $map.options
 }
 
 function Get-EntryDynamicParam(
@@ -265,11 +267,12 @@ function Get-MapEntries(
     $keys, 
     [switch][bool]$flatten = $false,
     [switch][bool]$leafsOnly = $false,
-    $separator = "."
+    $separator = ".",
+    $reservedKeys = $null
 ) {
     $results = @()
     
-    $completions = Get-CompletionList $map -flatten:$flatten -leafsOnly:$leafsOnly -separator:$separator
+    $completions = Get-CompletionList $map -flatten:$flatten -leafsOnly:$leafsOnly -separator:$separator -reservedKeys $reservedKeys
 
     foreach ($key in @($keys)) {        
         $found = $completions.GetEnumerator() | ? { $_.key -eq $key }
@@ -279,7 +282,7 @@ function Get-MapEntries(
     }
 
     if (!$results) {
-        $completions = Get-CompletionList $map -flatten:$flatten -leafsOnly:$leafsOnly -separator:$separator
+        $completions = Get-CompletionList $map -flatten:$flatten -leafsOnly:$leafsOnly -separator:$separator -reservedKeys $reservedKeys
         Write-Verbose "entry '$keys' not found in ($($completions.Keys))"
     }
 
@@ -435,7 +438,7 @@ function Invoke-QBuild {
                 return
             }
             else {
-                $completionList = Get-CompletionList $loadedMap
+                $completionList = Get-CompletionList $loadedMap -reservedKeys $languages.build.reservedKeys
                 if ($completionList.Keys -notcontains "init") {
                     throw "map file '$map' already exists"
                 }
@@ -513,7 +516,7 @@ function Invoke-QConf {
                     if (!$entry) {
                         throw "entry '$entry' not found"
                     }
-                    $options = Get-CompletionList $entry -listKey "options"
+                    $options = Get-CompletionList $entry -listKey "options" -reservedKeys $languages.conf.reservedKeys
                     return $options.Keys | ? { $_.startswith($wordToComplete) }
                 }
                 catch {
@@ -582,7 +585,7 @@ function Invoke-QConf {
                 }
         
                 $optionKey = $value
-                $options = Get-CompletionList $subEntry -listKey "options"
+                $options = Get-CompletionList $subEntry -listKey "options" -reservedKeys $languages.conf.reservedKeys
                 $optionValue = $options.$optionKey
 
                 $bound = $PSBoundParameters
@@ -591,7 +594,7 @@ function Invoke-QConf {
                 Invoke-Set $subEntry -ordered "", $optionValue, $optionKey -bound $bound
             }
             "get" {
-                $options = Get-CompletionList $subEntry -listKey "options"
+                $options = Get-CompletionList $subEntry -listKey "options" -reservedKeys $languages.conf.reservedKeys
                 
                 $bound = $PSBoundParameters
                 $bound.options = $options
@@ -690,12 +693,15 @@ function Test-IsParentEntry {
         The map entry to test
     .PARAMETER ListKey
         The key used to identify nested lists (default: "list")
+    .PARAMETER ReservedKeys
+        Array of reserved keys that should be skipped during processing
     .OUTPUTS
         [PSCustomObject] with IsParent (bool) and HasExplicitList (bool) properties
     #>
     param(
         $Entry,
-        $ListKey = "list"
+        $ListKey = "list",
+        $ReservedKeys = @("options", "exec", "list")
     )
     
     # If entry is not a hashtable, it's a leaf (scriptblock or other)
@@ -736,9 +742,9 @@ function Test-IsParentEntry {
 
 #region help
 function Write-MapHelp {
-    param([System.Collections.IDictionary]$map, $invocation)
+    param([System.Collections.IDictionary]$map, $invocation, [ValidateSet("build", "conf")]$language = "build")
     $commandName = $invocation.InvocationName
-    $scripts = Get-CompletionList $map
+    $scripts = Get-CompletionList $map -reservedKeys $languages.$language.reservedKeys
     
     # Calculate max command name length for alignment
     $maxNameLength = ($scripts.Keys | Measure-Object -Property Length -Maximum).Maximum
@@ -746,7 +752,7 @@ function Write-MapHelp {
     
     Write-Host ""
     Write-Host "$($commandName.ToUpper())" -ForegroundColor Cyan
-    Write-Host "A command line tool to manage build scripts" -ForegroundColor Gray
+    Write-Host "A command line tool to manage $language scripts" -ForegroundColor Gray
     Write-Host ""
     Write-Host "USAGE:" -ForegroundColor Yellow
     Write-Host "    $commandName <COMMAND> [OPTIONS]" -ForegroundColor White

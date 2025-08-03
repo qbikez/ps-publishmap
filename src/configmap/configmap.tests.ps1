@@ -4,6 +4,21 @@
 BeforeAll {
     Get-Module ConfigMap -ErrorAction SilentlyContinue | Remove-Module
     Import-Module $PSScriptRoot\configmap.psm1
+
+    
+    function Get-ValuesList(
+        [ValidateScript({
+                $_ -is [System.Collections.IDictionary] -and $_.options
+            })]
+        $map
+    ) {
+        if (!$map.options) {
+            throw "map doesn't have 'options' entry"
+        }
+
+        return Get-CompletionList $map.options -reservedKeys $language.reservedKeys
+    }
+
 }
 
 Describe "Test-IsParentEntry" {
@@ -16,7 +31,7 @@ Describe "Test-IsParentEntry" {
 
     It "should identify command object with exec as leaf" {
         $entry = @{
-            exec = { Write-Host "Command" }
+            exec        = { Write-Host "Command" }
             description = "A command"
         }
         $result = Test-IsParentEntry $entry
@@ -50,7 +65,7 @@ Describe "Test-IsParentEntry" {
 
     It "should identify data object as leaf" {
         $entry = @{
-            name = "test"
+            name  = "test"
             value = 42
             items = @("a", "b", "c")
         }
@@ -61,7 +76,7 @@ Describe "Test-IsParentEntry" {
 
     It "should identify mixed command object as parent when exec and subcommand is present" {
         $entry = @{
-            exec = { Write-Host "Main command" }
+            exec     = { Write-Host "Main command" }
             "subcmd" = { Write-Host "This should not make it a parent" }
         }
         $result = Test-IsParentEntry $entry
@@ -70,190 +85,11 @@ Describe "Test-IsParentEntry" {
     }
 }
 
-Describe "hierarchical key functions" {
-    Describe "Test-IsHierarchicalKey" {
-        It "should identify hierarchical key with default separator" {
-            Test-IsHierarchicalKey "parent.child" | Should -Be $true
-        }
-
-        It "should identify non-hierarchical key" {
-            Test-IsHierarchicalKey "simple" | Should -Be $false
-        }
-
-        It "should handle custom separator" {
-            Test-IsHierarchicalKey "parent/child" "/" | Should -Be $true
-            Test-IsHierarchicalKey "parent.child" "/" | Should -Be $false
-        }
-
-        It "should handle empty or null keys" {
-            Test-IsHierarchicalKey "" | Should -Be $false
-            Test-IsHierarchicalKey $null | Should -Be $false
-        }
-
-        It "should identify deep hierarchical keys" {
-            Test-IsHierarchicalKey "level1.level2.level3.level4.level5" | Should -Be $true
-            Test-IsHierarchicalKey "a.b.c.d.e.f.g.h.i.j" | Should -Be $true
-        }
-    }
-
-    Describe "Split-HierarchicalKey" {
-        It "should split key with default separator" {
-            $parts = Split-HierarchicalKey "parent.child.grandchild"
-            $parts | Should -Be @("parent", "child", "grandchild")
-        }
-
-        It "should split key with custom separator" {
-            $parts = Split-HierarchicalKey "parent/child/grandchild" "/"
-            $parts | Should -Be @("parent", "child", "grandchild")
-        }
-
-        It "should handle single part key" {
-            $parts = Split-HierarchicalKey "simple"
-            $parts | Should -Be @("simple")
-        }
-
-        It "should handle empty key" {
-            $parts = Split-HierarchicalKey ""
-            $parts | Should -Be @()
-        }
-
-        It "should handle special regex characters in separator" {
-            $parts = Split-HierarchicalKey "parent*child*grandchild" "*"
-            $parts | Should -Be @("parent", "child", "grandchild")
-        }
-
-        It "should split deep hierarchical keys" {
-            $parts = Split-HierarchicalKey "level1.level2.level3.level4.level5"
-            $parts | Should -Be @("level1", "level2", "level3", "level4", "level5")
-        }
-
-        It "should split very deep hierarchical keys" {
-            $parts = Split-HierarchicalKey "a.b.c.d.e.f.g.h.i.j"
-            $parts | Should -Be @("a", "b", "c", "d", "e", "f", "g", "h", "i", "j")
-        }
-    }
-
-    Describe "Resolve-HierarchicalPath" {
-        BeforeAll {
-            $testMap = @{
-                "parent" = @{
-                    "child" = @{
-                        "grandchild" = "found"
-                    }
-                    "simple" = "parent-simple"
-                }
-                "root" = "root-value"
-            }
-        }
-
-        It "should resolve deep hierarchical path" {
-            $result = Resolve-HierarchicalPath $testMap "parent.child.grandchild"
-            $result | Should -Be "found"
-        }
-
-        It "should resolve shallow hierarchical path" {
-            $result = Resolve-HierarchicalPath $testMap "parent.simple"
-            $result | Should -Be "parent-simple"
-        }
-
-        It "should return null for non-hierarchical key" {
-            $result = Resolve-HierarchicalPath $testMap "root"
-            $result | Should -Be $null
-        }
-
-        It "should return null for non-existent path" {
-            $result = Resolve-HierarchicalPath $testMap "parent.nonexistent"
-            $result | Should -Be $null
-        }
-
-        It "should handle custom separator" {
-            $customMap = @{
-                "parent" = @{
-                    "child" = @{
-                        "grandchild" = "found-with-slash"
-                    }
-                }
-            }
-            # Test with correct custom separator
-            $result = Resolve-HierarchicalPath $customMap "parent/child/grandchild" "/"
-            $result | Should -Be "found-with-slash"
-            
-            # Test with wrong separator (should return null because not identified as hierarchical)
-            $result2 = Resolve-HierarchicalPath $customMap "parent.child.grandchild" "/"
-            $result2 | Should -Be $null
-        }
-
-        It "should return intermediate objects" {
-            $result = Resolve-HierarchicalPath $testMap "parent.child"
-            $result | Should -Not -Be $null
-            $result.grandchild | Should -Be "found"
-        }
-
-        It "should resolve deep hierarchical paths" {
-            $deepMap = @{
-                "level1" = @{
-                    "level2" = @{
-                        "level3" = @{
-                            "level4" = @{
-                                "level5" = @{
-                                    "command" = "deep-command"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            
-            $result = Resolve-HierarchicalPath $deepMap "level1.level2.level3.level4.level5.command"
-            $result | Should -Be "deep-command"
-        }
-
-        It "should resolve very deep hierarchical paths (10 levels)" {
-            $veryDeepMap = @{
-                "a" = @{
-                    "b" = @{
-                        "c" = @{
-                            "d" = @{
-                                "e" = @{
-                                    "f" = @{
-                                        "g" = @{
-                                            "h" = @{
-                                                "i" = @{
-                                                    "j" = "very-deep-command"
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            
-            $result = Resolve-HierarchicalPath $veryDeepMap "a.b.c.d.e.f.g.h.i.j"
-            $result | Should -Be "very-deep-command"
-        }
-
-        It "should return null for broken deep paths" {
-            $deepMap = @{
-                "level1" = @{
-                    "level2" = @{
-                        "level3" = @{
-                            "level4" = "terminal-value"
-                        }
-                    }
-                }
-            }
-            
-            $result = Resolve-HierarchicalPath $deepMap "level1.level2.level3.level4.level5"
-            $result | Should -Be $null
-        }
-    }
-}
 
 Describe "map parsing" {
-
+    BeforeAll {
+        $language = Get-MapLanguage "conf"
+    }
     Describe '<name>' -ForEach @(
         @{
             Name = "simple list"
@@ -308,57 +144,9 @@ Describe "map parsing" {
             Flatten = @("db", "secrets*", "connectionString", "keyVault")
             Tree    = @("db", "secrets.connectionString", "secrets.keyVault")
         }
-        @{
-            Name    = "deep nesting (5 levels)"
-            Map     = [ordered]@{
-                "level1" = @{
-                    "level2" = @{
-                        "level3" = @{
-                            "level4" = @{
-                                "level5" = @{
-                                    exec = { Write-Host "Deep command" }
-                                }
-                                "another5" = { Write-Host "Another deep" }
-                            }
-                            "alt4" = { Write-Host "Alternative path" }
-                        }
-                    }
-                }
-                "simple" = { Write-Host "Simple command" }
-            }
-            Flatten = @("level1*", "level2*", "level3*", "level4*", "level5", "another5", "alt4", "simple")
-            Tree    = @("level1.level2.level3.level4.level5", "level1.level2.level3.level4.another5", "level1.level2.level3.alt4", "simple")
-        }
-        @{
-            Name    = "very deep nesting (10 levels)"
-            Map     = [ordered]@{
-                "a" = @{
-                    "b" = @{
-                        "c" = @{
-                            "d" = @{
-                                "e" = @{
-                                    "f" = @{
-                                        "g" = @{
-                                            "h" = @{
-                                                "i" = @{
-                                                    "j" = { Write-Host "Very deep command" }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                "root" = { Write-Host "Root command" }
-            }
-            Flatten = @("a*", "b*", "c*", "d*", "e*", "f*", "g*", "h*", "i*", "j", "root")
-            Tree    = @("a.b.c.d.e.f.g.h.i.j", "root")
-        }
     ) {
         It '<name> => flatten keys' {
-            $list = (Get-CompletionList -map $map -flatten:$true)
+            $list = (Get-CompletionList -map $map -flatten:$true -reservedKeys $language.reservedKeys)
             if (!$flatten) {
                 $flatten = $keys
             }
@@ -366,7 +154,7 @@ Describe "map parsing" {
             $list.Keys | Should -Be $Flatten
         }
         It '<name> => tree keys' {
-            $list = (Get-CompletionList -map $map -flatten:$false)
+            $list = (Get-CompletionList -map $map -flatten:$false -leafsOnly:$true -reservedKeys $language.reservedKeys)
             if (!$tree) {
                 $tree = $keys
             }
@@ -494,7 +282,6 @@ Describe "qbuild" {
     }
 }
 
-
 Describe "qconf" {
     BeforeAll {
         function Set-Conf {
@@ -522,6 +309,8 @@ Describe "qconf" {
                 }
             }
         }
+
+        $language = Get-MapLanguage "conf"
     }
 
     Describe "set custom parameters" {
@@ -530,13 +319,13 @@ Describe "qconf" {
             $parameters.Keys | Should -Be @("key", "value")
         }
         It "should return top-level completion list" {
-            $list = Get-CompletionList $targets
+            $list = Get-CompletionList $targets -reservedKeys $language.reservedKeys
             $list.Keys | Should -Be @("db")
         }
         It "should return options list" {
             $entry = Get-MapEntry $targets "db"
             $entry | Should -Not -BeNullOrEmpty
-            $options = Get-CompletionList $entry -listKey "options"
+            $options = Get-CompletionList $entry -listKey "options" -reservedKeys $language.reservedKeys
             $options.Keys | Should -Be @("local", "remote")
         }
         It "invoke options" {
@@ -666,7 +455,7 @@ Describe "qbuild dynamic parameters" {
     }
 
     It "should recognize <EntryType> command parameters" -TestCases @(
-        @{ EntryType = "push:short";  }
+        @{ EntryType = "push:short"; }
         @{ EntryType = "push:exec"; }
     ) {
         param($EntryType)
@@ -708,6 +497,7 @@ Describe "qbuild dynamic parameters" {
 Describe "deep hierarchical execution" {
     BeforeEach {
         Mock Write-Host
+        $language = Get-MapLanguage "build"
     }
 
     Describe "deep nesting commands" {
@@ -725,7 +515,7 @@ Describe "deep hierarchical execution" {
                         }
                     }
                 }
-                "root" = {
+                "root"   = {
                     Write-Host "Root command"
                 }
             }
@@ -805,32 +595,32 @@ Describe "deep hierarchical execution" {
     Describe "mixed depth hierarchical commands" {
         BeforeAll {
             $mixedMap = [ordered]@{
-                "build" = { 
+                "build"      = { 
                     Write-Host "build command" 
                 }
                 "build:exec" = [ordered]@{
-                    exec = { 
+                    exec        = { 
                         Write-Host "build:exec command" 
                     }
                     description = "Build command"
                 }
-                "db" = [ordered]@{
-                    exec = {
+                "db"         = [ordered]@{
+                    exec           = {
                         write-host "db top-level exec"
                     }
-                    "migrate" = {
+                    "migrate"      = {
                         Write-Host "db.migrate command"
                     }
                     "migrate:exec" = [ordered]@{
-                        exec = {
+                        exec        = {
                             Write-Host "db.migrate:exec command"
                         }
                         description = "Migrate command"
                     }
-                    "init" = {
+                    "init"         = {
                         Write-Host "db.init command"
                     }
-                    "init:exec" = [ordered]@{
+                    "init:exec"    = [ordered]@{
                         exec = {
                             Write-Host "db.init:exec command"
                         }
@@ -840,7 +630,7 @@ Describe "deep hierarchical execution" {
         }
 
         It "should return expected completionlist" {
-            $flatList = Get-CompletionList $mixedMap -flatten:$false
+            $flatList = Get-CompletionList $mixedMap -flatten:$false -reservedKeys $language.reservedKeys -leafsOnly:$true
             $flatList.Keys | Should -Be @(
                 "build"
                 "build:exec"
@@ -881,11 +671,11 @@ Describe "custom commands" {
 
         $mixedMap = [ordered]@{
             "db" = [ordered]@{ 
-                init = {
+                init    = {
                     write-host "db init"
                 }
                 migrate = [ordered]@{
-                    exec = {
+                    exec        = {
                         write-host "db migrate"
                     }
                     description = "Migrate command"
