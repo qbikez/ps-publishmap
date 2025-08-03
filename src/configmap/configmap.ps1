@@ -4,7 +4,7 @@ $languages = @{
     "build" = @{
         reservedKeys = @("exec", "list")
     }
-    "conf" = @{
+    "conf"  = @{
         reservedKeys = @("options", "exec", "list", "get", "set", "validate")
     }
 }
@@ -506,7 +506,7 @@ function Invoke-QConf {
                     if (!(Test-Path $map)) {
                         return @("init", "help", "list") | ? { $_.startswith($wordToComplete) }
                     }
-                    $map = Resolve-ConfigMap $map | % { . $_ } | Validate-ConfigMap
+                    $map = $map -is [IDictionary] ? $map : (Resolve-ConfigMap $map | % { . $_ } | Validate-ConfigMap)
                     return Get-EntryCompletion $map -language "conf" @PSBoundParameters
                 }
                 catch {
@@ -581,22 +581,27 @@ function Invoke-QConf {
             return
         }
 
-        $map = Resolve-ConfigMap $map -fallback "./.configuration.map.ps1" | % { . $_ } | Validate-ConfigMap
+        $map = $map -is [System.Collections.IDictionary] ? $map : (Resolve-ConfigMap $map | % { . $_ } | Validate-ConfigMap)
 
-        if (-not $entry) {           
+        if (-not $entry -and -not $command) {           
             Write-MapHelp -map $map -invocation $MyInvocation -language "conf"
             return
         }
 
+        if ($command -and -not $entry) {
+            
+        }
+
         Write-Verbose "entry=$entry command=$command"
 
-        $subEntry = $map.$entry
-        if (!$subEntry) {
-            throw "entry '$entry' not found"
-        }
 
         switch ($command) {
             "set" {
+                $subEntry = $map.$entry
+                if (!$subEntry) {
+                    throw "entry '$entry' not found"
+                }
+
                 $submodule = $map.$module
                 if (!$submodule) {
                     throw "module '$module' not found"
@@ -612,15 +617,25 @@ function Invoke-QConf {
                 Invoke-Set $subEntry -ordered "", $optionValue, $optionKey -bound $bound
             }
             "get" {
-                $options = Get-CompletionList $subEntry -listKey "options" -reservedKeys $languages.conf.reservedKeys
+                $entries = $entry
+                if (!$entries) {
+                    # not passing -listKey "options" here, as we don't want to expand options - we just need top-level keys
+                    $entries = (Get-CompletionList $map -reservedKeys $languages.conf.reservedKeys).Keys 
+                }
+
+                foreach ($entry in @($entries)) {
+                    $subEntry = $map.$entry
+
+                    $options = Get-CompletionList $subEntry -listKey "options" -reservedKeys $languages.conf.reservedKeys
                 
-                $bound = $PSBoundParameters
-                $bound.options = $options
+                    $bound = $PSBoundParameters
+                    $bound.options = $options
                 
-                $value = Invoke-Get $subEntry -bound $bound
+                    $value = Invoke-Get $subEntry -bound $bound
                 
-                $result = ConvertTo-MapResult $value $subEntry $options
-                $result | Write-Output
+                    $result = ConvertTo-MapResult $value $entry $subEntry $options
+                    $result | Write-Output
+                }
             }
             default {
                 throw "command '$command' not supported"
@@ -630,7 +645,7 @@ function Invoke-QConf {
     }
 }
 
-function ConvertTo-MapResult($value, $entry, $options, $validate = $true) {
+function ConvertTo-MapResult($value, $entryName, $entry, $options, $validate = $true) {
     $result = $null
     if ($value -is [Hashtable]) {
         $hash = @{

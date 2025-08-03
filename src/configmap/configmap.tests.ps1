@@ -288,7 +288,7 @@ Describe "qconf" {
             param($key, $value)
         }
         Mock Set-Conf
-        $targets = @{
+        $targets = [ordered]@{
             "db" = @{
                 options = { return [ordered]@{
                         "local"  = @{
@@ -308,6 +308,11 @@ Describe "qconf" {
                     return "my_value"
                 }
             }
+            "test" = @{
+                get = {
+                    return "test_value"
+                }
+            }
         }
 
         $language = Get-MapLanguage "conf"
@@ -320,7 +325,7 @@ Describe "qconf" {
         }
         It "should return top-level completion list" {
             $list = Get-CompletionList $targets -reservedKeys $language.reservedKeys
-            $list.Keys | Should -Be @("db")
+            $list.Keys | Should -Be @("db","test")
         }
         It "should return options list" {
             $entry = Get-MapEntry $targets "db"
@@ -339,6 +344,13 @@ Describe "qconf" {
         It "invoke set" {
             $r = Invoke-EntryCommand $targets.db "set" -bound @{ "key" = "key1"; "value" = "value2" }
             Should -Invoke Set-Conf -ParameterFilter { $key -eq "key1" -and $value -eq "value2" }
+        }
+        It "qconf get without entry should return list of all values" {
+            $result = qconf -map $targets "get"
+            $result | Should -Not -BeNullOrEmpty
+            $result | Should -HaveCount 2
+            $result[0].Path | Should -Be "db/"
+            $result[1].Path | Should -Be "test/"
         }
     }
 }
