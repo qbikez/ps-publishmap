@@ -72,7 +72,8 @@ function Get-CompletionList {
                 $_ -is [System.Collections.IDictionary] -or $_ -is [array] -or $_ -is [scriptblock] -or $_ -is [string]
             })]
         $map,
-        [switch][bool]$flatten = $true,
+        [switch][bool]$flatten = $false,
+        [switch][bool]$leafsOnly = $false,
         $separator = ".",
         $groupMarker = "*", 
         $listKey = "list"
@@ -94,12 +95,15 @@ function Get-CompletionList {
                 
                 if ($entryInfo.IsParent) {
                     # Add parent marker in flattened mode
+                    if (!$leafsOnly) {
+                        $result["$($kvp.key)"] = $entry
+                    }
                     if ($flatten) {
                         $result["$($kvp.key)$groupMarker"] = $entry
                     }
-
+                    
                     # Get nested entries and add them with appropriate prefixes
-                    $subEntries = Get-CompletionList $entry -listKey $listKey -flatten:$flatten
+                    $subEntries = Get-CompletionList $entry -listKey $listKey -flatten:$flatten -leafsOnly:$leafsOnly
                     foreach ($sub in $subEntries.GetEnumerator()) {
                         $subKey = $sub.Key
                         if (!$flatten) {
@@ -259,34 +263,26 @@ function Get-MapEntries(
         })]
     $map, 
     $keys, 
-    [switch][bool]$flatten = $true,
+    [switch][bool]$flatten = $false,
+    [switch][bool]$leafsOnly = $false,
     $separator = "."
 ) {
-    # Handle hierarchical paths by using Get-MapEntry directly
     $results = @()
-    foreach ($key in @($keys)) {
-        if (Test-IsHierarchicalKey $key $separator) {
-            $entry = Get-MapEntry $map $key $separator
-            if ($entry) {
-                $results += [PSCustomObject]@{
-                    Key = $key
-                    Value = $entry
-                }
-            }
-        } else {
-            # Use original logic for non-hierarchical keys
-            $list = Get-CompletionList $map -flatten:$flatten
-            $found = $list.GetEnumerator() | ? { $_.key -eq $key }
-            if ($found) {
-                $results += $found
-            }
-        }
+    
+    $completions = Get-CompletionList $map -flatten:$flatten -leafsOnly:$leafsOnly -separator:$separator
+
+    foreach ($key in @($keys)) {        
+        $found = $completions.GetEnumerator() | ? { $_.key -eq $key }
+        if ($found) {
+            $results += $found
+        }        
     }
 
     if (!$results) {
-        $list = Get-CompletionList $map -flatten:$flatten
-        Write-Verbose "entry '$keys' not found in ($($list.Keys))"
+        $completions = Get-CompletionList $map -flatten:$flatten -leafsOnly:$leafsOnly -separator:$separator
+        Write-Verbose "entry '$keys' not found in ($($completions.Keys))"
     }
+
     return $results
 }
 
@@ -298,14 +294,7 @@ function Get-MapEntry(
     $key,
     $separator = "."
 ) {
-    # Handle hierarchical paths using the new resolution function
-    $hierarchicalResult = Resolve-HierarchicalPath $map $key $separator
-    if ($null -ne $hierarchicalResult) {
-        return $hierarchicalResult
-    }
-    
-    # Fall back to original behavior for non-hierarchical keys
-    return (Get-MapEntries $map $key).Value
+    return (Get-MapEntries $map $key -separator $separator).Value
 }
 
 # TODO: key should be a hidden property of $entry
@@ -712,7 +701,7 @@ function Test-IsParentEntry {
     # If entry is not a hashtable, it's a leaf (scriptblock or other)
     if ($Entry -isnot [System.Collections.IDictionary]) {
         return [PSCustomObject]@{
-            IsParent = $false
+            IsParent        = $false
             HasExplicitList = $false
         }
     }
@@ -720,7 +709,7 @@ function Test-IsParentEntry {
     # Check for explicit list key (traditional nested structure)
     if ($Entry.$ListKey) {
         return [PSCustomObject]@{
-            IsParent = $true
+            IsParent        = $true
             HasExplicitList = $true
         }
     }
@@ -747,7 +736,7 @@ function Test-IsParentEntry {
     }
     
     return [PSCustomObject]@{
-        IsParent = $hasNestedCommands
+        IsParent        = $hasNestedCommands
         HasExplicitList = $false
     }
 }
@@ -821,22 +810,35 @@ function Resolve-HierarchicalPath {
     }
     
     $parts = Split-HierarchicalKey $Key $Separator
-    $current = $Map
     
-    foreach ($part in $parts) {
-        if ($current -is [System.Collections.IDictionary]) {
-            $current = $current[$part]
-            if (!$current) {
-                Write-Verbose "Path part '$part' not found in hierarchical path '$Key'"
-                return $null
-            }
-        } else {
+    function Resolve-RecursivePath {
+        param(
+            [System.Collections.IDictionary]$CurrentMap,
+            [string[]]$RemainingParts
+        )
+        
+        if ($RemainingParts.Length -eq 0) {
+            return $CurrentMap
+        }
+        
+        $currentPart = $RemainingParts[0]
+        $nextParts = $RemainingParts[1..$RemainingParts.Length]
+        
+        if (!($CurrentMap -is [System.Collections.IDictionary])) {
             Write-Verbose "Cannot navigate deeper - current object is not a dictionary"
             return $null
         }
+        
+        $nextLevel = $CurrentMap[$currentPart]
+        if (!$nextLevel) {
+            Write-Verbose "Path part '$currentPart' not found in hierarchical path '$Key'"
+            return $null
+        }
+        
+        return Resolve-RecursivePath -CurrentMap $nextLevel -RemainingParts $nextParts
     }
     
-    return $current
+    return Resolve-RecursivePath -CurrentMap $Map -RemainingParts $parts
 }
 
 #endregion

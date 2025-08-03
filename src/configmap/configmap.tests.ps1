@@ -874,3 +874,69 @@ Describe "deep hierarchical execution" {
         # }
     }
 }
+
+Describe "custom commands" {
+    BeforeAll {
+        Mock Write-Host
+
+        $mixedMap = [ordered]@{
+            "db" = [ordered]@{ 
+                init = {
+                    write-host "db init"
+                }
+                migrate = [ordered]@{
+                    exec = {
+                        write-host "db migrate"
+                    }
+                    description = "Migrate command"
+                }
+            }             
+        }
+    }
+
+    It "should return expected completionlist" {
+        $flatList = Get-CompletionList $mixedMap -flatten:$false
+        $flatList.Keys | Should -Be @(
+            "db.init"
+            "db.migrate"
+        )
+    }
+
+    It "should return expected entries" {
+        $entries = Get-MapEntries $mixedMap "db.init"
+        $entries.Count | Should -Be 1
+        $entries[0].Key | Should -Be "db.init"
+        $entries[0].Value | Should -BeOfType [ScriptBlock]
+    }
+
+    It "should execute custom command" {
+        qbuild -map $mixedMap "db.init"
+        Should -Invoke Write-Host -ParameterFilter { $Object -eq "db init" }
+    }
+
+    It "should execute custom command with exec" {
+        qbuild -map $mixedMap "db.migrate"
+        Should -Invoke Write-Host -ParameterFilter { $Object -eq "db migrate" }
+    }
+
+    Describe "entry as submap" {
+        BeforeAll {
+            $entry = get-mapentry $mixedMap "db"
+            $entry | Should -Not -BeNullOrEmpty
+            $entry | Should -BeOfType [System.Collections.IDictionary]
+        }
+
+        It "should return expected completionlist" {
+            $flatList = Get-CompletionList $entry -flatten:$false
+            $flatList.Keys | Should -Be @(
+                "init"
+                "migrate"
+            )
+        }
+
+        It "should execute custom command" {
+            qbuild -map $entry "init"
+            Should -Invoke Write-Host -ParameterFilter { $Object -eq "db init" }
+        }
+    }
+}
