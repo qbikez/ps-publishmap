@@ -102,8 +102,13 @@ function Get-CompletionList {
         $separator = ".",
         $groupMarker = $null, 
         $listKey = "list",
-        $reservedKeys = $null
+        $reservedKeys = $null,
+        $maxDepth = -1
     )
+
+    if ($maxDepth -eq 0) {
+        return @{}
+    }
     
     if (!$groupMarker) {
         $groupMarker = $flatten ? "*" : ""
@@ -134,7 +139,7 @@ function Get-CompletionList {
                 }
                     
                 # Get nested entries and add them with appropriate prefixes
-                $subEntries = Get-CompletionList $entry -listKey $listKey -flatten:$flatten -leafsOnly:$leafsOnly -reservedKeys $reservedKeys
+                $subEntries = Get-CompletionList $entry -listKey $listKey -flatten:$flatten -leafsOnly:$leafsOnly -reservedKeys $reservedKeys -maxDepth ($maxDepth - 1)
                 
                 foreach ($sub in $subEntries.GetEnumerator()) {
                     $subKey = $flatten ? $sub.Key : "$($kvp.key)$separator$($sub.Key)"
@@ -506,7 +511,7 @@ function Invoke-QConf {
                     if (!(Test-Path $map)) {
                         return @("init", "help", "list") | ? { $_.startswith($wordToComplete) }
                     }
-                    $map = $map -is [IDictionary] ? $map : (Resolve-ConfigMap $map | % { . $_ } | Validate-ConfigMap)
+                    $map = $map -is [System.Collections.IDictionary] ? $map : (Resolve-ConfigMap $map | % { . $_ } | Validate-ConfigMap)
                     return Get-EntryCompletion $map -language "conf" @PSBoundParameters
                 }
                 catch {
@@ -529,7 +534,7 @@ function Invoke-QConf {
                     if (!$entry) {
                         throw "entry '$entry' not found"
                     }
-                    $options = Get-CompletionList $entry -listKey "options" -reservedKeys $languages.conf.reservedKeys
+                    $options = Get-CompletionList $entry -listKey "options" -reservedKeys $languages.conf.reservedKeys -maxDepth 1
                     return $options.Keys | ? { $_.startswith($wordToComplete) }
                 }
                 catch {
@@ -608,7 +613,7 @@ function Invoke-QConf {
                 }
         
                 $optionKey = $value
-                $options = Get-CompletionList $subEntry -listKey "options" -reservedKeys $languages.conf.reservedKeys
+                $options = Get-CompletionList $subEntry -listKey "options" -reservedKeys $languages.conf.reservedKeys -maxDepth 1
                 $optionValue = $options.$optionKey
 
                 $bound = $PSBoundParameters
@@ -627,7 +632,7 @@ function Invoke-QConf {
                     try {
                         $subEntry = $map.$entry
 
-                        $options = Get-CompletionList $subEntry -listKey "options" -reservedKeys $languages.conf.reservedKeys
+                        $options = Get-CompletionList $subEntry -listKey "options" -reservedKeys $languages.conf.reservedKeys -maxDepth 1
                 
                         $bound = $PSBoundParameters
                         $bound.options = $options
