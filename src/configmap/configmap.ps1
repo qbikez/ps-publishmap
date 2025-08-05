@@ -631,11 +631,6 @@ function Invoke-QConf {
                 if (!$subEntry) {
                     throw "entry '$entry' not found"
                 }
-
-                $submodule = $map.$module
-                if (!$submodule) {
-                    throw "module '$module' not found"
-                }
         
                 $optionKey = $value
                 $options = Get-CompletionList $subEntry -listKey "options" -reservedKeys $languages.conf.reservedKeys -maxDepth 1
