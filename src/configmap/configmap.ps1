@@ -27,7 +27,8 @@ function Resolve-ConfigMap {
         # [ValidateScript({ $null -eq $_ -or $_ -is [string] -or $_ -is [System.Collections.IDictionary] })]
         $map,
         [Parameter(Mandatory = $false)]
-        $fallback
+        $fallback,
+        [switch][bool]$lookUp = $true
     )
     
     # Set default map file if null
@@ -41,11 +42,20 @@ function Resolve-ConfigMap {
     
     # Load map from file if it's a string path
     if ($map -is [string]) {
-        if (!(Test-Path $map)) {
-            throw "map file '$map' not found"
-            return $null
-        }
-        return $map
+        $fullPath = [System.IO.Path]::IsPathRooted($map) ? $map : (Join-Path $PWD.Path $map)
+        $file = Split-Path $fullPath -Leaf
+        $dir = Split-Path $fullPath -Parent
+        
+        do {
+            $fullPath = Join-Path $dir $file
+            if (Test-Path $fullPath) {
+                return $fullPath
+            }
+            $dir = Split-Path $dir -Parent
+        } while ($lookUp -and $dir)
+
+        throw "map file '$map' not found"
+        return $null
     }
     
     return $map
@@ -507,11 +517,10 @@ function Invoke-QConf {
                 try {
                     # ipmo configmap
                     $map = $fakeBoundParameters.map
-                    $map = $map ? $map : "./.configuration.map.ps1"
-                    if (!(Test-Path $map)) {
+                    $map = $map -is [System.Collections.IDictionary] ? $map : (Resolve-ConfigMap $map -fallback ".configuration.map.ps1" | % { . $_ } | Validate-ConfigMap)
+                    if (!$map) {
                         return @("init", "help", "list") | ? { $_.startswith($wordToComplete) }
                     }
-                    $map = $map -is [System.Collections.IDictionary] ? $map : (Resolve-ConfigMap $map | % { . $_ } | Validate-ConfigMap)
                     return Get-EntryCompletion $map -language "conf" @PSBoundParameters
                 }
                 catch {
