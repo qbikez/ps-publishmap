@@ -217,6 +217,7 @@ function Get-EntryDynamicParam(
     [System.Collections.IDictionary] $map, 
     $key, 
     $command, 
+    [int]$skip = 0,
     $bound
 ) {
     if (!$key) { return @() }
@@ -228,14 +229,17 @@ function Get-EntryDynamicParam(
     $commandKey = $command ? $command : "exec"
     $entryCommand = Get-EntryCommand $selectedEntry $commandKey
     if (!$entryCommand) { return @() }
-    $p = Get-ScriptArgs $entryCommand
+    $p = Get-ScriptArgs $entryCommand -skip $skip
 
     return $p
 }
 
 function Get-ScriptArgs {
     [OutputType([System.Management.Automation.RuntimeDefinedParameterDictionary])]
-    param([scriptblock]$func)
+    param(
+        [scriptblock]$func,
+        [int]$skip = 0
+    )
     function Get-SingleArg {
         [OutputType([System.Management.Automation.RuntimeDefinedParameter])]
         param([System.Management.Automation.Language.ParameterAst] $ast)
@@ -266,6 +270,8 @@ function Get-ScriptArgs {
         return $dynParam
     }
 
+    $exclude = @("$_context", "$_self")
+
     # Add parameter to parameter dictionary and return the object
     $paramDictionary = New-Object `
         -Type System.Management.Automation.RuntimeDefinedParameterDictionary
@@ -274,8 +280,13 @@ function Get-ScriptArgs {
     if ($func.AST.ParamBlock -and $func.AST.ParamBlock.Parameters) {
         $parameters = $func.AST.ParamBlock.Parameters
         
+        $skipped = 0
         foreach ($param in $parameters) {
-            if ("$($param.Name)" -eq '$_context') {
+            if ("$($param.Name)" -in $exclude) {
+                continue
+            }
+            if ($skipped -lt $skip) {
+                $skipped++
                 continue
             }
             $dynParam = Get-SingleArg $param
@@ -422,7 +433,7 @@ function Invoke-QBuild {
     dynamicparam {
         try {
             $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" | % { . $_ } | Validate-ConfigMap
-            $result = Get-EntryDynamicParam $map $entry $command $PSBoundParameters
+            $result = Get-EntryDynamicParam $map $entry $command -skip 0 -bound $PSBoundParameters
             Write-Debug "Dynamic parameters for entry '$entry': $($result.Keys -join ', ')"
             return $result
         }
@@ -537,7 +548,7 @@ function Invoke-QConf {
                     }
 
                     $map = $fakeBoundParameters.map
-                    $map = Resolve-ConfigMap $map -fallback "./.configuration.map.ps1" | % { . $_ } | Validate-ConfigMap
+                    $map = Resolve-ConfigMap $map -fallback ".configuration.map.ps1" | % { . $_ } | Validate-ConfigMap
                     $entry = $fakeBoundParameters.entry
                     $entry = Get-MapEntry $map $entry
                     if (!$entry) {
@@ -562,8 +573,13 @@ function Invoke-QConf {
             if ( !$entry) {
                 return @()
             }
-            $map = Resolve-ConfigMap $map -fallback "./.configuration.map.ps1" | % { . $_ } | Validate-ConfigMap
-            return Get-EntryDynamicParam $map "$entry.$command" $PSBoundParameters
+            $map = Resolve-ConfigMap $map -fallback ".configuration.map.ps1" | % { . $_ } | Validate-ConfigMap
+            $skip = switch ($command) {
+                "set" { 3 }
+                default { 0 }
+            }
+            
+            return Get-EntryDynamicParam $map "$entry.$command" -skip $skip -bound $PSBoundParameters
         }
         catch {
             return "ERROR [dynamic]: $($_.Exception.Message) $($_.ScriptStackTrace)"
