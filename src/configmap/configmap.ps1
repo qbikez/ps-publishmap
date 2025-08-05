@@ -363,6 +363,7 @@ function Get-EntryCommand(
 
 function Invoke-EntryCommand($entry, $key, $ordered = @(), $bound = @{}) {
     $command = Get-EntryCommand $entry $key
+    $scriptArgs = Get-ScriptArgs $command
 
     if (!$command) {
         throw "Command '$key' not found"
@@ -374,8 +375,19 @@ function Invoke-EntryCommand($entry, $key, $ordered = @(), $bound = @{}) {
     if (!$bound) { $bound = @{} }
     if (!$bound._context) { $bound._context = @{} }
     if (!$bound._context.self) { $bound._context.self = $entry }
-
-    return & $command @ordered @bound
+    
+    $filtered = @{}
+    write-verbose "script args: $( $scriptArgs.Keys -join ', ' )"
+    foreach ($boundKey in $bound.Keys) {        
+        if ($boundKey -in $scriptArgs.Keys) {
+            write-verbose "adding '$boundKey'"
+            $filtered[$boundKey] = $bound[$boundKey]
+        } else {
+            write-verbose "skipping '$boundKey'"
+        }
+    }
+    
+    return & $command @ordered @filtered
 }
 
 # function Invoke-Entry(
@@ -511,6 +523,7 @@ function Invoke-QBuild {
             # we should pass null instead?
             #Invoke-EntryCommand -entry $_.value -key $_.Key $bound
             $bound = $PSBoundParameters
+            $bound.Remove("entry")
             Invoke-EntryCommand -entry $_.value -key $command -bound $bound
         }
     
