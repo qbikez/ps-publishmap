@@ -427,7 +427,7 @@ function Invoke-QBuild {
                 try {
                     # ipmo configmap
                     $map = $fakeBoundParameters.map
-                    $map = $map ? $map : "./.build.map.ps1"
+                    $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1"
                     if (!(Test-Path $map)) {
                         return @("init", "help", "list") | ? { $_.startswith($wordToComplete) }
                     }
@@ -868,14 +868,6 @@ function Write-MapHelp {
         }
         Write-Host "  $description" -ForegroundColor White
     }
-    
-    Write-Host ""
-    Write-Host "EXAMPLES:" -ForegroundColor Yellow
-    Write-Host "    $commandName build" -ForegroundColor White
-    Write-Host "    $commandName test" -ForegroundColor White
-    Write-Host "    $commandName list" -ForegroundColor White
-    Write-Host ""
-    Write-Host "Use '$commandName help' for more information about this tool." -ForegroundColor Gray
 }
 
 function Write-Help {
