@@ -523,7 +523,7 @@ function Invoke-QBuild {
             # we should pass null instead?
             #Invoke-EntryCommand -entry $_.value -key $_.Key $bound
             $bound = $PSBoundParameters
-            $bound.Remove("entry")
+            $bound.Remove("entry") | out-null
             Invoke-EntryCommand -entry $_.value -key $command -bound $bound
         }
     
