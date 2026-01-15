@@ -31,6 +31,24 @@ function Resolve-ConfigMap {
         [switch][bool]$lookUp = $true
     )
     
+    if ($map -is [string]) {
+        $map = Resolve-ConfigMapFile $map $fallback
+    }
+    
+    return $map
+}
+
+
+function Resolve-ConfigMapFile {
+    [OutputType([System.Collections.IDictionary])]
+    param(
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        [string]$mapFile,
+        [Parameter(Mandatory = $false)]
+        [string]$fallback
+    )
+
     # Set default map file if null
     if (!$map) {
         if (!$fallback) {
@@ -41,24 +59,20 @@ function Resolve-ConfigMap {
     }
     
     # Load map from file if it's a string path
-    if ($map -is [string]) {
-        $fullPath = [System.IO.Path]::IsPathRooted($map) ? $map : (Join-Path $PWD.Path $map)
-        $file = Split-Path $fullPath -Leaf
-        $dir = Split-Path $fullPath -Parent
+    $fullPath = [System.IO.Path]::IsPathRooted($map) ? $map : (Join-Path $PWD.Path $map)
+    $file = Split-Path $fullPath -Leaf
+    $dir = Split-Path $fullPath -Parent
         
-        do {
-            $fullPath = Join-Path $dir $file
-            if (Test-Path $fullPath) {
-                return $fullPath
-            }
-            $dir = Split-Path $dir -Parent
-        } while ($lookUp -and $dir)
+    do {
+        $fullPath = Join-Path $dir $file
+        if (Test-Path $fullPath) {
+            return $fullPath
+        }
+        $dir = Split-Path $dir -Parent
+    } while ($lookUp -and $dir)
 
-        throw "map file '$map' not found"
-        return $null
-    }
-    
-    return $map
+    throw "map file '$map' not found"
+    return $null
 }
 
 function Validate-ConfigMap {
@@ -382,7 +396,8 @@ function Invoke-EntryCommand($entry, $key, $ordered = @(), $bound = @{}) {
         if ($boundKey -in $scriptArgs.Keys) {
             write-verbose "adding '$boundKey'"
             $filtered[$boundKey] = $bound[$boundKey]
-        } else {
+        }
+        else {
             write-verbose "skipping '$boundKey'"
         }
     }
@@ -427,7 +442,7 @@ function Invoke-QBuild {
                 try {
                     # ipmo configmap
                     $map = $fakeBoundParameters.map
-                    $map = $map ? $map : "./.build.map.ps1"
+                    $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1"
                     if (!(Test-Path $map)) {
                         return @("init", "help", "list") | ? { $_.startswith($wordToComplete) }
                     }
@@ -874,14 +889,6 @@ function Write-MapHelp {
         }
         Write-Host "  $description" -ForegroundColor White
     }
-    
-    Write-Host ""
-    Write-Host "EXAMPLES:" -ForegroundColor Yellow
-    Write-Host "    $commandName build" -ForegroundColor White
-    Write-Host "    $commandName test" -ForegroundColor White
-    Write-Host "    $commandName list" -ForegroundColor White
-    Write-Host ""
-    Write-Host "Use '$commandName help' for more information about this tool." -ForegroundColor Gray
 }
 
 function Write-Help {
