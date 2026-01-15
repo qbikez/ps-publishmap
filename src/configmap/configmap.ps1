@@ -474,7 +474,13 @@ function Invoke-QBuild {
             return
         }
         if ($entry -eq "init") {
-            $loadedMap = Resolve-ConfigMap $map -ErrorAction Ignore | % { . $_ }
+            $resolvedMap = Resolve-ConfigMap $map -ErrorAction Ignore -lookUp:$false
+            if (!$resolvedMap) {
+                Initialize-BuildMap -file $map
+                return
+            }
+
+            $loadedMap = $resolvedMap | % { . $_ }
             if (!$loadedMap) {
                 if ($map -isnot [string]) {
                     throw "Map appears to be an object, not a file"
