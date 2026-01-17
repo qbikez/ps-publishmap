@@ -1,6 +1,6 @@
 BeforeAll {
     Get-Module ConfigMap -ErrorAction SilentlyContinue | Remove-Module
-    import-module $PSScriptRoot\..\..\configmap.psm1
+    import-module $PSScriptRoot\..\..\src\configmap.psm1
 }
 
 Describe "install" {
