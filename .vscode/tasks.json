@@ -1,18 +1,15 @@
 {
-    "version": "0.1.0",
+    "version": "2.0.0",
     "command": "c:/windows/sysnative/WindowsPowerShell/v1.0/powershell.exe",
-    "isShellCommand": true,
-    //	"args": ["Invoke-Pester ${file}"],
-    "showOutput": "always",
     "fileLocation": "absolute",
     "tasks": [
         {
-            "taskName": "build",
+            "label": "build",
+            "type": "shell",
+            "command": "c:/windows/sysnative/WindowsPowerShell/v1.0/powershell.exe",
             "args": [
                 "Invoke-Pester ${file}"
             ],
-            "isBuildCommand": true,
-            "suppressTaskName": true,
             "problemMatcher": [
                 {
                     "owner": "pester",
@@ -91,10 +88,8 @@
                     "owner": "pester",
                     "severity": "info",
                     "pattern": {
-                        //match skipped tests
                         "regexp": "^\\s*\\[?\\]\\s+(.*)\\s+.*$",
                         "message": 2
-                        //missing file so this does not work
                     }
                 },
                 {
@@ -103,7 +98,6 @@
                     "fileLocation": "absolute",
                     "pattern": [
                         {
-                            //match pending tests
                             "regexp": "^\\s*\\[\\?\\]\\s+(.*)$",
                             "message": 1
                         },
@@ -114,16 +108,19 @@
                         }
                     ]
                 }
-            ]
+            ],
+            "group": {
+                "_id": "build",
+                "isDefault": false
+            }
         },
         {
-            "taskName": "test",
+            "label": "test",
+            "type": "shell",
+            "command": "c:/windows/sysnative/WindowsPowerShell/v1.0/powershell.exe",
             "args": [
-                //            "Invoke-Pester ${file}"
                 "Invoke-Pester test"
             ],
-            "isTestCommand": true,
-            "suppressTaskName": true,
             "problemMatcher": [
                 {
                     "owner": "pester",
@@ -141,35 +138,31 @@
                             "regexp": "^.*at.*, (.*): line (\\d+)$",
                             "line": 2,
                             "file": 1
-                            //"loop": true
                         }
                     ]
                 },
-                 {
+                {
                     "owner": "pester",
                     "severity": "error",
                     "fileLocation": "absolute",
                     "pattern": [
                         {
-                            "regexp": "^\\s*\\[([-])\\]\\s+(.*)\\s+.*$"
-                            ,"code": 2
-                            //,"message": 1
-                            //,"loop": true
+                            "regexp": "^\\s*\\[([-])\\]\\s+(.*)\\s+.*$",
+                            "code": 2
                         },
                         {
                             "regexp": "(.*)",
                             "message": 1
-                            //,"loop": true
                         },
                         {
-                             "regexp": "^\\s*at line: (\\d+) in (.*)$",
+                            "regexp": "^\\s*at line: (\\d+) in (.*)$",
                             "line": 1,
                             "file": 2,
                             "loop": true
                         }
                     ]
                 },
-                 {
+                {
                     "owner": "pester",
                     "severity": "info",
                     "fileLocation": "absolute",
@@ -185,7 +178,6 @@
                             "regexp": "^\\s*at line: (\\d+) in (.*)$",
                             "line": 1,
                             "file": 2
-                            //"loop": true
                         }
                     ]
                 },
@@ -194,10 +186,8 @@
                     "severity": "info",
                     "fileLocation": "absolute",
                     "pattern": {
-                        //match skipped tests
                         "regexp": "^\\s*\\[?\\]\\s+(.*)\\s+.*$",
                         "message": 2
-                        //missing file so this does not work
                     }
                 },
                 {
@@ -206,7 +196,6 @@
                     "fileLocation": "absolute",
                     "pattern": [
                         {
-                            //match pending tests
                             "regexp": "^\\s*\\[\\?\\]\\s+(.*)$",
                             "message": 1
                         },
@@ -217,7 +206,11 @@
                         }
                     ]
                 }
-            ]
+            ],
+            "group": {
+                "_id": "test",
+                "isDefault": false
+            }
         }
     ]
 }

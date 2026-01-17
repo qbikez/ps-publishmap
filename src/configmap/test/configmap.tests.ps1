@@ -3,9 +3,8 @@
 }
 BeforeAll {
     Get-Module ConfigMap -ErrorAction SilentlyContinue | Remove-Module
-    Import-Module $PSScriptRoot\configmap.psm1
+    Import-Module $PSScriptRoot\..\src\configmap.psm1
 
-    
     function Get-ValuesList(
         [ValidateScript({
                 $_ -is [System.Collections.IDictionary] -and $_.options

@@ -161,7 +161,7 @@ function set-appsettingsobject(
     }
 }
 
-function get-appsettingsObjct(
+function get-appsettingsObject(
     [Parameter(Mandatory = $true)][string]$file, 
     [Parameter(Mandatory = $true)]$options
 ) {
@@ -185,7 +185,7 @@ function get-appsettingsObjct(
     }
     
     return @{ value = "?"; }
-
+}
 
 function test-azureAccount($value) {
     $account = az account show | ConvertFrom-Json
@@ -428,51 +428,6 @@ Function Create-JWT(
 
     return $jwt
 
-}
-
-Function Get-RezlynxToken {
-    param(
-        [Parameter(Mandatory = $true)]$signingKey,
-        [Parameter(Mandatory = $true)]$siteId, 
-        $groupId = "",
-        $username = "SUPERVISOR",
-        $audience = "GhpServices",
-        $clientId = "RezlynxUi",
-        $expireAfterMin = 60
-    )
-
-    # rlx uses symmetric key for signature
-    $header = @{
-        "alg" = "HS256"
-        "typ" = "JWT"
-    }
-
-    # this is the format of Rlx auth token
-    $payload = @{
-        "aud"         = "$audience"
-        "username"    = "$username"
-        "gl_username" = "$username"
-        "gl_group"    = "$groupId"
-        "group"       = "$groupId"
-        "siteId"      = "$siteId"
-        "gl_site"     = "$siteId"
-        "client_id"   = "$clientId"
-        "nbf"         = 1677747257
-        "exp"         = 1677748457
-        "iat"         = 1677747257
-        "iss"         = "rezlynx"
-    }
-
-    $epochNow = [int]([DateTime]::UtcNow - [DateTime]('1970,1,1')).TotalSeconds
-    $epochExpiry = [int]([DateTime]::UtcNow.AddMinutes($expireAfterMin) - [DateTime]('1970,1,1')).TotalSeconds
-    $payload.nbf = $epochNow
-    $payload.iat = $epochNow
-    $payload.exp = $epochExpiry
-
-
-    $jwt = Create-JWT -headers $header -payload $payload -secret $signingKey
-
-    return $jwt 
 }
 
 function get-xmlconfig($file, $path) {

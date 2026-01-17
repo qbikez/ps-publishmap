@@ -16,13 +16,13 @@ function Get-MapLanguage {
 
 # in order to make imports from the map file work globally, we have to call dot-source from top-level scope. 
 # hence this pattern: 
-# $map = Resolve-ConfigMap $map | % { . $_ } | Validate-ConfigMap
+# $map = Resolve-ConfigMap $map | ForEach-Object { $_ -is [string] ? (. $_) : $_ } | Validate-ConfigMap
 function Resolve-ConfigMap {
     [OutputType([System.Collections.IDictionary])]
     param(
         [Parameter(Mandatory = $false)]
         [AllowNull()]
-        [string]
+        # we want to allow passing objects or strings as map
         # somehow validateScript is throwing an error when $map is null
         # [ValidateScript({ $null -eq $_ -or $_ -is [string] -or $_ -is [System.Collections.IDictionary] })]
         $map,
@@ -446,7 +446,7 @@ function Invoke-QBuild {
                     if (!(Test-Path $map)) {
                         return @("init", "help", "list") | ? { $_.startswith($wordToComplete) }
                     }
-                    $map = Resolve-ConfigMap $map | % { . $_ } | Validate-ConfigMap
+                    $map = Resolve-ConfigMap $map | % { $_ -is [string] ? (. $_) : $_ } | Validate-ConfigMap
                     return Get-EntryCompletion $map -language "build" @PSBoundParameters
                 }
                 catch {
@@ -459,7 +459,7 @@ function Invoke-QBuild {
     )
     dynamicparam {
         try {
-            $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" | % { . $_ } | Validate-ConfigMap
+            $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" | % { $_ -is [string] ? (. $_) : $_ } | Validate-ConfigMap
             $result = Get-EntryDynamicParam $map $entry $command -skip 0 -bound $PSBoundParameters
             Write-Debug "Dynamic parameters for entry '$entry': $($result.Keys -join ', ')"
             return $result
@@ -479,7 +479,7 @@ function Invoke-QBuild {
             return
         }
         if ($entry -eq "list") {
-            $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" | % { . $_ }
+            $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" | % { $_ -is [string] ? (. $_) : $_ }
             if (!$map) {
                 $invocation = $MyInvocation
                 Write-Help -invocation $invocation -mapPath "./.build.map.ps1"
@@ -520,7 +520,7 @@ function Invoke-QBuild {
              
         }
 
-        $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" -ErrorAction Ignore | % { . $_ }
+        $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" -ErrorAction Ignore | % { $_ -is [string] ? (. $_) : $_ }
         if (!$map) {
             $invocation = $MyInvocation
             $commandName = $invocation.Statement
@@ -562,7 +562,7 @@ function Invoke-QConf {
                 try {
                     # ipmo configmap
                     $map = $fakeBoundParameters.map
-                    $map = $map -is [System.Collections.IDictionary] ? $map : (Resolve-ConfigMap $map -fallback ".configuration.map.ps1" | % { . $_ } | Validate-ConfigMap)
+                    $map = $map -is [System.Collections.IDictionary] ? $map : (Resolve-ConfigMap $map -fallback ".configuration.map.ps1" | % { $_ -is [string] ? (. $_) : $_ } | Validate-ConfigMap)
                     if (!$map) {
                         return @("init", "help", "list") | ? { $_.startswith($wordToComplete) }
                     }
@@ -582,7 +582,7 @@ function Invoke-QConf {
                     }
 
                     $map = $fakeBoundParameters.map
-                    $map = Resolve-ConfigMap $map -fallback ".configuration.map.ps1" | % { . $_ } | Validate-ConfigMap
+                    $map = Resolve-ConfigMap $map -fallback ".configuration.map.ps1" | ForEach-Object { $_ -is [string] ? (. $_) : $_ } | Validate-ConfigMap
                     $entry = $fakeBoundParameters.entry
                     $entry = Get-MapEntry $map $entry
                     if (!$entry) {
@@ -607,7 +607,7 @@ function Invoke-QConf {
             if ( !$entry) {
                 return @()
             }
-            $map = Resolve-ConfigMap $map -fallback ".configuration.map.ps1" | % { . $_ } | Validate-ConfigMap
+            $map = Resolve-ConfigMap $map -fallback ".configuration.map.ps1" | ForEach-Object { $_ -is [string] ? (. $_) : $_ } | Validate-ConfigMap
             $skip = switch ($command) {
                 "set" { 3 }
                 default { 0 }
@@ -645,7 +645,7 @@ function Invoke-QConf {
             return
         }
 
-        $map = $map -is [System.Collections.IDictionary] ? $map : (Resolve-ConfigMap $map | % { . $_ } | Validate-ConfigMap)
+        $map = $map -is [System.Collections.IDictionary] ? $map : (Resolve-ConfigMap $map | ForEach-Object { $_ -is [string] ? (. $_) : $_ } | Validate-ConfigMap)
 
         if (-not $entry -and -not $command) {           
             Write-MapHelp -map $map -invocation $MyInvocation -language "conf"

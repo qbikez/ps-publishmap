@@ -3,7 +3,7 @@ BeforeDiscovery {
 }
 BeforeAll {
     Get-Module ConfigMap -ErrorAction SilentlyContinue | Remove-Module
-    Import-Module $PSScriptRoot\configmap.psm1
+    Import-Module $PSScriptRoot\..\src\configmap.psm1
 }
 
 Describe "qbuild" {
