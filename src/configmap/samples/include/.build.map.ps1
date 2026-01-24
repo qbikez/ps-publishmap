@@ -4,7 +4,7 @@
     }
     "#include"  = @{
         "child" = @{
-            prefix = $false
+            prefix = $true
         }
     }
 }
