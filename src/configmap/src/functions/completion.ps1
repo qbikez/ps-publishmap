@@ -14,6 +14,8 @@ function Get-CompletionList {
         The key used to identify nested command lists
     .PARAMETER reservedKeys
         Array of reserved keys that should be skipped during processing
+    .PARAMETER baseDir
+        The base directory path for resolving relative include paths
     .OUTPUTS
         [System.Collections.Specialized.OrderedDictionary] containing the processed command list
     #>
@@ -31,7 +33,8 @@ function Get-CompletionList {
         $groupMarker = $null,
         $listKey = "list",
         $reservedKeys = $null,
-        $maxDepth = -1
+        $maxDepth = -1,
+        $baseDir = $null
     )
 
     if ($maxDepth -eq 0) {
@@ -50,9 +53,19 @@ function Get-CompletionList {
             $result = [ordered]@{}
 
             foreach ($kvp in $list.GetEnumerator()) {
+                # Handle #include directives first (before reserved keys check)
+                if ($kvp.key -eq "#include") {
+                    $includedEntries = Merge-IncludeDirectives $kvp.value $baseDir -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -reservedKeys $reservedKeys
+                    foreach ($inc in $includedEntries.GetEnumerator()) {
+                        $result[$inc.Key] = $inc.Value
+                    }
+                    continue
+                }
+
                 if ($kvp.key -in $reservedKeys -or $kvp.key -eq $listKey) {
                     continue
                 }
+
                 $entry = $kvp.value
                 $entryInfo = Test-IsParentEntry $entry $listKey -reservedKeys $reservedKeys
 
@@ -67,7 +80,7 @@ function Get-CompletionList {
                 }
 
                 # Get nested entries and add them with appropriate prefixes
-                $subEntries = Get-CompletionList $entry -listKey $listKey -flatten:$flatten -leafsOnly:$leafsOnly -reservedKeys $reservedKeys -maxDepth ($maxDepth - 1)
+                $subEntries = Get-CompletionList $entry -listKey $listKey -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -reservedKeys $reservedKeys -maxDepth ($maxDepth - 1) -baseDir $baseDir
 
                 foreach ($sub in $subEntries.GetEnumerator()) {
                     $subKey = $flatten ? $sub.Key : "$($kvp.key)$separator$($sub.Key)"
@@ -106,6 +119,74 @@ function Get-CompletionList {
     }
 
     return $r
+}
+
+function Merge-IncludeDirectives {
+    <#
+    .SYNOPSIS
+        Processes #include directives and merges included map entries
+    .PARAMETER includes
+        Hashtable with include configuration (directory names as keys with prefix option)
+    .PARAMETER baseDir
+        Base directory for resolving relative paths
+    #>
+    param(
+        [System.Collections.IDictionary]$includes,
+        $baseDir,
+        [switch][bool]$flatten = $false,
+        [switch][bool]$leafsOnly = $false,
+        $separator = ".",
+        $reservedKeys = $null
+    )
+
+    $result = [ordered]@{}
+
+    if (!$baseDir) {
+        $baseDir = $PWD.Path
+    }
+
+    foreach ($kvp in $includes.GetEnumerator()) {
+        $dirName = $kvp.Key
+        $includeConfig = $kvp.Value
+
+        # Resolve the include directory path
+        $includePath = Join-Path $baseDir $dirName
+        if (!(Test-Path $includePath -PathType Container)) {
+            Write-Warning "Include directory not found: $includePath"
+            continue
+        }
+
+        # Look for map file in the included directory
+        $mapFile = Join-Path $includePath ".build.map.ps1"
+        if (!(Test-Path $mapFile)) {
+            Write-Warning "Map file not found in include directory: $mapFile"
+            continue
+        }
+
+        # Load the map from the included directory
+        $includedMap = . $mapFile
+
+        # Process the included map
+        $includedEntries = Get-CompletionList $includedMap -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -reservedKeys $reservedKeys -baseDir $includePath
+
+        # Apply prefix if configured
+        $usePrefix = $false
+        if ($includeConfig -is [System.Collections.IDictionary]) {
+            $usePrefix = $includeConfig.prefix -eq $true
+        }
+
+        foreach ($entry in $includedEntries.GetEnumerator()) {
+            if ($usePrefix) {
+                $key = "$dirName$separator$($entry.Key)"
+            }
+            else {
+                $key = $entry.Key
+            }
+            $result[$key] = $entry.Value
+        }
+    }
+
+    return $result
 }
 
 function Get-EntryCompletion(
