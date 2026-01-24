@@ -1,6 +1,6 @@
 # in order to make imports from the map file work globally, we have to call dot-source from top-level scope.
 # hence this pattern:
-# $map = Resolve-ConfigMap $map | ForEach-Object { $_ -is [string] ? (. $_) : $_ } | Validate-ConfigMap
+# $map = Resolve-ConfigMap $map | ForEach-Object { $_ -is [string] ? (. $_) : $_ } | Assert-ConfigMap
 function Resolve-ConfigMap {
     [OutputType([System.Collections.IDictionary])]
     param(
@@ -61,7 +61,7 @@ function Resolve-ConfigMapFile {
     return $null
 }
 
-function Validate-ConfigMap {
+function Assert-ConfigMap {
     param(
         [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
         $map

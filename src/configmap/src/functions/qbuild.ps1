@@ -10,7 +10,7 @@ function Invoke-QBuild {
                     if (!(Test-Path $map)) {
                         return @("init", "help", "list") | ? { $_.startswith($wordToComplete) }
                     }
-                    $map = Resolve-ConfigMap $map | % { $_ -is [string] ? (. $_) : $_ } | Validate-ConfigMap
+                    $map = Resolve-ConfigMap $map | % { $_ -is [string] ? (. $_) : $_ } | Assert-ConfigMap
                     return Get-EntryCompletion $map -language "build" @PSBoundParameters
                 }
                 catch {
@@ -23,7 +23,7 @@ function Invoke-QBuild {
     )
     dynamicparam {
         try {
-            $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" | % { $_ -is [string] ? (. $_) : $_ } | Validate-ConfigMap
+            $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" | % { $_ -is [string] ? (. $_) : $_ } | Assert-ConfigMap
             $result = Get-EntryDynamicParam $map $entry $command -skip 0 -bound $PSBoundParameters
             Write-Debug "Dynamic parameters for entry '$entry': $($result.Keys -join ', ')"
             return $result
