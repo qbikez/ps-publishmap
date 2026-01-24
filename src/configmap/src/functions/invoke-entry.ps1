@@ -27,7 +27,14 @@ function Invoke-EntryCommand($entry, $key, $ordered = @(), $bound = @{}) {
         }
     }
 
-    return & $command @ordered @filtered
+    $wd = $entry._baseDir ? $entry._baseDir : $pwd.path
+    try {
+        pushd $wd | Out-Null
+        return & $command @ordered @filtered
+    }
+    finally {
+        popd
+    }
 }
 
 # function Invoke-Entry(

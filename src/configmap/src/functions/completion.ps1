@@ -159,6 +159,9 @@ function Merge-IncludeDirectives {
 
         # Load the map from the included directory
         $includedMap = . $mapFile
+        
+        # Inject _baseDir for included entries (wraps bare scriptblocks)
+        $includedMap = Add-BaseDir $includedMap $includePath
 
         # Process the included map
         $includedEntries = Get-CompletionList $includedMap -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language

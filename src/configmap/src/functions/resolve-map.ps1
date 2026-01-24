@@ -26,7 +26,7 @@ function Resolve-ConfigMap {
 
 
 function Resolve-ConfigMapFile {
-    [OutputType([System.Collections.IDictionary])]
+    [OutputType([string])]
     param(
         [Parameter(Mandatory = $false)]
         [AllowNull()]
@@ -76,5 +76,53 @@ function Assert-ConfigMap {
         throw "map is not a dictionary"
     }
 
+    return $map
+}
+
+function Add-BaseDir {
+    <#
+    .SYNOPSIS
+        Recursively injects _baseDir property into map entries
+    .DESCRIPTION
+        Adds _baseDir to dictionary entries (directly).
+        Wraps bare scriptblock leaf entries in @{ exec = scriptblock, _baseDir = ... } dictionaries
+        so they can carry the _baseDir metadata needed for directory switching.
+        Skips reserved keys like exec, set, get, description, etc.
+    #>
+    param(
+        [System.Collections.IDictionary]$map,
+        [string]$baseDir
+    )
+    
+    if (!$map -or !$baseDir) {
+        return $map
+    }
+
+    $reservedKeys = @("exec", "set", "get", "options", "list", "description", "#include")
+    
+    foreach ($key in @($map.Keys)) {
+        $value = $map[$key]
+        
+        # Skip reserved keys
+        if ($key -in $reservedKeys) {
+            continue
+        }
+        
+        # If value is a bare scriptblock (leaf entry), wrap it with _baseDir
+        if ($value -is [scriptblock]) {
+            $map[$key] = @{
+                exec = $value
+                _baseDir = $baseDir
+            }
+            continue
+        }
+        
+        # If value is a dictionary, add _baseDir and recurse
+        if ($value -is [System.Collections.IDictionary]) {
+            $value._baseDir = $baseDir
+            Add-BaseDir $value $baseDir | Out-Null
+        }
+    }
+    
     return $map
 }

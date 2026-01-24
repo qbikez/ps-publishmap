@@ -10,7 +10,15 @@ function Invoke-QBuild {
                     if (!(Test-Path $map)) {
                         return @("!init", "help", "list") | ? { $_.startswith($wordToComplete) }
                     }
-                    $map = Resolve-ConfigMap $map | % { $_ -is [string] ? (. $_) : $_ } | Assert-ConfigMap
+                    $map = Resolve-ConfigMap $map | % { 
+                        if ($_ -is [string]) {
+                            $loadedMap = . $_
+                            $baseDir = Split-Path $_ -Parent
+                            Add-BaseDir $loadedMap $baseDir
+                        } else {
+                            $_
+                        }
+                    } | Assert-ConfigMap
                     return Get-EntryCompletion $map -language "build" @PSBoundParameters
                 }
                 catch {
@@ -23,7 +31,15 @@ function Invoke-QBuild {
     )
     dynamicparam {
         try {
-            $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" | % { $_ -is [string] ? (. $_) : $_ } | Assert-ConfigMap
+            $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" | % { 
+            if ($_ -is [string]) {
+                $loadedMap = . $_
+                $baseDir = Split-Path $_ -Parent
+                Add-BaseDir $loadedMap $baseDir
+            } else {
+                $_
+            }
+        } | Assert-ConfigMap
             $result = Get-EntryDynamicParam $map $entry $command -skip 0 -bound $PSBoundParameters
             Write-Debug "Dynamic parameters for entry '$entry': $($result.Keys -join ', ')"
             return $result
@@ -43,7 +59,15 @@ function Invoke-QBuild {
             return
         }
         if ($entry -eq "list") {
-            $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" | % { $_ -is [string] ? (. $_) : $_ }
+            $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" | % { 
+                if ($_ -is [string]) {
+                    $loadedMap = . $_
+                    $baseDir = Split-Path $_ -Parent
+                    Add-BaseDir $loadedMap $baseDir
+                } else {
+                    $_
+                }
+            }
             if (!$map) {
                 $invocation = $MyInvocation
                 Write-Help -invocation $invocation -mapPath "./.build.map.ps1"
@@ -84,7 +108,15 @@ function Invoke-QBuild {
 
         }
 
-        $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" -ErrorAction Ignore | % { $_ -is [string] ? (. $_) : $_ }
+        $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" -ErrorAction Ignore | % { 
+            if ($_ -is [string]) {
+                $loadedMap = . $_
+                $baseDir = Split-Path $_ -Parent
+                Add-BaseDir $loadedMap $baseDir
+            } else {
+                $_
+            }
+        }
         if (!$map) {
             $invocation = $MyInvocation
             $commandName = $invocation.Statement

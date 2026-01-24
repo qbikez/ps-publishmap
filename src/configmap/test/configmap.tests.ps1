@@ -763,12 +763,21 @@ Describe "#include directives" {
 
     It "should execute included prefixed entry" {
         $mapPath = Join-Path $importSampleDir ".build.map.ps1"
-        $map = . $mapPath
+        $map = Resolve-ConfigMap $mapPath | % { 
+            if ($_ -is [string]) {
+                $loadedMap = . $_
+                $baseDir = Split-Path $_ -Parent
+                Add-BaseDir $loadedMap $baseDir
+            } else {
+                $_
+            }
+        }
             
         $entry = Get-MapEntry $map "child.inner-task-1" -language "build"
         $entry | Should -Not -BeNullOrEmpty
-            
-        $output = & $entry *>&1
+        
+        # Use Invoke-EntryCommand which handles the pushd/popd for _baseDir
+        $output = Invoke-EntryCommand $entry "exec" *>&1
         $output | Should -Match "Executing child task 1"
     }
 
@@ -795,5 +804,43 @@ Describe "#include directives" {
         $completions = Get-CompletionList $map -language "build"
         
         $completions.Keys | Should -Not -Contain "#include"
+    }
+
+    It "should inject _baseDir into included entries" {
+        $mapPath = Join-Path $importSampleDir ".build.map.ps1"
+        $map = Resolve-ConfigMap $mapPath | % { 
+            if ($_ -is [string]) {
+                $loadedMap = . $_
+                $baseDir = Split-Path $_ -Parent
+                Add-BaseDir $loadedMap $baseDir
+            } else {
+                $_
+            }
+        }
+        
+        $entry = Get-MapEntry $map "child.inner-task-1" -language "build"
+        $entry | Should -Not -BeNullOrEmpty
+        $entry._baseDir | Should -Not -BeNullOrEmpty
+        $entry._baseDir | Should -Match "child"
+    }
+
+    It "should change directory when executing included entry" {
+        $mapPath = Join-Path $importSampleDir ".build.map.ps1"
+        $map = Resolve-ConfigMap $mapPath | % { 
+            if ($_ -is [string]) {
+                $loadedMap = . $_
+                $baseDir = Split-Path $_ -Parent
+                Add-BaseDir $loadedMap $baseDir
+            } else {
+                $_
+            }
+        }
+        $initialDir = (Get-Location).Path
+        
+        $entry = Get-MapEntry $map "child.inner-task-1" -language "build"
+        Invoke-EntryCommand $entry "exec"
+        
+        $currentDir = (Get-Location).Path
+        $currentDir | Should -Be $initialDir
     }
 }

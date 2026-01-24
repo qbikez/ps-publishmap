@@ -9,7 +9,15 @@ function Invoke-QConf {
                 try {
                     # ipmo configmap
                     $map = $fakeBoundParameters.map
-                    $map = $map -is [System.Collections.IDictionary] ? $map : (Resolve-ConfigMap $map -fallback ".configuration.map.ps1" | % { $_ -is [string] ? (. $_) : $_ } | Assert-ConfigMap)
+                    $map = $map -is [System.Collections.IDictionary] ? $map : (Resolve-ConfigMap $map -fallback ".configuration.map.ps1" | % { 
+                        if ($_ -is [string]) {
+                            $loadedMap = . $_
+                            $baseDir = Split-Path $_ -Parent
+                            Add-BaseDir $loadedMap $baseDir
+                        } else {
+                            $_
+                        }
+                    } | Assert-ConfigMap)
                     if (!$map) {
                         return @("init", "help", "list") | ? { $_.startswith($wordToComplete) }
                     }
@@ -29,7 +37,15 @@ function Invoke-QConf {
                     }
 
                     $map = $fakeBoundParameters.map
-                    $map = Resolve-ConfigMap $map -fallback ".configuration.map.ps1" | ForEach-Object { $_ -is [string] ? (. $_) : $_ } | Assert-ConfigMap
+                    $map = Resolve-ConfigMap $map -fallback ".configuration.map.ps1" | ForEach-Object { 
+                        if ($_ -is [string]) {
+                            $loadedMap = . $_
+                            $baseDir = Split-Path $_ -Parent
+                            Add-BaseDir $loadedMap $baseDir
+                        } else {
+                            $_
+                        }
+                    } | Assert-ConfigMap
                     $entry = $fakeBoundParameters.entry
                     $entry = Get-MapEntry $map $entry
                     if (!$entry) {
@@ -54,7 +70,15 @@ function Invoke-QConf {
             if ( !$entry) {
                 return @()
             }
-            $map = Resolve-ConfigMap $map -fallback ".configuration.map.ps1" | ForEach-Object { $_ -is [string] ? (. $_) : $_ } | Assert-ConfigMap
+            $map = Resolve-ConfigMap $map -fallback ".configuration.map.ps1" | ForEach-Object { 
+                if ($_ -is [string]) {
+                    $loadedMap = . $_
+                    $baseDir = Split-Path $_ -Parent
+                    Add-BaseDir $loadedMap $baseDir
+                } else {
+                    $_
+                }
+            } | Assert-ConfigMap
             $skip = switch ($command) {
                 "set" { 3 }
                 default { 0 }
@@ -92,7 +116,15 @@ function Invoke-QConf {
             return
         }
 
-        $map = $map -is [System.Collections.IDictionary] ? $map : (Resolve-ConfigMap $map | ForEach-Object { $_ -is [string] ? (. $_) : $_ } | Assert-ConfigMap)
+        $map = $map -is [System.Collections.IDictionary] ? $map : (Resolve-ConfigMap $map | ForEach-Object { 
+            if ($_ -is [string]) {
+                $loadedMap = . $_
+                $baseDir = Split-Path $_ -Parent
+                Add-BaseDir $loadedMap $baseDir
+            } else {
+                $_
+            }
+        } | Assert-ConfigMap)
 
         if (-not $entry -and -not $command) {
             Write-MapHelp -map $map -invocation $MyInvocation -language "conf"
