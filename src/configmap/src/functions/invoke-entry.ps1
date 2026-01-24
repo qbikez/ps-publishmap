@@ -1,6 +1,6 @@
 function Invoke-EntryCommand($entry, $key, $ordered = @(), $bound = @{}) {
     $command = Get-EntryCommand $entry $key
-    $scriptArgs = Get-ScriptArgs $command
+    $scriptArgs = Get-ScriptArgs $command -exclude @()
 
     if (!$command) {
         throw "Command '$key' not found"
@@ -14,7 +14,7 @@ function Invoke-EntryCommand($entry, $key, $ordered = @(), $bound = @{}) {
     if (!$bound._context.self) { $bound._context.self = $entry }
 
     # Always pass special parameters (_context, _self) plus any that match script params
-    $specialParams = @("_context", "_self")
+    $specialParams = @("_context", "_self") | ? { $scriptArgs.Keys -contains $_ }
     $filtered = @{}
     Write-Verbose "script args: $( $scriptArgs.Keys -join ', ' )"
     foreach ($boundKey in $bound.Keys) {
