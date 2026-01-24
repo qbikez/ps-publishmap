@@ -8,7 +8,7 @@ function Invoke-QBuild {
                     $map = $fakeBoundParameters.map
                     $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1"
                     if (!(Test-Path $map)) {
-                        return @("init", "help", "list") | ? { $_.startswith($wordToComplete) }
+                        return @("!init", "help", "list") | ? { $_.startswith($wordToComplete) }
                     }
                     $map = Resolve-ConfigMap $map | % { $_ -is [string] ? (. $_) : $_ } | Assert-ConfigMap
                     return Get-EntryCompletion $map -language "build" @PSBoundParameters
@@ -52,7 +52,7 @@ function Invoke-QBuild {
             Write-MapHelp -map $map -invocation $MyInvocation
             return
         }
-        if ($entry -eq "init") {
+        if ($entry -eq "!init") {
             $resolvedMap = Resolve-ConfigMap $map -ErrorAction Ignore -lookUp:$false
             if (!$resolvedMap) {
                 Initialize-BuildMap -file $map
@@ -74,7 +74,7 @@ function Invoke-QBuild {
             }
             else {
                 $completionList = Get-CompletionList $loadedMap -language "build"
-                if ($completionList.Keys -notcontains "init") {
+                if ($completionList.Keys -notcontains "!init") {
                     throw "map file '$map' already exists"
                 }
                 else {

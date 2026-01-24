@@ -692,6 +692,7 @@ Describe "custom commands" {
     It "should return expected completionlist" {
         $flatList = Get-CompletionList $mixedMap -flatten:$false -language "build"
         $flatList.Keys | Should -Be @(
+            "db" # should "db" be included or not?
             "db.init"
             "db.migrate"
         )
