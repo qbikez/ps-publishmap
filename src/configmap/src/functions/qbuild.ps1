@@ -6,19 +6,16 @@ function Invoke-QBuild {
                 try {
                     # ipmo configmap
                     $map = $fakeBoundParameters.map
-                    $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1"
-                    if (!(Test-Path $map)) {
+                    $resolved = Resolve-ConfigMap $map -fallback "./.build.map.ps1"
+                    if ($resolved.source -eq "file" -and !(Test-Path $resolved.sourceFile)) {
                         return @("!init", "help", "list") | ? { $_.startswith($wordToComplete) }
                     }
-                    $map = Resolve-ConfigMap $map | % { 
-                        if ($_ -is [string]) {
-                            $loadedMap = . $_
-                            $baseDir = Split-Path $_ -Parent
-                            Add-BaseDir $loadedMap $baseDir
-                        } else {
-                            $_
+                    $map = $resolved | % {
+                        if ($_.source -eq "file") {
+                            $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
                         }
-                    } | Assert-ConfigMap
+                        $_
+                    } | % { $_.map } | Assert-ConfigMap
                     return Get-EntryCompletion $map -language "build" @PSBoundParameters
                 }
                 catch {
@@ -31,15 +28,12 @@ function Invoke-QBuild {
     )
     dynamicparam {
         try {
-            $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" | % { 
-            if ($_ -is [string]) {
-                $loadedMap = . $_
-                $baseDir = Split-Path $_ -Parent
-                Add-BaseDir $loadedMap $baseDir
-            } else {
+            $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" | % {
+                if ($_.source -eq "file") {
+                    $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
+                }
                 $_
-            }
-        } | Assert-ConfigMap
+            } | % { $_.map } | Assert-ConfigMap
             $result = Get-EntryDynamicParam $map $entry $command -skip 0 -bound $PSBoundParameters
             Write-Debug "Dynamic parameters for entry '$entry': $($result.Keys -join ', ')"
             return $result
@@ -59,15 +53,12 @@ function Invoke-QBuild {
             return
         }
         if ($entry -eq "list") {
-            $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" | % { 
-                if ($_ -is [string]) {
-                    $loadedMap = . $_
-                    $baseDir = Split-Path $_ -Parent
-                    Add-BaseDir $loadedMap $baseDir
-                } else {
-                    $_
+            $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" | % {
+                if ($_.source -eq "file") {
+                    $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
                 }
-            }
+                $_
+            } | % { $_.map }
             if (!$map) {
                 $invocation = $MyInvocation
                 Write-Help -invocation $invocation -mapPath "./.build.map.ps1"
@@ -77,13 +68,13 @@ function Invoke-QBuild {
             return
         }
         if ($entry -eq "!init") {
-            $resolvedMap = Resolve-ConfigMap $map -ErrorAction Ignore -lookUp:$false
-            if (!$resolvedMap) {
+            $resolved = Resolve-ConfigMap $map -ErrorAction Ignore -lookUp:$false
+            if (!$resolved) {
                 Initialize-BuildMap -file $map
                 return
             }
 
-            $loadedMap = $resolvedMap | % { . $_ }
+            $loadedMap = $resolved | % { if ($_.source -eq "file") { $_.map = . $_.sourceFile }; $_ } | % { $_.map }
             if (!$loadedMap) {
                 if ($map -isnot [string]) {
                     throw "Map appears to be an object, not a file"
@@ -108,15 +99,12 @@ function Invoke-QBuild {
 
         }
 
-        $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" -ErrorAction Ignore | % { 
-            if ($_ -is [string]) {
-                $loadedMap = . $_
-                $baseDir = Split-Path $_ -Parent
-                Add-BaseDir $loadedMap $baseDir
-            } else {
-                $_
+        $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" -ErrorAction Ignore | % {
+            if ($_.source -eq "file") {
+                $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
             }
-        }
+            $_
+        } | % { $_.map }
         if (!$map) {
             $invocation = $MyInvocation
             $commandName = $invocation.Statement

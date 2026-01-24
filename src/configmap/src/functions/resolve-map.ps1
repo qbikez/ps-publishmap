@@ -1,8 +1,8 @@
 # in order to make imports from the map file work globally, we have to call dot-source from top-level scope.
 # hence this pattern:
-# $map = Resolve-ConfigMap $map | ForEach-Object { $_ -is [string] ? (. $_) : $_ } | Assert-ConfigMap
+# $map = Resolve-ConfigMap $map | % { if ($_.source -eq "file") { $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile }; $_ } | % { $_.map }
 function Resolve-ConfigMap {
-    [OutputType([System.Collections.IDictionary])]
+    [OutputType([PSCustomObject])]
     param(
         [Parameter(Mandatory = $false)]
         [AllowNull()]
@@ -15,13 +15,23 @@ function Resolve-ConfigMap {
         [switch][bool]$lookUp = $true
     )
 
-    if ($map -is [string] -or !$map) {
-        $map = Resolve-ConfigMapFile $map $fallback
+    if ($map -is [System.Collections.IDictionary]) {
+        return [PSCustomObject]@{
+            source     = "object"
+            sourceFile = $null
+            map        = $map
+        }
     }
-    if (!$map) {
+
+    $sourceFile = Resolve-ConfigMapFile $map $fallback
+    if (!$sourceFile) {
         throw "No map provided and fallback '$fallback' not found"
     }
-    return $map
+    return [PSCustomObject]@{
+        source     = "file"
+        sourceFile = $sourceFile
+        map        = $null
+    }
 }
 
 
@@ -88,14 +98,21 @@ function Add-BaseDir {
         Wraps bare scriptblock leaf entries in @{ exec = scriptblock, _baseDir = ... } dictionaries
         so they can carry the _baseDir metadata needed for directory switching.
         Skips reserved keys like exec, set, get, description, etc.
+        If baseDir is a file path, automatically extracts the parent directory.
     #>
     param(
+        [Parameter(ValueFromPipeline = $true)]
         [System.Collections.IDictionary]$map,
         [string]$baseDir
     )
-    
+
     if (!$map -or !$baseDir) {
         return $map
+    }
+
+    # If baseDir is a file, get its parent directory
+    if ((Test-Path $baseDir -PathType Leaf) -or [System.IO.Path]::GetExtension($baseDir)) {
+        $baseDir = Split-Path $baseDir -Parent
     }
 
     $reservedKeys = @("exec", "set", "get", "options", "list", "description", "#include")

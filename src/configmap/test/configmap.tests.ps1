@@ -763,19 +763,16 @@ Describe "#include directives" {
 
     It "should execute included prefixed entry" {
         $mapPath = Join-Path $importSampleDir ".build.map.ps1"
-        $map = Resolve-ConfigMap $mapPath | % { 
-            if ($_ -is [string]) {
-                $loadedMap = . $_
-                $baseDir = Split-Path $_ -Parent
-                Add-BaseDir $loadedMap $baseDir
-            } else {
-                $_
+        $map = Resolve-ConfigMap $mapPath | % {
+            if ($_.source -eq "file") {
+                $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
             }
-        }
-            
+            $_
+        } | % { $_.map }
+
         $entry = Get-MapEntry $map "child.inner-task-1" -language "build"
         $entry | Should -Not -BeNullOrEmpty
-        
+
         # Use Invoke-EntryCommand which handles the pushd/popd for _baseDir
         $output = Invoke-EntryCommand $entry "exec" *>&1
         $output | Should -Match "Executing child task 1"
@@ -808,16 +805,13 @@ Describe "#include directives" {
 
     It "should inject _baseDir into included entries" {
         $mapPath = Join-Path $importSampleDir ".build.map.ps1"
-        $map = Resolve-ConfigMap $mapPath | % { 
-            if ($_ -is [string]) {
-                $loadedMap = . $_
-                $baseDir = Split-Path $_ -Parent
-                Add-BaseDir $loadedMap $baseDir
-            } else {
-                $_
+        $map = Resolve-ConfigMap $mapPath | % {
+            if ($_.source -eq "file") {
+                $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
             }
-        }
-        
+            $_
+        } | % { $_.map }
+
         $entry = Get-MapEntry $map "child.inner-task-1" -language "build"
         $entry | Should -Not -BeNullOrEmpty
         $entry._baseDir | Should -Not -BeNullOrEmpty
@@ -826,20 +820,17 @@ Describe "#include directives" {
 
     It "should change directory when executing included entry" {
         $mapPath = Join-Path $importSampleDir ".build.map.ps1"
-        $map = Resolve-ConfigMap $mapPath | % { 
-            if ($_ -is [string]) {
-                $loadedMap = . $_
-                $baseDir = Split-Path $_ -Parent
-                Add-BaseDir $loadedMap $baseDir
-            } else {
-                $_
+        $map = Resolve-ConfigMap $mapPath | % {
+            if ($_.source -eq "file") {
+                $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
             }
-        }
+            $_
+        } | % { $_.map }
         $initialDir = (Get-Location).Path
-        
+
         $entry = Get-MapEntry $map "child.inner-task-1" -language "build"
         Invoke-EntryCommand $entry "exec"
-        
+
         $currentDir = (Get-Location).Path
         $currentDir | Should -Be $initialDir
     }
