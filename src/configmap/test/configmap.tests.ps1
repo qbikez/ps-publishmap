@@ -744,11 +744,17 @@ Describe "#include directives" {
     BeforeAll {
         $importSampleDir = Resolve-Path (Join-Path $PSScriptRoot "..\samples\include")
     }
+    BeforeEach {
+        pushd $importSampleDir
+    }
+    AfterEach {
+        popd
+    }
 
     It "should include and prefix entries from child directory" {
         $mapPath = Join-Path $importSampleDir ".build.map.ps1"
         $map = . $mapPath
-        $completions = Get-CompletionList $map -language "build" -baseDir $importSampleDir
+        $completions = Get-CompletionList $map -language "build"
         
         $completions.Keys | Should -Contain "child.inner-task-1"
         $completions.Keys | Should -Contain "child.inner-2"
@@ -758,12 +764,12 @@ Describe "#include directives" {
     It "should execute included prefixed entry" {
         $mapPath = Join-Path $importSampleDir ".build.map.ps1"
         $map = . $mapPath
-        
-        $entry = Get-MapEntry $map "child.inner-task-1"
+            
+        $entry = Get-MapEntry $map "child.inner-task-1" -language "build"
         $entry | Should -Not -BeNullOrEmpty
-        
-        $output = & $entry 2>&1
-        $output | Should -Contain "Executing child task 1"
+            
+        $output = & $entry *>&1
+        $output | Should -Match "Executing child task 1"
     }
 
     It "should include and merge entries without prefix" {
@@ -776,7 +782,7 @@ Describe "#include directives" {
             }
         }
         
-        $completions = Get-CompletionList $mapNoPrefixTest -language "build" -baseDir $importSampleDir
+        $completions = Get-CompletionList $mapNoPrefixTest -language "build"
         
         $completions.Keys | Should -Contain "inner-task-1"
         $completions.Keys | Should -Contain "inner-2"
@@ -786,7 +792,7 @@ Describe "#include directives" {
     It "should skip #include key in completion list" {
         $mapPath = Join-Path $importSampleDir ".build.map.ps1"
         $map = . $mapPath
-        $completions = Get-CompletionList $map -language "build" -baseDir $importSampleDir
+        $completions = Get-CompletionList $map -language "build"
         
         $completions.Keys | Should -Not -Contain "#include"
     }

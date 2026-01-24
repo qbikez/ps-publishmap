@@ -14,8 +14,6 @@ function Get-CompletionList {
         The key used to identify nested command lists
     .PARAMETER language
         The language to use for determining reserved keys (e.g., "build", "conf")
-    .PARAMETER baseDir
-        The base directory path for resolving relative include paths
     .OUTPUTS
         [System.Collections.Specialized.OrderedDictionary] containing the processed command list
     #>
@@ -33,8 +31,7 @@ function Get-CompletionList {
         $groupMarker = $null,
         $listKey = "list",
         $language = $null,
-        $maxDepth = -1,
-        $baseDir = $null
+        $maxDepth = -1
     )
 
     if ($maxDepth -eq 0) {
@@ -57,7 +54,7 @@ function Get-CompletionList {
             foreach ($kvp in $list.GetEnumerator()) {
                 # Handle #include directives first (before reserved keys check)
                 if ($kvp.key -eq "#include") {
-                    $includedEntries = Merge-IncludeDirectives $kvp.value $baseDir -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language
+                    $includedEntries = Merge-IncludeDirectives $kvp.value -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language
                     foreach ($inc in $includedEntries.GetEnumerator()) {
                         $result[$inc.Key] = $inc.Value
                     }
@@ -82,7 +79,7 @@ function Get-CompletionList {
                 }
 
                 # Get nested entries and add them with appropriate prefixes
-                $subEntries = Get-CompletionList $entry -listKey $listKey -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language -maxDepth ($maxDepth - 1) -baseDir $baseDir
+                $subEntries = Get-CompletionList $entry -listKey $listKey -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language -maxDepth ($maxDepth - 1)
 
                 foreach ($sub in $subEntries.GetEnumerator()) {
                     $subKey = $flatten ? $sub.Key : "$($kvp.key)$separator$($sub.Key)"
@@ -129,12 +126,9 @@ function Merge-IncludeDirectives {
         Processes #include directives and merges included map entries
     .PARAMETER includes
         Hashtable with include configuration (directory names as keys with prefix option)
-    .PARAMETER baseDir
-        Base directory for resolving relative paths
     #>
     param(
         [System.Collections.IDictionary]$includes,
-        $baseDir,
         [switch][bool]$flatten = $false,
         [switch][bool]$leafsOnly = $false,
         $separator = ".",
@@ -143,9 +137,7 @@ function Merge-IncludeDirectives {
 
     $result = [ordered]@{}
 
-    if (!$baseDir) {
-        $baseDir = $PWD.Path
-    }
+    $baseDir = $PWD.Path
 
     foreach ($kvp in $includes.GetEnumerator()) {
         $dirName = $kvp.Key
@@ -169,7 +161,7 @@ function Merge-IncludeDirectives {
         $includedMap = . $mapFile
 
         # Process the included map
-        $includedEntries = Get-CompletionList $includedMap -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language -baseDir $includePath
+        $includedEntries = Get-CompletionList $includedMap -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language
 
         # Apply prefix if configured
         $usePrefix = $false
