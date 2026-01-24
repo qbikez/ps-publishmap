@@ -1,6 +1,6 @@
 $helpersPath = (Split-Path -Parent $MyInvocation.MyCommand.Definition)
 
-. "$helpersPath\configmap.ps1"
+. "$helpersPath\src\configmap.ps1"
 
 Export-ModuleMember `
     -Function `

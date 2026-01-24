@@ -745,7 +745,7 @@ Describe "custom commands" {
 Describe "#include directives" {
     BeforeAll {
         $language = Get-MapLanguage "build"
-        $importSampleDir = Join-Path $PSScriptRoot "..\samples\import"
+        $importSampleDir = Resolve-Path (Join-Path $PSScriptRoot "..\samples\import")
     }
 
     It "should include and prefix entries from child directory" {
@@ -779,7 +779,7 @@ Describe "#include directives" {
             }
         }
         
-        $completions = Get-CompletionList $mapNoPrefixTest -reservedKeys $language.reservedKeys -baseDir (Join-Path $importSampleDir)
+        $completions = Get-CompletionList $mapNoPrefixTest -reservedKeys $language.reservedKeys -baseDir $importSampleDir
         
         $completions.Keys | Should -Contain "inner-task-1"
         $completions.Keys | Should -Contain "inner-2"
