@@ -15,7 +15,7 @@ BeforeAll {
             throw "map doesn't have 'options' entry"
         }
 
-        return Get-CompletionList $map.options -reservedKeys $language.reservedKeys
+        return Get-CompletionList $map.options -language "conf"
     }
 
 }
@@ -86,9 +86,6 @@ Describe "Test-IsParentEntry" {
 
 
 Describe "map parsing" {
-    BeforeAll {
-        $language = Get-MapLanguage "conf"
-    }
     Describe '<name>' -ForEach @(
         @{
             Name = "simple list"
@@ -145,7 +142,7 @@ Describe "map parsing" {
         }
     ) {
         It '<name> => flatten keys' {
-            $list = (Get-CompletionList -map $map -flatten:$true -reservedKeys $language.reservedKeys)
+            $list = (Get-CompletionList -map $map -flatten:$true -language "conf")
             if (!$flatten) {
                 $flatten = $keys
             }
@@ -153,7 +150,7 @@ Describe "map parsing" {
             $list.Keys | Should -Be $Flatten
         }
         It '<name> => tree keys' {
-            $list = (Get-CompletionList -map $map -flatten:$false -leafsOnly:$true -reservedKeys $language.reservedKeys)
+            $list = (Get-CompletionList -map $map -flatten:$false -leafsOnly:$true -language "conf")
             if (!$tree) {
                 $tree = $keys
             }
@@ -313,8 +310,6 @@ Describe "qconf" {
                 }
             }
         }
-
-        $language = Get-MapLanguage "conf"
     }
 
     Describe "set custom parameters" {
@@ -323,13 +318,13 @@ Describe "qconf" {
             $parameters.Keys | Should -Be @("key", "value")
         }
         It "should return top-level completion list" {
-            $list = Get-CompletionList $targets -reservedKeys $language.reservedKeys
+            $list = Get-CompletionList $targets -language "conf"
             $list.Keys | Should -Be @("db", "test")
         }
         It "should return options list" {
             $entry = Get-MapEntry $targets "db"
             $entry | Should -Not -BeNullOrEmpty
-            $options = Get-CompletionList $entry -listKey "options" -reservedKeys $language.reservedKeys
+            $options = Get-CompletionList $entry -listKey "options" -language "conf"
             $options.Keys | Should -Be @("local", "remote")
         }
         It "invoke options" {
@@ -508,7 +503,6 @@ Describe "qbuild dynamic parameters" {
 Describe "deep hierarchical execution" {
     BeforeEach {
         Mock Write-Host
-        $language = Get-MapLanguage "build"
     }
 
     Describe "deep nesting commands" {
@@ -641,7 +635,7 @@ Describe "deep hierarchical execution" {
         }
 
         It "should return expected completionlist" {
-            $flatList = Get-CompletionList $mixedMap -flatten:$false -reservedKeys $language.reservedKeys -leafsOnly:$true
+            $flatList = Get-CompletionList $mixedMap -flatten:$false -language "build" -leafsOnly:$true
             $flatList.Keys | Should -Be @(
                 "build"
                 "build:exec"
@@ -696,7 +690,7 @@ Describe "custom commands" {
     }
 
     It "should return expected completionlist" {
-        $flatList = Get-CompletionList $mixedMap -flatten:$false
+        $flatList = Get-CompletionList $mixedMap -flatten:$false -language "build"
         $flatList.Keys | Should -Be @(
             "db.init"
             "db.migrate"
@@ -723,8 +717,11 @@ Describe "custom commands" {
     Describe "entry as submap" {
         BeforeAll {
             $entry = Get-MapEntry $mixedMap "db"
-            $entry | Should -Not -BeNullOrEmpty -Because "db entry should exist"
-            $entry | Should -BeOfType [System.Collections.IDictionary] -Because "db entry should be a submap"
+        }
+
+        It "should return expected entry" {
+            $entry | Should -Not -BeNullOrEmpty
+            $entry | Should -BeOfType [System.Collections.IDictionary]
         }
 
         It "should return expected completionlist" {
@@ -744,14 +741,13 @@ Describe "custom commands" {
 
 Describe "#include directives" {
     BeforeAll {
-        $language = Get-MapLanguage "build"
-        $importSampleDir = Resolve-Path (Join-Path $PSScriptRoot "..\samples\import")
+        $importSampleDir = Resolve-Path (Join-Path $PSScriptRoot "..\samples\include")
     }
 
     It "should include and prefix entries from child directory" {
         $mapPath = Join-Path $importSampleDir ".build.map.ps1"
         $map = . $mapPath
-        $completions = Get-CompletionList $map -reservedKeys $language.reservedKeys -baseDir $importSampleDir
+        $completions = Get-CompletionList $map -language "build" -baseDir $importSampleDir
         
         $completions.Keys | Should -Contain "child.inner-task-1"
         $completions.Keys | Should -Contain "child.inner-2"
@@ -779,7 +775,7 @@ Describe "#include directives" {
             }
         }
         
-        $completions = Get-CompletionList $mapNoPrefixTest -reservedKeys $language.reservedKeys -baseDir $importSampleDir
+        $completions = Get-CompletionList $mapNoPrefixTest -language "build" -baseDir $importSampleDir
         
         $completions.Keys | Should -Contain "inner-task-1"
         $completions.Keys | Should -Contain "inner-2"
@@ -789,7 +785,7 @@ Describe "#include directives" {
     It "should skip #include key in completion list" {
         $mapPath = Join-Path $importSampleDir ".build.map.ps1"
         $map = . $mapPath
-        $completions = Get-CompletionList $map -reservedKeys $language.reservedKeys -baseDir $importSampleDir
+        $completions = Get-CompletionList $map -language "build" -baseDir $importSampleDir
         
         $completions.Keys | Should -Not -Contain "#include"
     }

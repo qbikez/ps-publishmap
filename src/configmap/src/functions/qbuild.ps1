@@ -73,7 +73,7 @@ function Invoke-QBuild {
                 return
             }
             else {
-                $completionList = Get-CompletionList $loadedMap -reservedKeys $script:languages.build.reservedKeys
+                $completionList = Get-CompletionList $loadedMap -language "build"
                 if ($completionList.Keys -notcontains "init") {
                     throw "map file '$map' already exists"
                 }

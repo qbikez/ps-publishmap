@@ -12,8 +12,8 @@ function Get-CompletionList {
         The marker to append to parent command names when flattened
     .PARAMETER listKey
         The key used to identify nested command lists
-    .PARAMETER reservedKeys
-        Array of reserved keys that should be skipped during processing
+    .PARAMETER language
+        The language to use for determining reserved keys (e.g., "build", "conf")
     .PARAMETER baseDir
         The base directory path for resolving relative include paths
     .OUTPUTS
@@ -32,7 +32,7 @@ function Get-CompletionList {
         $separator = ".",
         $groupMarker = $null,
         $listKey = "list",
-        $reservedKeys = $null,
+        $language = $null,
         $maxDepth = -1,
         $baseDir = $null
     )
@@ -45,6 +45,8 @@ function Get-CompletionList {
         $groupMarker = $flatten ? "*" : ""
     }
 
+    $reservedKeys = $language ? (Get-MapLanguage $language).reservedKeys : @()
+
     $list = $map.$listKey ? $map.$listKey : $map
     $list = $list -is [scriptblock] ? (Invoke-Command -ScriptBlock $list) : $list
 
@@ -55,7 +57,7 @@ function Get-CompletionList {
             foreach ($kvp in $list.GetEnumerator()) {
                 # Handle #include directives first (before reserved keys check)
                 if ($kvp.key -eq "#include") {
-                    $includedEntries = Merge-IncludeDirectives $kvp.value $baseDir -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -reservedKeys $reservedKeys
+                    $includedEntries = Merge-IncludeDirectives $kvp.value $baseDir -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language
                     foreach ($inc in $includedEntries.GetEnumerator()) {
                         $result[$inc.Key] = $inc.Value
                     }
@@ -80,7 +82,7 @@ function Get-CompletionList {
                 }
 
                 # Get nested entries and add them with appropriate prefixes
-                $subEntries = Get-CompletionList $entry -listKey $listKey -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -reservedKeys $reservedKeys -maxDepth ($maxDepth - 1) -baseDir $baseDir
+                $subEntries = Get-CompletionList $entry -listKey $listKey -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language -maxDepth ($maxDepth - 1) -baseDir $baseDir
 
                 foreach ($sub in $subEntries.GetEnumerator()) {
                     $subKey = $flatten ? $sub.Key : "$($kvp.key)$separator$($sub.Key)"
@@ -136,7 +138,7 @@ function Merge-IncludeDirectives {
         [switch][bool]$flatten = $false,
         [switch][bool]$leafsOnly = $false,
         $separator = ".",
-        $reservedKeys = $null
+        $language = $null
     )
 
     $result = [ordered]@{}
@@ -167,7 +169,7 @@ function Merge-IncludeDirectives {
         $includedMap = . $mapFile
 
         # Process the included map
-        $includedEntries = Get-CompletionList $includedMap -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -reservedKeys $reservedKeys -baseDir $includePath
+        $includedEntries = Get-CompletionList $includedMap -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language -baseDir $includePath
 
         # Apply prefix if configured
         $usePrefix = $false
@@ -203,8 +205,8 @@ function Get-EntryCompletion(
     $fakeBoundParameters
 ) {
     # For hierarchical completion, we need both flattened and tree structures
-    $flatList = Get-CompletionList $map -flatten:$true -reservedKeys $script:languages.$language.reservedKeys
-    $treeList = Get-CompletionList $map -flatten:$false -reservedKeys $script:languages.$language.reservedKeys
+    $flatList = Get-CompletionList $map -flatten:$true -language $language
+    $treeList = Get-CompletionList $map -flatten:$false -language $language
 
     # Combine both lists and remove duplicates
     $allKeys = @($flatList.Keys) + @($treeList.Keys) | Sort-Object -Unique

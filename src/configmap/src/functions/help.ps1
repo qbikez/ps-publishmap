@@ -1,7 +1,7 @@
 function Write-MapHelp {
     param([System.Collections.IDictionary]$map, $invocation, [ValidateSet("build", "conf")]$language = "build")
     $commandName = $invocation.InvocationName
-    $scripts = Get-CompletionList $map -reservedKeys $script:languages.$language.reservedKeys
+    $scripts = Get-CompletionList $map -language $language
 
     # Calculate max command name length for alignment
     $maxNameLength = ($scripts.Keys | Measure-Object -Property Length -Maximum).Maximum

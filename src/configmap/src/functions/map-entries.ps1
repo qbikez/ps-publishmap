@@ -6,7 +6,7 @@ function Get-MapEntry(
     $map,
     $key,
     $separator = ".",
-    $reservedKeys = $null
+    $language = $null
 ) {
     return (Get-MapEntries $map $key -separator $separator -language $language).Value
 }
@@ -24,47 +24,19 @@ function Get-MapEntries(
 ) {
     $results = @()
 
-    $completions = Get-CompletionList $map -flatten:$flatten -leafsOnly:$leafsOnly -separator:$separator -reservedKeys $reservedKeys
+    $completions = Get-CompletionList $map -flatten:$flatten -leafsOnly:$leafsOnly -separator:$separator -language $language
 
     foreach ($key in @($keys)) {
         $found = $completions.GetEnumerator() | ? { $_.key -eq $key }
         if ($found) {
             $results += $found
         }
-        # else {
-        #     # Fallback: try to find the entry by navigating the map directly
-        #     # This handles containers that aren't in the completion list
-        #     $parts = $key -split [regex]::Escape($separator)
-        #     $current = $map
-        #     $found = $true
-            
-        #     foreach ($part in $parts) {
-        #         if ($current -is [System.Collections.IDictionary]) {
-        #             try {
-        #                 $current = $current[$part]
-        #             }
-        #             catch {
-        #                 $found = $false
-        #                 break
-        #             }
-        #         }
-        #         else {
-        #             $found = $false
-        #             break
-        #         }
-        #     }
-            
-        #     if ($found -and $current -ne $null) {
-        #         $results += @{Key = $key; Value = $current }
-        #     }
-        # }
     }
 
     if (!$results) {
-        $completions = Get-CompletionList $map -flatten:$flatten -leafsOnly:$leafsOnly -separator:$separator -reservedKeys $reservedKeys
+        $completions = Get-CompletionList $map -flatten:$flatten -leafsOnly:$leafsOnly -separator:$separator -language $language
         Write-Verbose "entry '$keys' not found in ($($completions.Keys))"
     }
-
 
     return $results
 }

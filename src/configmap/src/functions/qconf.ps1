@@ -35,7 +35,7 @@ function Invoke-QConf {
                     if (!$entry) {
                         throw "entry '$entry' not found"
                     }
-                    $options = Get-CompletionList $entry -listKey "options" -reservedKeys $script:languages.conf.reservedKeys -maxDepth 1
+                    $options = Get-CompletionList $entry -listKey "options" -language "conf" -maxDepth 1
                     return $options.Keys | ? { $_.startswith($wordToComplete) }
                 }
                 catch {
@@ -114,7 +114,7 @@ function Invoke-QConf {
                 }
 
                 $optionKey = $value
-                $options = Get-CompletionList $subEntry -listKey "options" -reservedKeys $script:languages.conf.reservedKeys -maxDepth 1
+                $options = Get-CompletionList $subEntry -listKey "options" -language "conf" -maxDepth 1
                 $optionValue = $options.$optionKey
 
                 $bound = $PSBoundParameters
@@ -126,14 +126,14 @@ function Invoke-QConf {
                 $entries = $entry
                 if (!$entries) {
                     # not passing -listKey "options" here, as we don't want to expand options - we just need top-level keys
-                    $entries = (Get-CompletionList $map -reservedKeys $script:languages.conf.reservedKeys).Keys
+                    $entries = (Get-CompletionList $map -language "conf").Keys
                 }
 
                 foreach ($entry in @($entries)) {
                     try {
                         $subEntry = $map.$entry
 
-                        $options = Get-CompletionList $subEntry -listKey "options" -reservedKeys $script:languages.conf.reservedKeys -maxDepth 1
+                        $options = Get-CompletionList $subEntry -listKey "options" -language "conf" -maxDepth 1
 
                         $bound = $PSBoundParameters
                         $bound.options = $options
