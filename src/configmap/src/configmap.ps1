@@ -31,10 +31,12 @@ function Resolve-ConfigMap {
         [switch][bool]$lookUp = $true
     )
     
-    if ($map -is [string]) {
+    if ($map -is [string] -or !$map) {
         $map = Resolve-ConfigMapFile $map $fallback
     }
-    
+    if (!$map) {
+        throw "No map provided and fallback '$fallback' not found"
+    }
     return $map
 }
 
@@ -391,14 +393,14 @@ function Invoke-EntryCommand($entry, $key, $ordered = @(), $bound = @{}) {
     if (!$bound._context.self) { $bound._context.self = $entry }
     
     $filtered = @{}
-    write-verbose "script args: $( $scriptArgs.Keys -join ', ' )"
+    Write-Verbose "script args: $( $scriptArgs.Keys -join ', ' )"
     foreach ($boundKey in $bound.Keys) {        
         if ($boundKey -in $scriptArgs.Keys) {
-            write-verbose "adding '$boundKey'"
+            Write-Verbose "adding '$boundKey'"
             $filtered[$boundKey] = $bound[$boundKey]
         }
         else {
-            write-verbose "skipping '$boundKey'"
+            Write-Verbose "skipping '$boundKey'"
         }
     }
     
@@ -544,7 +546,7 @@ function Invoke-QBuild {
             # we should pass null instead?
             #Invoke-EntryCommand -entry $_.value -key $_.Key $bound
             $bound = $PSBoundParameters
-            $bound.Remove("entry") | out-null
+            $bound.Remove("entry") | Out-Null
             Invoke-EntryCommand -entry $_.value -key $command -bound $bound
         }
     
