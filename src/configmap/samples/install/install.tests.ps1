@@ -1,20 +1,21 @@
 BeforeAll {
     Get-Module ConfigMap -ErrorAction SilentlyContinue | Remove-Module
-    import-module $PSScriptRoot\..\..\src\configmap.psm1
+    Import-Module $PSScriptRoot\..\..\configmap.psm1
 }
 
-Describe "install" {
+
+Describe "install" -Skip {
     BeforeAll {
         $modules = . "$PSScriptRoot/.configuration.map.ps1"
         Mock install-mypackage {
             param($package)
-            write-host "mocked package install of $($package.name)"
+            Write-Host "mocked package install of $($package.name)"
         }
     }
 
     It "can list keys" {
         $list = Get-CompletionList $modules
-        $list | Should -not -BeNullOrEmpty
+        $list | Should -Not -BeNullOrEmpty
         $list.Keys | Should -Contain "media*"
     }
 

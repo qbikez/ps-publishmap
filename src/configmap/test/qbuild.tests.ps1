@@ -3,7 +3,7 @@ BeforeDiscovery {
 }
 BeforeAll {
     Get-Module ConfigMap -ErrorAction SilentlyContinue | Remove-Module
-    Import-Module $PSScriptRoot\..\src\configmap.psm1
+    Import-Module $PSScriptRoot\..\configmap.psm1
 }
 
 Describe "qbuild" {
@@ -273,13 +273,13 @@ Describe "hierarchical" {
 Describe "hierarchical completion" {
     BeforeAll {
         $targets = @{
-            "parent" = @{
+            "parent"  = @{
                 "write:simple"  = {
                     param([string] $message)
                     Write-Host "SIMPLE: '$message'"
                 }
                 "write:wrapped" = @{
-                    exec  = {
+                    exec = {
                         param([string] $message)
                         Write-Host "WRAPPED: '$message'"
                     }
@@ -300,7 +300,7 @@ Describe "hierarchical completion" {
     }
 
     It "should complete partial parent name 'paren' to show all parent.* commands" {
-        $completions = Get-EntryCompletion $targets $null $null "paren" $null @{}
+        $completions = Get-EntryCompletion -map $targets -language build -wordToComplete "paren" @{}
         
         $completions | Should -Contain "parent.write:simple"
         $completions | Should -Contain "parent.write:wrapped" 
@@ -309,7 +309,7 @@ Describe "hierarchical completion" {
     }
 
     It "should complete 'parent.' to show all parent child commands" {
-        $completions = Get-EntryCompletion $targets $null $null "parent." $null @{}
+        $completions = Get-EntryCompletion -map $targets -language build -wordToComplete "parent." @{}
         
         $completions | Should -Contain "parent.write:simple"
         $completions | Should -Contain "parent.write:wrapped"
@@ -319,7 +319,7 @@ Describe "hierarchical completion" {
     }
 
     It "should complete 'parent.write' to show only matching write commands" {
-        $completions = Get-EntryCompletion $targets $null $null "parent.write" $null @{}
+        $completions = Get-EntryCompletion -map $targets -language build -wordToComplete "parent.write" @{}
         
         $completions | Should -Contain "parent.write:simple"
         $completions | Should -Contain "parent.write:wrapped"
@@ -328,14 +328,14 @@ Describe "hierarchical completion" {
     }
 
     It "should complete regular commands normally" {
-        $completions = Get-EntryCompletion $targets $null $null "reg" $null @{}
+        $completions = Get-EntryCompletion -map $targets -language build -wordToComplete "reg" @{}
         
         $completions | Should -Contain "regular"
         $completions | Should -Not -Contain "parent.write:simple"
     }
 
     It "should complete partial parent names to multiple parent groups" {
-        $completions = Get-EntryCompletion $targets $null $null "" $null @{}
+        $completions = Get-EntryCompletion -map $targets -language build -wordToComplete "" @{}
         
         $completions | Should -Contain "parent.write:simple"
         $completions | Should -Contain "another.nested:cmd"
@@ -345,7 +345,7 @@ Describe "hierarchical completion" {
     }
 
     It "should handle empty completion to show all available commands" {
-        $completions = Get-EntryCompletion $targets $null $null "" $null @{}
+        $completions = Get-EntryCompletion -map $targets -language build -wordToComplete "" @{}
         
         # Should contain both hierarchical and flat commands
         $completions.Count | Should -BeGreaterThan 5

@@ -3,7 +3,7 @@
 }
 BeforeAll {
     Get-Module ConfigMap -ErrorAction SilentlyContinue | Remove-Module
-    Import-Module $PSScriptRoot\..\src\configmap.psm1
+    Import-Module $PSScriptRoot\..\configmap.psm1
 
     function Get-ValuesList(
         [ValidateScript({
@@ -288,7 +288,7 @@ Describe "qconf" {
         }
         Mock Set-Conf
         $targets = [ordered]@{
-            "db" = @{
+            "db"   = @{
                 options = { return [ordered]@{
                         "local"  = @{
                             "connectionString" = "localconnstr"
@@ -324,7 +324,7 @@ Describe "qconf" {
         }
         It "should return top-level completion list" {
             $list = Get-CompletionList $targets -reservedKeys $language.reservedKeys
-            $list.Keys | Should -Be @("db","test")
+            $list.Keys | Should -Be @("db", "test")
         }
         It "should return options list" {
             $entry = Get-MapEntry $targets "db"
@@ -617,7 +617,7 @@ Describe "deep hierarchical execution" {
                 }
                 "db"         = [ordered]@{
                     exec           = {
-                        write-host "db top-level exec"
+                        Write-Host "db top-level exec"
                     }
                     "migrate"      = {
                         Write-Host "db.migrate command"
@@ -683,11 +683,11 @@ Describe "custom commands" {
         $mixedMap = [ordered]@{
             "db" = [ordered]@{ 
                 init    = {
-                    write-host "db init"
+                    Write-Host "db init"
                 }
                 migrate = [ordered]@{
                     exec        = {
-                        write-host "db migrate"
+                        Write-Host "db migrate"
                     }
                     description = "Migrate command"
                 }
@@ -722,13 +722,13 @@ Describe "custom commands" {
 
     Describe "entry as submap" {
         BeforeAll {
-            $entry = get-mapentry $mixedMap "db"
+            $entry = Get-MapEntry $mixedMap "db"
             $entry | Should -Not -BeNullOrEmpty
             $entry | Should -BeOfType [System.Collections.IDictionary]
         }
 
         It "should return expected completionlist" {
-            $flatList = Get-CompletionList $entry -flatten:$false
+            $flatList = Get-CompletionList $entry -flatten:$false -language build
             $flatList.Keys | Should -Be @(
                 "init"
                 "migrate"
