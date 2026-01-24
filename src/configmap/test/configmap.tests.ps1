@@ -723,8 +723,8 @@ Describe "custom commands" {
     Describe "entry as submap" {
         BeforeAll {
             $entry = Get-MapEntry $mixedMap "db"
-            $entry | Should -Not -BeNullOrEmpty
-            $entry | Should -BeOfType [System.Collections.IDictionary]
+            $entry | Should -Not -BeNullOrEmpty -Because "db entry should exist"
+            $entry | Should -BeOfType [System.Collections.IDictionary] -Because "db entry should be a submap"
         }
 
         It "should return expected completionlist" {

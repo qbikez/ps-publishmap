@@ -1,3 +1,16 @@
+
+function Get-MapEntry(
+    [ValidateScript({
+            $_ -is [System.Collections.IDictionary] -or $_ -is [array]
+        })]
+    $map,
+    $key,
+    $separator = ".",
+    $reservedKeys = $null
+) {
+    return (Get-MapEntries $map $key -separator $separator -language $language).Value
+}
+
 function Get-MapEntries(
     [ValidateScript({
             $_ -is [System.Collections.IDictionary] -or $_ -is [array]
@@ -7,7 +20,7 @@ function Get-MapEntries(
     [switch][bool]$flatten = $false,
     [switch][bool]$leafsOnly = $false,
     $separator = ".",
-    $reservedKeys = $null
+    $language = $null
 ) {
     $results = @()
 
@@ -18,6 +31,33 @@ function Get-MapEntries(
         if ($found) {
             $results += $found
         }
+        # else {
+        #     # Fallback: try to find the entry by navigating the map directly
+        #     # This handles containers that aren't in the completion list
+        #     $parts = $key -split [regex]::Escape($separator)
+        #     $current = $map
+        #     $found = $true
+            
+        #     foreach ($part in $parts) {
+        #         if ($current -is [System.Collections.IDictionary]) {
+        #             try {
+        #                 $current = $current[$part]
+        #             }
+        #             catch {
+        #                 $found = $false
+        #                 break
+        #             }
+        #         }
+        #         else {
+        #             $found = $false
+        #             break
+        #         }
+        #     }
+            
+        #     if ($found -and $current -ne $null) {
+        #         $results += @{Key = $key; Value = $current }
+        #     }
+        # }
     }
 
     if (!$results) {
@@ -25,18 +65,8 @@ function Get-MapEntries(
         Write-Verbose "entry '$keys' not found in ($($completions.Keys))"
     }
 
-    return $results
-}
 
-function Get-MapEntry(
-    [ValidateScript({
-            $_ -is [System.Collections.IDictionary] -or $_ -is [array]
-        })]
-    $map,
-    $key,
-    $separator = "."
-) {
-    return (Get-MapEntries $map $key -separator $separator).Value
+    return $results
 }
 
 # TODO: key should be a hidden property of $entry
