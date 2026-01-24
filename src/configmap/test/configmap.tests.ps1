@@ -741,3 +741,56 @@ Describe "custom commands" {
         }
     }
 }
+
+Describe "#include directives" {
+    BeforeAll {
+        $language = Get-MapLanguage "build"
+        $importSampleDir = Join-Path $PSScriptRoot "..\samples\import"
+    }
+
+    It "should include and prefix entries from child directory" {
+        $mapPath = Join-Path $importSampleDir ".build.map.ps1"
+        $map = . $mapPath
+        $completions = Get-CompletionList $map -reservedKeys $language.reservedKeys -baseDir $importSampleDir
+        
+        $completions.Keys | Should -Contain "child.inner-task-1"
+        $completions.Keys | Should -Contain "child.inner-2"
+        $completions.Keys | Should -Contain "top-level"
+    }
+
+    It "should execute included prefixed entry" {
+        $mapPath = Join-Path $importSampleDir ".build.map.ps1"
+        $map = . $mapPath
+        
+        $entry = Get-MapEntry $map "child.inner-task-1"
+        $entry | Should -Not -BeNullOrEmpty
+        
+        $output = & $entry 2>&1
+        $output | Should -Contain "Executing child task 1"
+    }
+
+    It "should include and merge entries without prefix" {
+        $mapNoPrefixTest = @{
+            "top-level" = { Write-Host "top level task" }
+            "#include"  = @{
+                "child" = @{
+                    prefix = $false
+                }
+            }
+        }
+        
+        $completions = Get-CompletionList $mapNoPrefixTest -reservedKeys $language.reservedKeys -baseDir (Join-Path $importSampleDir)
+        
+        $completions.Keys | Should -Contain "inner-task-1"
+        $completions.Keys | Should -Contain "inner-2"
+        $completions.Keys | Should -Not -Contain "child.inner-task-1"
+    }
+
+    It "should skip #include key in completion list" {
+        $mapPath = Join-Path $importSampleDir ".build.map.ps1"
+        $map = . $mapPath
+        $completions = Get-CompletionList $map -reservedKeys $language.reservedKeys -baseDir $importSampleDir
+        
+        $completions.Keys | Should -Not -Contain "#include"
+    }
+}
