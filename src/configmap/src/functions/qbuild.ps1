@@ -4,10 +4,11 @@ function Invoke-QBuild {
         [ArgumentCompleter({
                 param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
                 try {
-                    # ipmo configmap
-                    $map = $fakeBoundParameters.map
-                    $resolved = Resolve-ConfigMap $map -fallback "./.build.map.ps1"
-                    if ($resolved.source -eq "file" -and !(Test-Path $resolved.sourceFile)) {
+                    $mapPath = if ($fakeBoundParameters.map) { $fakeBoundParameters.map } else { "./.build.map.ps1" }
+                    $localMapExists = Test-Path $mapPath
+
+                    $resolved = Resolve-ConfigMap $fakeBoundParameters.map -fallback "./.build.map.ps1" -ErrorAction Ignore
+                    if (!$resolved -or ($resolved.source -eq "file" -and !(Test-Path $resolved.sourceFile))) {
                         return @("!init", "help", "list") | ? { $_.startswith($wordToComplete) }
                     }
                     $map = $resolved | % {
@@ -16,7 +17,13 @@ function Invoke-QBuild {
                         }
                         $_
                     } | % { $_.map } | Assert-ConfigMap
-                    return Get-EntryCompletion $map -language "build" @PSBoundParameters
+
+                    $completions = Get-EntryCompletion $map -language "build" @PSBoundParameters
+                    # Include !init if no local map file exists
+                    if (!$localMapExists) {
+                        $completions = @("!init" | ? { $_.startswith($wordToComplete) }) + $completions
+                    }
+                    return $completions
                 }
                 catch {
                     return "ERROR [-entry]: $($_.Exception.Message) $($_.ScriptStackTrace)"
@@ -68,35 +75,12 @@ function Invoke-QBuild {
             return
         }
         if ($entry -eq "!init") {
-            $resolved = Resolve-ConfigMap $map -ErrorAction Ignore -lookUp:$false
-            if (!$resolved) {
-                Initialize-BuildMap -file $map
-                return
+            # Only check current directory - create new map regardless of parent configs
+            if (Test-Path $map) {
+                throw "map file '$map' already exists"
             }
-
-            $loadedMap = $resolved | % { if ($_.source -eq "file") { $_.map = . $_.sourceFile }; $_ } | % { $_.map }
-            if (!$loadedMap) {
-                if ($map -isnot [string]) {
-                    throw "Map appears to be an object, not a file"
-                }
-                if ((Test-Path $map)) {
-                    throw "map file '$map' already exists"
-                }
-
-                Initialize-BuildMap -file $map
-
-                return
-            }
-            else {
-                $completionList = Get-CompletionList $loadedMap -language "build"
-                if ($completionList.Keys -notcontains "!init") {
-                    throw "map file '$map' already exists"
-                }
-                else {
-                    # continue with executing "init" command
-                }
-            }
-
+            Initialize-BuildMap -file $map
+            return
         }
 
         $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" -ErrorAction Ignore | % {

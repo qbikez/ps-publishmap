@@ -346,11 +346,74 @@ Describe "hierarchical completion" {
 
     It "should handle empty completion to show all available commands" {
         $completions = Get-EntryCompletion -map $targets -language build -wordToComplete "" @{}
-        
+
         # Should contain both hierarchical and flat commands
         $completions.Count | Should -BeGreaterThan 5
         $completions | Should -Contain "regular"
         $completions | Should -Contain "parent.write:simple"
         $completions | Should -Contain "another.nested:cmd"
+    }
+}
+
+Describe "qbuild !init" {
+    BeforeAll {
+        $testRoot = Join-Path $TestDrive "init-test"
+        $parentDir = Join-Path $testRoot "parent"
+        $childDir = Join-Path $parentDir "child"
+        New-Item -ItemType Directory -Path $childDir -Force | Out-Null
+    }
+
+    It "should fail when map file already exists in current directory" {
+        $existingDir = Join-Path $testRoot "existing"
+        New-Item -ItemType Directory -Path $existingDir -Force | Out-Null
+        "@{ 'test' = { Write-Host 'test' } }" | Out-File (Join-Path $existingDir ".build.map.ps1")
+
+        Push-Location $existingDir
+        try {
+            { qbuild "!init" } | Should -Throw "*already exists*"
+        }
+        finally {
+            Pop-Location
+        }
+    }
+
+    It "should create map file even when parent directory has one" {
+        # clean up any existing map files first
+        Remove-Item (Join-Path $childDir ".build.map.ps1") -ErrorAction Ignore
+
+        "@{ 'parent-cmd' = { Write-Host 'parent' } }" | Out-File (Join-Path $parentDir ".build.map.ps1")
+
+        Push-Location $childDir
+        try {
+            # !init should create a new file regardless of parent's map
+            qbuild "!init"
+            # verify file was created in child
+            Test-Path ".build.map.ps1" | Should -BeTrue
+        }
+        finally {
+            Pop-Location
+        }
+    }
+
+    It "should include !init in completions when no local map but parent has one" {
+        # clean up any existing map files first
+        Remove-Item (Join-Path $childDir ".build.map.ps1") -ErrorAction Ignore
+
+        "@{ 'parent-cmd' = { Write-Host 'parent' } }" | Out-File (Join-Path $parentDir ".build.map.ps1")
+
+        Push-Location $childDir
+        try {
+            # simulate tab completion
+            $completer = (Get-Command qbuild).Parameters['entry'].Attributes |
+                Where-Object { $_ -is [System.Management.Automation.ArgumentCompleterAttribute] } |
+                Select-Object -First 1
+            $completions = & $completer.ScriptBlock "qbuild" "entry" "" $null @{}
+
+            $completions | Should -Contain "!init"
+            $completions | Should -Contain "parent-cmd"
+        }
+        finally {
+            Pop-Location
+        }
     }
 }
