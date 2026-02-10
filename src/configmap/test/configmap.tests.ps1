@@ -768,7 +768,7 @@ Describe "#include directives" {
         $entry = Get-MapEntry $map "child.inner-task-1" -language "build"
         $entry | Should -Not -BeNullOrEmpty
             
-        $output = & $entry *>&1
+        $output = Invoke-EntryCommand $entry *>&1 | Out-String
         $output | Should -Match "Executing child task 1"
     }
 
