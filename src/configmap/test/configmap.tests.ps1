@@ -796,4 +796,19 @@ Describe "#include directives" {
         
         $completions.Keys | Should -Not -Contain "#include"
     }
+
+    It "should run included scripts in their own directories" {
+        $mapPath = Join-Path $importSampleDir ".build.map.ps1"
+        $map = . $mapPath
+        
+        $entry = Get-MapEntry $map "child.inner-task-1" -language "build"
+        $entry | Should -Not -BeNullOrEmpty
+        
+        # Invoke the entry command and capture the result
+        $result = Invoke-EntryCommand $entry
+        
+        # The script should report running from the child directory
+        $childDir = Join-Path $importSampleDir "child"
+        $result.pwd | Should -Be $childDir
+    }
 }
