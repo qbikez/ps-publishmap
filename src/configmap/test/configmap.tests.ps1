@@ -850,3 +850,98 @@ Describe "#include directives" {
         $currentDir | Should -Be $initialDir
     }
 }
+
+Describe "#include with parent directory traversal" {
+    BeforeAll {
+        # Directory structure in TestDrive:
+        #   root/
+        #     .build.map.ps1       (parent map with #include "child")
+        #     child/
+        #       .build.map.ps1     (child build map)
+        #     nomap/               (no map file - qbuild invoked from here)
+
+        $testRoot = Join-Path $TestDrive "include-traversal"
+        $childDir = Join-Path $testRoot "child"
+        $nomapDir = Join-Path $testRoot "nomap"
+
+        New-Item -ItemType Directory -Path $childDir -Force | Out-Null
+        New-Item -ItemType Directory -Path $nomapDir -Force | Out-Null
+
+        Set-Content (Join-Path $testRoot ".build.map.ps1") @'
+@{
+    "top-level" = {
+        Write-Host "top level task"
+    }
+    "#include"  = @{
+        "child" = @{
+            prefix = $true
+        }
+    }
+}
+'@
+
+        Set-Content (Join-Path $childDir ".build.map.ps1") @'
+@{
+    "child-task" = {
+        return @{
+            pwd = $PWD.Path
+        }
+    }
+}
+'@
+    }
+
+    It "should find parent map when invoked from subdirectory without map file" {
+        pushd $nomapDir
+        try {
+            $resolved = Resolve-ConfigMap -fallback "./.build.map.ps1"
+            $resolved.sourceFile | Should -Be (Join-Path $testRoot ".build.map.ps1")
+        }
+        finally {
+            popd
+        }
+    }
+
+    It "should resolve #include relative to map file directory, not CWD" {
+        pushd $nomapDir
+        try {
+            $resolved = Resolve-ConfigMap -fallback "./.build.map.ps1"
+            $map = $resolved | % {
+                if ($_.source -eq "file") {
+                    $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
+                }
+                $_
+            } | % { $_.map }
+
+            $completions = Get-CompletionList $map -language "build"
+
+            $completions.Keys | Should -Contain "top-level"
+            $completions.Keys | Should -Contain "child.child-task"
+        }
+        finally {
+            popd
+        }
+    }
+
+    It "should execute included entry when invoked from subdirectory" {
+        pushd $nomapDir
+        try {
+            $resolved = Resolve-ConfigMap -fallback "./.build.map.ps1"
+            $map = $resolved | % {
+                if ($_.source -eq "file") {
+                    $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
+                }
+                $_
+            } | % { $_.map }
+
+            $entry = Get-MapEntry $map "child.child-task" -language "build"
+            $entry | Should -Not -BeNullOrEmpty
+
+            $result = Invoke-EntryCommand $entry
+            $result.pwd | Should -Be $childDir
+        }
+        finally {
+            popd
+        }
+    }
+}

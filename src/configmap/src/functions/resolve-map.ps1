@@ -115,6 +115,8 @@ function Add-BaseDir {
         $baseDir = Split-Path $baseDir -Parent
     }
 
+    $map._baseDir = $baseDir
+
     $reservedKeys = @("exec", "set", "get", "options", "list", "description", "#include")
     
     foreach ($key in @($map.Keys)) {

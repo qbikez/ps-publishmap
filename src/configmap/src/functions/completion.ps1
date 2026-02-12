@@ -54,7 +54,7 @@ function Get-CompletionList {
             foreach ($kvp in $list.GetEnumerator()) {
                 # Handle #include directives first (before reserved keys check)
                 if ($kvp.key -eq "#include") {
-                    $includedEntries = Merge-IncludeDirectives $kvp.value -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language
+                    $includedEntries = Merge-IncludeDirectives $kvp.value -baseDir $map._baseDir -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language
                     foreach ($inc in $includedEntries.GetEnumerator()) {
                         $result[$inc.Key] = $inc.Value
                     }
@@ -126,9 +126,12 @@ function Merge-IncludeDirectives {
         Processes #include directives and merges included map entries
     .PARAMETER includes
         Hashtable with include configuration (directory names as keys with prefix option)
+    .PARAMETER baseDir
+        Base directory for resolving include paths. Defaults to $PWD if not specified.
     #>
     param(
         [System.Collections.IDictionary]$includes,
+        [string]$baseDir = $null,
         [switch][bool]$flatten = $false,
         [switch][bool]$leafsOnly = $false,
         $separator = ".",
@@ -137,7 +140,7 @@ function Merge-IncludeDirectives {
 
     $result = [ordered]@{}
 
-    $baseDir = $PWD.Path
+    if (!$baseDir) { $baseDir = $PWD.Path }
 
     foreach ($kvp in $includes.GetEnumerator()) {
         $dirName = $kvp.Key
