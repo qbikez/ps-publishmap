@@ -7,18 +7,33 @@ function Invoke-QConf {
         [ArgumentCompleter({
                 param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
                 try {
-                    # ipmo configmap
-                    $map = $fakeBoundParameters.map
-                    $map = $map -is [System.Collections.IDictionary] ? $map : (Resolve-ConfigMap $map -fallback ".configuration.map.ps1" | % {
+                    $mapPath = if ($fakeBoundParameters.map) { $fakeBoundParameters.map } else { "./.configuration.map.ps1" }
+                    $localMapExists = Test-Path $mapPath
+
+                    $inputMap = $fakeBoundParameters.map
+                    $resolved = if ($inputMap -is [System.Collections.IDictionary]) {
+                        [PSCustomObject]@{ source = "object"; map = $inputMap }
+                    } else {
+                        Resolve-ConfigMap $inputMap -fallback ".configuration.map.ps1" -ErrorAction Ignore
+                    }
+
+                    if (!$resolved -or ($resolved.source -eq "file" -and !(Test-Path $resolved.sourceFile))) {
+                        return @("!init", "help", "list") | ? { $_.startswith($wordToComplete) }
+                    }
+
+                    $map = $resolved | % {
                         if ($_.source -eq "file") {
                             $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
                         }
                         $_
-                    } | % { $_.map } | Assert-ConfigMap)
-                    if (!$map) {
-                        return @("init", "help", "list") | ? { $_.startswith($wordToComplete) }
+                    } | % { $_.map } | Assert-ConfigMap
+
+                    $completions = Get-EntryCompletion $map -language "conf" @PSBoundParameters
+                    # Include !init if no local map file exists
+                    if (!$localMapExists) {
+                        $completions = @("!init" | ? { $_.startswith($wordToComplete) }) + $completions
                     }
-                    return Get-EntryCompletion $map -language "conf" @PSBoundParameters
+                    return $completions
                 }
                 catch {
                     return "ERROR [-entry]: $($_.Exception.Message) $($_.ScriptStackTrace)"
@@ -91,19 +106,12 @@ function Invoke-QConf {
             Write-Host "qconf -entry <entry> -command <command> -value <value>"
             return
         }
-        if ($command -eq "init") {
-            if (!$map) { $map = "./.configuration.map.ps1" }
-            if ($map -is [string]) {
-                if ((Test-Path $map)) {
-                    throw "map file '$map' already exists"
-                }
+        if ($entry -eq "!init") {
+            # Only check current directory - create new map regardless of parent configs
+            if (Test-Path $map) {
+                throw "map file '$map' already exists"
             }
-            else {
-                throw "Map appears to be an object, not a file"
-            }
-
             Initialize-ConfigMap -file $map
-
             return
         }
 
