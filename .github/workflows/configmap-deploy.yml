@@ -25,6 +25,14 @@ jobs:
           Import-Module require
           req pathutils
 
+      - name: Run tests
+        shell: pwsh
+        run: |
+          $testResults = Invoke-Pester -Path ./src/configmap/tests -PassThru
+          if ($testResults.FailedCount -gt 0) {
+            throw "Tests failed. Failed count: $($testResults.FailedCount)"
+          }
+
       - name: Publish configmap
         shell: pwsh
         env:
