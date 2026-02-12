@@ -30,6 +30,7 @@ jobs:
         uses: PSModule/Invoke-Pester@v3
         with:
           Path: ./src/configmap/test
+          Run_Path: ./src/configmap/test
 
       - name: Publish configmap
         shell: pwsh
