@@ -5,12 +5,13 @@ on:
     branches: [master]
     paths:
       - 'src/configmap/**'
+      - '.github/workflows/configmap-deploy.yml'
 
   workflow_dispatch:
 
 jobs:
   publish:
-    runs-on: windows-latest
+    runs-on: linux-latest
     steps:
       - uses: actions/checkout@v4
         with:
