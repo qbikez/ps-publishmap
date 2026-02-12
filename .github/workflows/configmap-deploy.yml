@@ -26,12 +26,9 @@ jobs:
           req pathutils
 
       - name: Run tests
-        shell: pwsh
-        run: |
-          $testResults = Invoke-Pester -Path ./src/configmap/tests -PassThru
-          if ($testResults.FailedCount -gt 0) {
-            throw "Tests failed. Failed count: $($testResults.FailedCount)"
-          }
+        uses: PSModule/Invoke-Pester@v3
+        with:
+          Run_Path: ./src/configmap/test
 
       - name: Publish configmap
         shell: pwsh
