@@ -160,7 +160,6 @@ function Merge-IncludeDirectives {
         # Load the map from the included directory
         $includedMap = . $mapFile
         
-        # Inject _baseDir for included entries (wraps bare scriptblocks)
         $includedMap = Add-BaseDir $includedMap $includePath
 
         # Process the included map
@@ -180,45 +179,11 @@ function Merge-IncludeDirectives {
                 $key = $entry.Key
             }
             
-            # Add _source metadata to the entry for working directory resolution
-            $entryWithSource = Add-SourceMetadata -entry $entry.Value -sourcePath $mapFile
-            $result[$key] = $entryWithSource
+            $result[$key] = $entry.Value
         }
     }
 
     return $result
-}
-
-function Add-SourceMetadata {
-    <#
-    .SYNOPSIS
-        Adds _source metadata to an entry for working directory resolution
-    #>
-    param(
-        $entry,
-        [string]$sourcePath
-    )
-
-    if ($entry -is [scriptblock]) {
-        # Wrap scriptblock in a hashtable with exec and _source
-        return @{
-            exec    = $entry
-            _source = $sourcePath
-        }
-    }
-    elseif ($entry -is [System.Collections.IDictionary]) {
-        # Add _source to existing hashtable (create copy to avoid modifying original)
-        $withSource = [ordered]@{}
-        foreach ($kvp in $entry.GetEnumerator()) {
-            $withSource[$kvp.Key] = $kvp.Value
-        }
-        $withSource['_source'] = $sourcePath
-        return $withSource
-    }
-    else {
-        # Return as-is for non-scriptblock values
-        return $entry
-    }
 }
 
 function Get-EntryCompletion(

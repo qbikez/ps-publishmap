@@ -27,23 +27,20 @@ function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}
         }
     }
 
-    # Check for _source metadata to change working directory
-    $sourcePath = $null
-    if ($entry -is [System.Collections.IDictionary] -and $entry._source) {
-        $sourcePath = $entry._source
+    $baseDir = $null
+    if (!$baseDir -and $entry -is [System.Collections.IDictionary] -and $entry._baseDir) {
+        $baseDir = $entry._baseDir
     }
-
-    if ($sourcePath) {
-        try {
-            Push-Location (Split-Path $sourcePath)
-            return & $command @ordered @filtered
-        }
-        finally {
-            Pop-Location
-        }
+    if (!$baseDir) {
+        $baseDir = Get-Location
     }
-    else {
+    
+    try {
+        pushd $baseDir
         return & $command @ordered @filtered
+    }
+    finally {
+        popd
     }
 }
 
