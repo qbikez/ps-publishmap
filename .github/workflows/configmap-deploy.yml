@@ -1,0 +1,41 @@
+name: Publish configmap
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'src/configmap/**'
+
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module -Name Pester -Force -Confirm:$false
+          Install-Module -Name require -Force -Confirm:$false
+          Import-Module require
+          req pathutils
+
+      - name: Publish configmap
+        shell: pwsh
+        env:
+          PS_PUBLISH_REPO_KEY: ${{ secrets.PS_PUBLISH_REPO_KEY }}
+        run: |
+          scripts/lib/push.ps1 -path ./src/configmap -newversion -Verbose
+
+      - name: Commit version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add src/configmap/configmap.psd1
+          git diff --cached --quiet || git commit -m "bump configmap version"
+          git push
