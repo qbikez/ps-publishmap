@@ -37,7 +37,7 @@ jobs:
         env:
           PS_PUBLISH_REPO_KEY: ${{ secrets.PS_PUBLISH_REPO_KEY }}
         run: |
-          scripts/lib/push.ps1 -path ./src/configmap -newversion -Verbose
+          scripts/lib/push.ps1 -path ./src/configmap/configmap.psd1 -newversion -Verbose
 
       - name: Commit version bump
         run: |
