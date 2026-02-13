@@ -505,6 +505,27 @@ Describe "deep hierarchical execution" {
         Mock Write-Host
     }
 
+    Describe "nested map prefix requirement" {
+        It "should only allow access via parent prefix" {
+            $map = @{
+                "parent" = @{
+                    "child" = { Write-Host "child" }
+                }
+            }
+
+            $completions = Get-CompletionList $map -flatten:$false -leafsOnly:$true -language "build"
+            $completions.Keys | Should -Contain "parent.child"
+            $completions.Keys | Should -Not -Contain "child"
+
+            $entry = Get-MapEntry $map "child"
+            $entry | Should -BeNullOrEmpty
+
+            $prefixed = Get-MapEntry $map "parent.child"
+            $prefixed | Should -Not -BeNullOrEmpty
+            $prefixed | Should -BeOfType [ScriptBlock]
+        }
+    }
+
     Describe "deep nesting commands" {
         BeforeAll {
             $deepMap = @{
