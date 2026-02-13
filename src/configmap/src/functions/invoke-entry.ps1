@@ -1,10 +1,35 @@
 function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}) {
     $command = Get-EntryCommand $entry $key
-    $scriptArgs = Get-ScriptArgs $command -exclude @()
-
+    
     if (!$command) {
         throw "Command '$key' not found"
     }
+    
+    # Handle exec as list of subcommand names
+    if ($command -is [array]) {
+        if ($entry -isnot [System.Collections.IDictionary]) {
+            throw "Entry must be a hashtable when exec is an array"
+        }
+        
+        $results = @()
+        foreach ($subCommandName in $command) {
+            Write-Verbose "executing subcommand '$subCommandName' from exec list"
+            
+            if (!$entry.$subCommandName) {
+                throw "Subcommand '$subCommandName' not found in entry"
+            }
+            
+            $subEntry = $entry.$subCommandName
+            $result = Invoke-EntryCommand -entry $subEntry -ordered $ordered -bound $bound
+            $results += $result
+        }
+        
+        return $results
+    }
+    
+    # Normal scriptblock execution
+    $scriptArgs = Get-ScriptArgs $command -exclude @()
+
     if ($command -isnot [scriptblock]) {
         throw "Entry '$key' of type $($command.GetType().Name) is not supported"
     }
