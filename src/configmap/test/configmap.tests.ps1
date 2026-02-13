@@ -500,6 +500,59 @@ Describe "qbuild dynamic parameters" {
     }
 }
 
+Describe "exec as list" {
+    BeforeAll {
+        Mock Write-Host
+        
+        $buildTargets = @{
+            "build" = @{
+                exec        = @("frontend", "backend")
+                "frontend"  = {
+                    Write-Host "building frontend"
+                }
+                "backend"   = {
+                    Write-Host "building backend"
+                }
+            }
+        }
+    }
+
+    It "should execute all commands in exec list sequentially" {
+        qbuild -map $buildTargets "build"
+        
+        Should -Invoke Write-Host -Times 2
+        Should -Invoke Write-Host -ParameterFilter { $Object -eq "building frontend" }
+        Should -Invoke Write-Host -ParameterFilter { $Object -eq "building backend" }
+    }
+
+    It "should still execute individual subcommand from build.frontend" {
+        qbuild -map $buildTargets "build.frontend"
+        
+        Should -Invoke Write-Host -Exactly 1 -ParameterFilter { $Object -eq "building frontend" }
+    }
+
+    It "should still execute individual subcommand from build.backend" {
+        qbuild -map $buildTargets "build.backend"
+        
+        Should -Invoke Write-Host -Exactly 1 -ParameterFilter { $Object -eq "building backend" }
+    }
+
+    It "should treat entry with exec list as parent entry" {
+        $entry = Get-MapEntry $buildTargets "build"
+        $result = Test-IsParentEntry $entry
+        
+        # Entry has both exec and subcommands, should be parent
+        $result.IsParent | Should -Be $true
+    }
+
+    It "should include subcommands in completion list" {
+        $completions = Get-CompletionList $buildTargets -language "build" -leafsOnly:$true
+        
+        $completions.Keys | Should -Contain "build.frontend"
+        $completions.Keys | Should -Contain "build.backend"
+    }
+}
+
 Describe "deep hierarchical execution" {
     BeforeEach {
         Mock Write-Host
