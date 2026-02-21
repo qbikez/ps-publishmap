@@ -551,6 +551,24 @@ Describe "exec as list" {
         $completions.Keys | Should -Contain "build.frontend"
         $completions.Keys | Should -Contain "build.backend"
     }
+
+    It "should reslove lists for exec and other keys" {
+        $targets = @{
+            "subcommand" = @{
+                "exec"  = @("build", "test")
+                "build" = { Write-Host "running build" }
+                "test"  = { Write-Host "running tests" }
+                "all"   = @("build", "test")
+            }
+        }
+
+        $o1 = qbuild -map $targets "subcommand" 
+        $o1 | Should -Contain "Resolved to commands: [build, test]"
+
+        { qbuild -map $targets "subcommand.all" } | Should -Not Throw
+        $o2 = qbuild -map $targets "subcommand.all" 
+        $o2 | Should -Contain "Resolved to commands: [build, test]"
+    }
 }
 
 Describe "exec as list - streaming output" {
