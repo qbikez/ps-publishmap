@@ -553,6 +553,43 @@ Describe "exec as list" {
     }
 }
 
+Describe "qbuild list with exec list entries" {
+    BeforeAll {
+        Mock Write-Host
+
+        $buildTargets = @{
+            "build" = @{
+                exec       = @("frontend", "backend")
+                "frontend" = {
+                    Write-Host "building frontend"
+                }
+                "backend"  = {
+                    Write-Host "building backend"
+                }
+            }
+        }
+
+        $invocation = [pscustomobject]@{
+            InvocationName = "qbuild"
+            Statement      = "qbuild"
+        }
+    }
+
+    It "should not throw when listing commands" {
+        { qbuild -map $buildTargets "list" } | Should -Not -Throw
+    }
+
+    It "should not throw when formatting help" {
+        {
+            InModuleScope ConfigMap {
+                param($map, $inv)
+
+                Write-MapHelp -map $map -invocation $inv
+            } -ArgumentList $buildTargets, $invocation
+        } | Should -Not -Throw
+    }
+}
+
 Describe "exec as list - streaming output" {
     # The goal: output from each subcommand should appear immediately after the
     # "[N/M] Running '...'" banner for that command, not buffered until after all
@@ -1073,5 +1110,85 @@ Describe "#include with parent directory traversal" {
         finally {
             popd
         }
+    }
+}
+
+Describe "qbuild with no map file" {
+    BeforeAll {
+        $testDir = Join-Path $TestDrive "no-map-test"
+        New-Item -ItemType Directory -Path $testDir -Force | Out-Null
+    }
+
+    It "should output nothing when no map file exists and entry is provided" {
+        pushd $testDir
+        try {
+            # Capture all output streams and errors
+            $output = $null
+            $errorOutput = $null
+            try {
+                $output = qbuild "anything" 6>&1 5>&1 4>&1 3>&1 2>&1 | Out-String
+            }
+            catch {
+                $errorOutput = $_.Exception.Message
+            }
+            
+            # Currently throws an error, but ideally should output nothing
+            # Documenting current behavior: throws "map file './.build.map.ps1' not found"
+            $errorOutput | Should -Match "map file.*not found"
+        }
+        finally {
+            popd
+        }
+    }
+
+    It "should output nothing when no map file exists and no entry is provided" {
+        pushd $testDir
+        try {
+            # Capture all output streams and errors
+            $output = $null
+            $errorOutput = $null
+            try {
+                $output = qbuild 6>&1 5>&1 4>&1 3>&1 2>&1 | Out-String
+            }
+            catch {
+                $errorOutput = $_.Exception.Message
+            }
+            
+            # Currently throws an error, but ideally should output nothing
+            # Documenting current behavior: throws "map file './.build.map.ps1' not found"  
+            $errorOutput | Should -Match "map file.*not found"
+        }
+        finally {
+            popd
+        }
+    }
+}
+
+Describe "qbuild with non-existing entry" {
+    BeforeAll {
+        Mock Write-Host
+
+        $testMap = @{
+            "existing-command" = {
+                Write-Host "This command exists"
+            }
+            "another-command"  = {
+                Write-Host "Another valid command"
+            }
+        }
+    }
+
+    It "should throw an error when entry does not exist in map" {
+        $errorOutput = $null
+        try {
+            qbuild -map $testMap "non_existing_entry"
+        }
+        catch {
+            $errorOutput = $_.Exception.Message
+        }
+        
+        # Should throw an error indicating the entry doesn't exist
+        $errorOutput | Should -Not -BeNullOrEmpty
+        $errorOutput | Should -Match "entry.*not found|does not exist|unknown|invalid"
     }
 }
