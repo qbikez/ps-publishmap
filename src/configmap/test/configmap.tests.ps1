@@ -506,11 +506,11 @@ Describe "exec as list" {
         
         $buildTargets = @{
             "build" = @{
-                exec        = @("frontend", "backend")
-                "frontend"  = {
+                exec       = @("frontend", "backend")
+                "frontend" = {
                     Write-Host "building frontend"
                 }
-                "backend"   = {
+                "backend"  = {
                     Write-Host "building backend"
                 }
             }
@@ -550,6 +550,62 @@ Describe "exec as list" {
         
         $completions.Keys | Should -Contain "build.frontend"
         $completions.Keys | Should -Contain "build.backend"
+    }
+}
+
+Describe "exec as list - streaming output" {
+    # The goal: output from each subcommand should appear immediately after the
+    # "[N/M] Running '...'" banner for that command, not buffered until after all
+    # commands have finished.
+    #
+    # The bug: Invoke-EntryCommand captures subcommand output with
+    #   $result = Invoke-EntryCommand ...
+    # which buffers ALL stream-1 output until the call returns.  The Write-Host
+    # status banners (stream 6) escape immediately, so the user sees all banners
+    # first and then all output in a lump.
+    #
+    # We detect this by merging all streams with 6>&1…2>&1 so everything ends up
+    # on stream 1 in the order it was emitted, then asserting the interleaved
+    # sequence.  cmd /c echo is used because its output is stream-1 (pipeline)
+    # output — exactly what gets buffered.
+
+    It "output from each command should appear before the next command's banner" {
+        $buildTargets = @{
+            "all" = @{
+                exec       = @("backend", "frontend")
+                "backend"  = {
+                    cmd /c echo backend: step 1
+                    cmd /c echo backend: step 2
+                }
+                "frontend" = {
+                    cmd /c echo frontend: step 1
+                    cmd /c echo frontend: step 2
+                }
+            }
+        }
+
+        # Merge all streams so we capture everything in emission order
+        $log = qbuild -map $buildTargets "all" 6>&1 5>&1 4>&1 3>&1 2>&1 |
+            ForEach-Object { "$_".Trim() }
+
+        # Expected interleaved order:
+        # [0] "Resolved to commands: [backend, frontend]"
+        # [1] "[1/2] Running 'backend'..."
+        # [2] "backend: step 1"      <- must come BEFORE "[2/2] Running 'frontend'..."
+        # [3] "backend: step 2"      <- must come BEFORE "[2/2] Running 'frontend'..."
+        # [4] "[2/2] Running 'frontend'..."
+        # [5] "frontend: step 1"
+        # [6] "frontend: step 2"
+
+        $log | Should -HaveCount 7
+
+        $log[0] | Should -BeLike "*Resolved to commands*"
+        $log[1] | Should -BeLike "*1/2*backend*"
+        $log[2] | Should -Be "backend: step 1"
+        $log[3] | Should -Be "backend: step 2"
+        $log[4] | Should -BeLike "*2/2*frontend*"
+        $log[5] | Should -Be "frontend: step 1"
+        $log[6] | Should -Be "frontend: step 2"
     }
 }
 
