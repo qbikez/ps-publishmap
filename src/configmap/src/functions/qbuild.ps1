@@ -104,6 +104,12 @@ function Invoke-QBuild {
         }
 
         $targets = Get-MapEntries $map $entry
+        
+        # Validate that the entry exists
+        if (!$targets -or $targets.Count -eq 0) {
+            throw "Entry '$entry' not found. Run 'qbuild list' to see all available commands."
+        }
+        
         Write-Verbose "running targets: $($targets.Key)"
 
         @($targets) | % {
