@@ -14,7 +14,6 @@ function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}
         $commandList = $command -join ", "
         Write-Host "Resolved to commands: [$commandList]" -ForegroundColor Cyan
 
-        $results = @()
         for ($i = 0; $i -lt $command.Count; $i++) {
             $subCommandName = $command[$i]
             Write-Host "[$($i + 1)/$($command.Count)] Running '$subCommandName'..." -ForegroundColor Yellow
@@ -24,11 +23,10 @@ function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}
             }
 
             $subEntry = $entry.$subCommandName
-            $result = Invoke-EntryCommand -entry $subEntry -ordered $ordered -bound $bound
-            $results += $result
+            Invoke-EntryCommand -entry $subEntry -ordered $ordered -bound $bound
         }
 
-        return $results
+        return
     }
     
     # Normal scriptblock execution
