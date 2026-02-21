@@ -10,20 +10,24 @@ function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}
         if ($entry -isnot [System.Collections.IDictionary]) {
             throw "Entry must be a hashtable when exec is an array"
         }
-        
+
+        $commandList = $command -join ", "
+        Write-Host "Resolved to commands: [$commandList]" -ForegroundColor Cyan
+
         $results = @()
-        foreach ($subCommandName in $command) {
-            Write-Verbose "executing subcommand '$subCommandName' from exec list"
-            
+        for ($i = 0; $i -lt $command.Count; $i++) {
+            $subCommandName = $command[$i]
+            Write-Host "[$($i + 1)/$($command.Count)] Running '$subCommandName'..." -ForegroundColor Yellow
+
             if (!$entry.$subCommandName) {
                 throw "Subcommand '$subCommandName' not found in entry"
             }
-            
+
             $subEntry = $entry.$subCommandName
             $result = Invoke-EntryCommand -entry $subEntry -ordered $ordered -bound $bound
             $results += $result
         }
-        
+
         return $results
     }
     
