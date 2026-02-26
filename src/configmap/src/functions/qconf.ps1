@@ -13,7 +13,8 @@ function Invoke-QConf {
                     $inputMap = $fakeBoundParameters.map
                     $resolved = if ($inputMap -is [System.Collections.IDictionary]) {
                         [PSCustomObject]@{ source = "object"; map = $inputMap }
-                    } else {
+                    }
+                    else {
                         Resolve-ConfigMap $inputMap -fallback ".configuration.map.ps1" -ErrorAction Ignore
                     }
 
@@ -116,11 +117,11 @@ function Invoke-QConf {
         }
 
         $map = $map -is [System.Collections.IDictionary] ? $map : (Resolve-ConfigMap $map | % {
-            if ($_.source -eq "file") {
-                $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-            }
-            $_
-        } | % { $_.map } | Assert-ConfigMap)
+                if ($_.source -eq "file") {
+                    $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
+                }
+                $_
+            } | % { $_.map } | Assert-ConfigMap)
 
         if (-not $entry -and -not $command) {
             Write-MapHelp -map $map -invocation $MyInvocation -language "conf"
@@ -138,7 +139,7 @@ function Invoke-QConf {
             "set" {
                 $subEntry = $map.$entry
                 if (!$subEntry) {
-                    throw "entry '$entry' not found"
+                    throw "Entry '$entry' not found. Run 'qconf list' to see all available entries."
                 }
 
                 $optionKey = $value

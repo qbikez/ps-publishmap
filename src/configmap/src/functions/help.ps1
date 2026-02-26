@@ -28,7 +28,12 @@ function Write-MapHelp {
         catch {
             $entry = $null
         }
-        $args = $entry ? (Get-ScriptArgs $entry) : @{}
+        if ($entry -is [scriptblock]) {
+            $args = Get-ScriptArgs $entry
+        }
+        else {
+            $args = @{}
+        }
 
         # Format command name with proper padding
         $paddedName = $name.PadRight($maxNameLength)
