@@ -8,6 +8,7 @@ $targets = @{
         }
         dotnet build @a
     }
+    # NPM_SCRIPTS_PLACEHOLDER
 }
 
 return $targets
