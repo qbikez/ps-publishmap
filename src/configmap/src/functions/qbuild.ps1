@@ -30,7 +30,9 @@ function Invoke-QBuild {
                 }
             })]
         $entry = $null,
+        [Parameter(DontShow)]
         $command = "exec",
+        [Parameter(DontShow)]
         $map = "./.build.map.ps1"
     )
     dynamicparam {
