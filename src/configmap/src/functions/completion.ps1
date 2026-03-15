@@ -228,7 +228,7 @@ function Get-EntryDynamicParam(
     $commandKey = $command ? $command : "exec"
     $entryCommand = Get-EntryCommand $selectedEntry $commandKey
     if (!$entryCommand) { return @() }
-    $p = Get-ScriptArgs $entryCommand -skip $skip
+    $p = Get-ScriptArgs $entryCommand -skip $skip -entry $selectedEntry
 
     return $p
 }
@@ -238,12 +238,16 @@ function Get-ScriptArgs {
     param(
         [scriptblock]$func,
         [int]$skip = 0,
-        $exclude = @("$_context", "$_self")
+        $exclude = @("$_context", "$_self"),
+        [System.Collections.IDictionary]$entry = $null
     )
     function Get-SingleArg {
         [OutputType([System.Management.Automation.RuntimeDefinedParameter])]
-        param([System.Management.Automation.Language.ParameterAst] $ast)
-    
+        param(
+            [System.Management.Automation.Language.ParameterAst] $ast,
+            [System.Collections.IDictionary] $entryContext = $null
+        )
+
         $paramAttributesCollect = New-Object -Type System.Collections.ObjectModel.Collection[System.Attribute]
         
         $paramAttribute = New-Object -Type System.Management.Automation.ParameterAttribute
@@ -271,8 +275,21 @@ function Get-ScriptArgs {
                         }
                     }
                     if ($values.Count -gt 0) {
-                        $validateSetAttr = New-Object System.Management.Automation.ValidateSetAttribute([string[]]$values)
-                        $paramAttributesCollect.Add($validateSetAttr)
+                        # Resolve @__siblingKey reference to entry's sibling array
+                        if ($values.Count -eq 1 -and $values[0] -match '^@(.+)$') {
+                            if ($entryContext -isnot [System.Collections.IDictionary]) {
+                                throw "entryContext is not a dictionary"
+                            }
+                            $refKey = $Matches[1]
+                            $resolved = $entryContext[$refKey]
+                            if ($null -ne $resolved -and $resolved -is [array]) {
+                                $values = @($resolved | ForEach-Object { [string]$_ })
+                            }
+                        }
+                        if ($values.Count -gt 0) {
+                            $validateSetAttr = New-Object System.Management.Automation.ValidateSetAttribute([string[]]$values)
+                            $paramAttributesCollect.Add($validateSetAttr)
+                        }
                     }
                 }
             }
@@ -303,7 +320,7 @@ function Get-ScriptArgs {
                 $skipped++
                 continue
             }
-            $dynParam = Get-SingleArg $param
+            $dynParam = Get-SingleArg $param $entry
             $paramDictionary.Add($dynParam.Name, $dynParam)
         }
     }
