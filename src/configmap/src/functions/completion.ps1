@@ -261,6 +261,21 @@ function Get-ScriptArgs {
                     # $paramAttributesCollect.Add($newAttr)
                 }
             }
+            elseif ($attr -is [System.Management.Automation.Language.AttributeAst]) {
+                $typeName = $attr.TypeName.ToString() -replace '^.*\.', ''
+                if ($typeName -eq "ValidateSet") {
+                    $values = @()
+                    foreach ($arg in $attr.PositionalArguments) {
+                        if ($arg -is [System.Management.Automation.Language.StringConstantExpressionAst]) {
+                            $values += $arg.Value
+                        }
+                    }
+                    if ($values.Count -gt 0) {
+                        $validateSetAttr = New-Object System.Management.Automation.ValidateSetAttribute([string[]]$values)
+                        $paramAttributesCollect.Add($validateSetAttr)
+                    }
+                }
+            }
         }
         
         # Create parameter with name, type, and attributes

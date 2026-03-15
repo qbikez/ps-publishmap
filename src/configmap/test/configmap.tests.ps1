@@ -1,4 +1,4 @@
-﻿BeforeDiscovery {
+BeforeDiscovery {
     . "$PSScriptRoot\test-utils.ps1"
 }
 BeforeAll {
@@ -471,6 +471,19 @@ Describe "qbuild dynamic parameters" {
         $parameters = Get-ScriptArgs $ScriptBlock
         $parameters.Keys | Should -Contain "NewVersion"
         $parameters.Keys | Should -Contain "path"
+    }
+
+    It "should attach ValidateSet attribute to dynamic parameter for tab completion" {
+        $scriptWithValidateSet = {
+            param([ValidateSet("debug", "devel", "release")][string]$mode = "debug")
+            Write-Host "building in mode $mode"
+        }
+        $parameters = Get-ScriptArgs $scriptWithValidateSet
+        $parameters.Keys | Should -Contain "mode"
+        $modeParam = $parameters["mode"]
+        $validateSetAttr = $modeParam.Attributes | Where-Object { $_ -is [System.Management.Automation.ValidateSetAttribute] }
+        $validateSetAttr | Should -Not -BeNullOrEmpty
+        $validateSetAttr.ValidValues | Should -Be @("debug", "devel", "release")
     }
 
     It "should handle <EntryType> command with -path parameter" -TestCases @(
