@@ -416,4 +416,31 @@ Describe "qbuild !init" {
             Pop-Location
         }
     }
+
+    It "should add npm entry with script subentries when package.json exists" {
+        $npmDir = Join-Path $testRoot "npm-project"
+        New-Item -ItemType Directory -Path $npmDir -Force | Out-Null
+        Remove-Item (Join-Path $npmDir ".build.map.ps1") -ErrorAction Ignore
+        @'
+{"name":"test","version":"1.0.0","scripts":{"build":"echo build","test":"echo test","lint":"echo lint"}}
+'@ | Out-File (Join-Path $npmDir "package.json") -Encoding utf8
+
+        Push-Location $npmDir
+        try {
+            qbuild "!init"
+            Test-Path ".build.map.ps1" | Should -BeTrue
+            $content = Get-Content ".build.map.ps1" -Raw
+            $content | Should -Match '"npm"\s*=\s*\[ordered\]@\{'
+            $content | Should -Match '"build"\s*=\s*\{\s*npm run'
+            $content | Should -Match '"test"\s*=\s*\{\s*npm run'
+            $content | Should -Match '"lint"\s*=\s*\{\s*npm run'
+            $map = . ".\.build.map.ps1"
+            $map.Keys | Should -Contain "npm"
+            $map.npm.build | Should -BeOfType [ScriptBlock]
+            $map.npm.test | Should -BeOfType [ScriptBlock]
+        }
+        finally {
+            Pop-Location
+        }
+    }
 }
