@@ -43,6 +43,59 @@ Describe "qbuild" {
     }
 }
 
+Describe "qbuild passthrough args (--)" {
+    BeforeAll {
+        $script:capturedAdditionalArgs = $null
+        function Invoke-CaptureAdditionalArgs {
+            param($_context)
+        }
+        Mock Invoke-CaptureAdditionalArgs {
+            param($_context)
+            $script:capturedAdditionalArgs = $_context.additionalArgs
+        }
+        $script:passthroughTargets = @{
+            "build" = {
+                param($_context, [bool][switch]$noRestore)
+                Invoke-CaptureAdditionalArgs @PSBoundParameters
+            }
+        }
+    }
+
+    BeforeEach {
+        $script:capturedAdditionalArgs = $null
+    }
+
+    It "merges tokens after -- into _context.additionalArgs with order preserved" {
+        qbuild -map $script:passthroughTargets "build" -- --config=Release --somethingelse
+        Should -Invoke Invoke-CaptureAdditionalArgs -Times 1
+        $script:capturedAdditionalArgs | Should -Be @('--config=Release', '--somethingelse')
+    }
+
+    It "merges tokens after known args" {
+        qbuild -map $script:passthroughTargets "build" -NoRestore -- --config=Release --somethingelse
+        Should -Invoke Invoke-CaptureAdditionalArgs -Times 1
+        $script:capturedAdditionalArgs | Should -Be @('--config=Release', '--somethingelse')
+    }
+
+    It "does not populate additionalArgs when -- has no following tokens" {
+        qbuild -map $script:passthroughTargets "build" --
+        Should -Invoke Invoke-CaptureAdditionalArgs -Times 1
+        $script:capturedAdditionalArgs | Should -BeNullOrEmpty
+    }
+
+    It "does not populate additionalArgs when none are there" {
+        qbuild -map $script:passthroughTargets "build"
+        Should -Invoke Invoke-CaptureAdditionalArgs -Times 1
+        $script:capturedAdditionalArgs | Should -BeNullOrEmpty
+    }
+
+    It "does not populate additionalArgs with known args" {
+        qbuild -map $script:passthroughTargets "build" -NoRestore
+        Should -Invoke Invoke-CaptureAdditionalArgs -Times 1
+        $script:capturedAdditionalArgs | Should -BeNullOrEmpty
+    }
+}
+
 Describe "qbuild dynamic parameters" {
     BeforeAll {
         Mock Write-Host

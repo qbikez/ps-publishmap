@@ -486,6 +486,42 @@ Describe "qbuild dynamic parameters" {
         $validateSetAttr.ValidValues | Should -Be @("debug", "devel", "release")
     }
 
+    It "should resolve ValidateSet @__siblingKey to sibling entry array for completion" {
+        $mapWithConfigOptions = @{
+            "build" = @{
+                "__configOptions" = @("debug", "release")
+                "exec"             = {
+                    param([ValidateSet("@__configOptions")][string]$config)
+                    Write-Host "building config $config"
+                }
+            }
+        }
+        $parameters = Get-EntryDynamicParam $mapWithConfigOptions "build" "exec"
+        $parameters.Keys | Should -Contain "config"
+        $configParam = $parameters["config"]
+        $validateSetAttr = $configParam.Attributes | Where-Object { $_ -is [System.Management.Automation.ValidateSetAttribute] }
+        $validateSetAttr | Should -Not -BeNullOrEmpty
+        $validateSetAttr.ValidValues | Should -Be @("debug", "release")
+    }
+
+    It "should resolve ValidateSet @__siblingKey when sibling is a scriptblock that returns a list" {
+        $mapWithScriptBlockOptions = @{
+            "build" = @{
+                "__configOptions" = { @("debug", "release") }
+                "exec"             = {
+                    param([ValidateSet("@__configOptions")][string]$config)
+                    Write-Host "building config $config"
+                }
+            }
+        }
+        $parameters = Get-EntryDynamicParam $mapWithScriptBlockOptions "build" "exec"
+        $parameters.Keys | Should -Contain "config"
+        $configParam = $parameters["config"]
+        $validateSetAttr = $configParam.Attributes | Where-Object { $_ -is [System.Management.Automation.ValidateSetAttribute] }
+        $validateSetAttr | Should -Not -BeNullOrEmpty
+        $validateSetAttr.ValidValues | Should -Be @("debug", "release")
+    }
+
     It "should handle <EntryType> command with -path parameter" -TestCases @(
         @{ EntryType = "push:short" }
         @{ EntryType = "push:exec" }

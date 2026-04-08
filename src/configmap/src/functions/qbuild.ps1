@@ -29,11 +29,14 @@ function Invoke-QBuild {
                     return "ERROR [-entry]: $($_.Exception.Message) $($_.ScriptStackTrace)"
                 }
             })]
+        [Parameter(Position = 0)]
         $entry = $null,
         [Parameter(DontShow)]
         $command = "exec",
         [Parameter(DontShow)]
-        $map = "./.build.map.ps1"
+        $map = "./.build.map.ps1",
+        [Parameter(ValueFromRemainingArguments = $true, DontShow = $true)]
+        [string[]]$RemainingArguments
     )
     dynamicparam {
         try {
@@ -121,6 +124,14 @@ function Invoke-QBuild {
             #Invoke-EntryCommand -entry $_.value -key $_.Key $bound
             $bound = $PSBoundParameters
             $bound.Remove("entry") | Out-Null
+            $bound.Remove("RemainingArguments") | Out-Null
+            $passthrough = @($RemainingArguments) | Where-Object { $null -ne $_ }
+            if ($passthrough.Count -gt 0) {
+                if (-not $bound._context -or $bound._context -isnot [hashtable]) {
+                    $bound._context = @{}
+                }
+                $bound._context['additionalArgs'] = @($passthrough)
+            }
             Invoke-EntryCommand -entry $_.value -key $command -bound $bound
         }
 

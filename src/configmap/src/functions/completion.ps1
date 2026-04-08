@@ -228,7 +228,8 @@ function Get-EntryDynamicParam(
     $commandKey = $command ? $command : "exec"
     $entryCommand = Get-EntryCommand $selectedEntry $commandKey
     if (!$entryCommand) { return @() }
-    $p = Get-ScriptArgs $entryCommand -skip $skip -entry $selectedEntry
+    $entryContext = if ($selectedEntry -is [System.Collections.IDictionary]) { $selectedEntry } else { $null }
+    $p = Get-ScriptArgs $entryCommand -skip $skip -entry $entryContext
 
     return $p
 }
@@ -282,8 +283,18 @@ function Get-ScriptArgs {
                             }
                             $refKey = $Matches[1]
                             $resolved = $entryContext[$refKey]
-                            if ($null -ne $resolved -and $resolved -is [array]) {
-                                $values = @($resolved | ForEach-Object { [string]$_ })
+                            if ($resolved) {
+                                if ($resolved -is [array]) {
+                                    $values = @($resolved | ForEach-Object { [string]$_ })
+                                }
+                                elseif ($resolved -is [scriptblock]) {
+                                    $fromSb = & $resolved
+                                    if ($null -ne $fromSb) {
+                                        $values = @(@($fromSb) | ForEach-Object { [string]$_ })
+                                    }
+                                } else {
+                                    throw "resolved value is not an array or scriptblock"
+                                }
                             }
                         }
                         if ($values.Count -gt 0) {
