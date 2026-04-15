@@ -3,15 +3,16 @@ install:
 - git submodule update --init --recursive
 - ps: scripts/lib/init.ps1
 - ps: scripts/lib/restore.ps1
-- ps: ./init.ps1
-- ps: ./restore.ps1
+- ps: require configmap
+- ps: qbuild init
+- ps: qbuild restore
 build_script:
-- ps: ./build.ps1
+- ps: qbuild build
 - ps: write-host "no need to build powershell"
 test_script:
-- ps: ./test.ps1
+- ps: qbuild test
 artifacts:
 - path: artifacts
 - path: src/publishmap
 deploy_script:
-- ps: scripts/lib/push.ps1 . -buildno $env:APPVEYOR_BUILD_NUMBER
+- ps: qbuild push . -buildno $env:APPVEYOR_BUILD_NUMBER
