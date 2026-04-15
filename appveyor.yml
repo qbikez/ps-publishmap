@@ -3,7 +3,10 @@ install:
 - git submodule update --init --recursive
 - pwsh: scripts/lib/init.ps1
 - pwsh: scripts/lib/restore.ps1
-- pwsh: ipmo require; req configmap
+- pwsh: >
+    ipmo require
+    gmo require
+    req configmap
 - pwsh: qbuild init
 - pwsh: qbuild restore
 build_script:
