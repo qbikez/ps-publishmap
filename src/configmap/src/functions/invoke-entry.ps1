@@ -40,6 +40,15 @@ function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}
     if (!$bound._context) { $bound._context = @{} }
     if (!$bound._context.self) { $bound._context.self = $entry }
 
+    $baseDir = $null
+    if ($entry -is [System.Collections.IDictionary] -and $entry._baseDir) {
+        $baseDir = $entry._baseDir
+    }
+    if (!$baseDir) {
+        $baseDir = Get-Location
+    }
+    if (!$bound._context.workDir) { $bound._context.workDir = $baseDir }
+
     # Always pass special parameters (_context, _self) plus any that match script params
     $specialParams = @("_context", "_self") | ? { $scriptArgs.Keys -contains $_ }
     $filtered = @{}
@@ -52,14 +61,6 @@ function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}
         else {
             Write-Verbose "skipping '$boundKey'"
         }
-    }
-
-    $baseDir = $null
-    if (!$baseDir -and $entry -is [System.Collections.IDictionary] -and $entry._baseDir) {
-        $baseDir = $entry._baseDir
-    }
-    if (!$baseDir) {
-        $baseDir = Get-Location
     }
     
     try {

@@ -239,6 +239,18 @@ Describe "map execuction" {
             }
         }
     }
+
+    It "should include workDir in _context" {
+        $map = @{
+            "build" = {
+                param($_context)
+                $_context.workDir
+            }
+        }
+        $result = Get-CompletionList $map
+        $output = Invoke-EntryCommand $result.build
+        $output | Should -Be (Get-Location).Path
+    }
 }
 
 Describe "qbuild" {
