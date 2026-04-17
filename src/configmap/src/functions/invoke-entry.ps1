@@ -47,7 +47,7 @@ function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}
     if (!$baseDir) {
         $baseDir = Get-Location
     }
-    if (!$bound._context.workDir) { $bound._context.workDir = $baseDir }
+    if (!$bound._context.workDir) { $bound._context.workDir = (Get-Location).Path }
 
     # Always pass special parameters (_context, _self) plus any that match script params
     $specialParams = @("_context", "_self") | ? { $scriptArgs.Keys -contains $_ }
