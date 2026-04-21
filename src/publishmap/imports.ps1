@@ -5,7 +5,7 @@ get-childitem $psscriptroot\functions\ -filter "*.ps1" |
 % { . $_.fullname }
 
 
-$usenative = $true
+$usenative = $false
 $lib = "$psscriptroot\lib\publishmap.core.dll"
 
 function loadLib($lib, [scriptblock] $init) {
