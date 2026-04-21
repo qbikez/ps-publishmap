@@ -1,4 +1,6 @@
 version: 1.0.{build}
+image: Visual Studio 2022
+
 install:
 - git submodule update --init --recursive
 - pwsh: scripts/lib/init.ps1
