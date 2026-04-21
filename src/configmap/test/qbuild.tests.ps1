@@ -326,6 +326,7 @@ Describe "hierarchical" {
 Describe "parent without exec invoked without subcommand" {
     BeforeAll {
         Mock Write-Host
+        Mock Write-Host -ModuleName ConfigMap
 
         $targets = @{
             "parent" = @{
@@ -353,7 +354,7 @@ Describe "parent without exec invoked without subcommand" {
     It "should instruct the user to choose a subcommand" {
         qbuild -map $targets "parent" -ErrorAction SilentlyContinue
 
-        Should -Invoke Write-Host -ParameterFilter {
+        Should -Invoke Write-Host -ModuleName ConfigMap -ParameterFilter {
             $Object -match "(?i)subcommand|sub-command|choose|select|specify"
         }
     }
@@ -361,10 +362,10 @@ Describe "parent without exec invoked without subcommand" {
     It "should list the available subcommands" {
         qbuild -map $targets "parent" -ErrorAction SilentlyContinue
 
-        Should -Invoke Write-Host -ParameterFilter {
+        Should -Invoke Write-Host -ModuleName ConfigMap -ParameterFilter {
             "$Object" -match "child-one"
         }
-        Should -Invoke Write-Host -ParameterFilter {
+        Should -Invoke Write-Host -ModuleName ConfigMap -ParameterFilter {
             "$Object" -match "child-two"
         }
     }
