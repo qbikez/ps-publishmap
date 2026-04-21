@@ -12,7 +12,7 @@ install:
 - pwsh: qbuild init
 - pwsh: qbuild restore
 build_script:
-- pwsh: qbuild build
+# - pwsh: qbuild build # skip the old dotnet 1.0.0 native build
 - pwsh: write-host "no need to build powershell"
 test_script:
 - pwsh: qbuild test
