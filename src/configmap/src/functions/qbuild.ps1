@@ -118,7 +118,18 @@ function Invoke-QBuild {
         Write-Verbose "running targets: $($targets.Key)"
 
         @($targets) | % {
-            Write-Verbose "running entry '$($_.key)'"
+            $targetKey = $_.key
+            $targetEntry = $_.value
+            Write-Verbose "running entry '$targetKey'"
+
+            if ($command -eq "exec" `
+                    -and $targetEntry -is [System.Collections.IDictionary] `
+                    -and -not $targetEntry.exec `
+                    -and (Test-IsParentEntry $targetEntry).IsParent) {
+                Write-ChooseSubcommand -parentKey $targetKey -parentEntry $targetEntry -invocation $MyInvocation -language "build"
+                return
+            }
+
             # FIXME: we already have the entry in $_.value, we know ITs own key, but we don't want to search for this key inside this object
             # we should pass null instead?
             #Invoke-EntryCommand -entry $_.value -key $_.Key $bound
@@ -132,7 +143,7 @@ function Invoke-QBuild {
                 }
                 $bound._context['additionalArgs'] = @($passthrough)
             }
-            Invoke-EntryCommand -entry $_.value -key $command -bound $bound
+            Invoke-EntryCommand -entry $targetEntry -key $command -bound $bound
         }
 
     }

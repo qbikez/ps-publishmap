@@ -67,3 +67,32 @@ function Write-Help {
     Write-Host ""
     Write-Host "This will create a sample $mapPath file with basic build scripts."
 }
+
+function Write-ChooseSubcommand {
+    <#
+    .SYNOPSIS
+        Emits a friendly message prompting the user to choose a subcommand for
+        a parent entry that has no 'exec' command defined.
+    #>
+    param(
+        [string]$parentKey,
+        [System.Collections.IDictionary]$parentEntry,
+        $invocation,
+        [ValidateSet("build", "conf")]$language = "build"
+    )
+
+    $commandName = $invocation ? $invocation.InvocationName : $language
+    $children = Get-CompletionList $parentEntry -language $language
+
+    Write-Host ""
+    Write-Host "Entry '$parentKey' has no 'exec' command for default action." -ForegroundColor Yellow
+    Write-Host "Please choose a subcommand to run:" -ForegroundColor Yellow
+    Write-Host ""
+
+    foreach ($childName in $children.Keys) {
+        Write-Host "    $commandName " -NoNewline
+        Write-Host "$parentKey.$childName" -ForegroundColor Green
+    }
+
+    Write-Host ""
+}
