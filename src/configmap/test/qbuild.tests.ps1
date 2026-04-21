@@ -323,6 +323,53 @@ Describe "hierarchical" {
     }
 }
 
+Describe "parent without exec invoked without subcommand" {
+    BeforeAll {
+        Mock Write-Host
+
+        $targets = @{
+            "parent" = @{
+                "child-one" = {
+                    Write-Host "child-one executed"
+                }
+                "child-two" = {
+                    Write-Host "child-two executed"
+                }
+            }
+        }
+    }
+
+    It "should not execute any subcommand" {
+        qbuild -map $targets "parent" -ErrorAction SilentlyContinue
+
+        Should -Invoke Write-Host -Times 0 -ParameterFilter {
+            $Object -eq "child-one executed"
+        }
+        Should -Invoke Write-Host -Times 0 -ParameterFilter {
+            $Object -eq "child-two executed"
+        }
+    }
+
+    It "should instruct the user to choose a subcommand" {
+        qbuild -map $targets "parent" -ErrorAction SilentlyContinue
+
+        Should -Invoke Write-Host -ParameterFilter {
+            $Object -match "(?i)subcommand|sub-command|choose|select|specify"
+        }
+    }
+
+    It "should list the available subcommands" {
+        qbuild -map $targets "parent" -ErrorAction SilentlyContinue
+
+        Should -Invoke Write-Host -ParameterFilter {
+            "$Object" -match "child-one"
+        }
+        Should -Invoke Write-Host -ParameterFilter {
+            "$Object" -match "child-two"
+        }
+    }
+}
+
 Describe "hierarchical completion" {
     BeforeAll {
         $targets = @{
