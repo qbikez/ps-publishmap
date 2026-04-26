@@ -59,12 +59,26 @@ function Resolve-ConfigMapFile {
     $file = Split-Path $fullPath -Leaf
     $dir = Split-Path $fullPath -Parent
 
+    $supportsChildNamedParentMap = $file -match '^\.[^.]+\.map\.ps1$'
+
     do {
         $fullPath = Join-Path $dir $file
         if (Test-Path $fullPath) {
             return $fullPath
         }
-        $dir = Split-Path $dir -Parent
+
+        $parentDir = Split-Path $dir -Parent
+        if ($lookUp -and $supportsChildNamedParentMap -and $parentDir) {
+            $childDirName = Split-Path $dir -Leaf
+            if ($childDirName) {
+                $childNamedMap = Join-Path $parentDir ".$childDirName.map.ps1"
+                if (Test-Path $childNamedMap) {
+                    return $childNamedMap
+                }
+            }
+        }
+
+        $dir = $parentDir
     } while ($lookUp -and $dir)
 
     throw "map file '$map' not found"

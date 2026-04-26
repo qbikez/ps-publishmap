@@ -1192,6 +1192,49 @@ Describe "#include with parent directory traversal" {
     }
 }
 
+Describe "Resolve-ConfigMapFile parent map naming fallback" {
+    BeforeAll {
+        # Directory structure in TestDrive:
+        #   root/
+        #     .project.map.ps1
+        #     project/
+        #       .subdir.map.ps1
+        #       subdir/
+        #         leaf/              (test starts here)
+        $testRoot = Join-Path $TestDrive "named-parent-map-lookup"
+        $projectDir = Join-Path $testRoot "project"
+        $subdirDir = Join-Path $projectDir "subdir"
+        $leafDir = Join-Path $subdirDir "leaf"
+
+        New-Item -ItemType Directory -Path $leafDir -Force | Out-Null
+
+        # Child-specific fallback when searching parent directory.
+        Set-Content (Join-Path $projectDir ".subdir.map.ps1") @'
+@{
+    "source" = "project-level-child-specific-map"
+}
+'@
+
+        # Higher-level parent fallback.
+        Set-Content (Join-Path $testRoot ".project.map.ps1") @'
+@{
+    "source" = "root-level-child-specific-map"
+}
+'@
+    }
+
+    It "should prefer .{child}.map.ps1 while traversing parents" {
+        Push-Location $leafDir
+        try {
+            $resolved = Resolve-ConfigMap -fallback "./.build.map.ps1"
+            $resolved.sourceFile | Should -Be (Join-Path $projectDir ".subdir.map.ps1")
+        }
+        finally {
+            Pop-Location
+        }
+    }
+}
+
 Describe "qbuild with no map file" {
     BeforeAll {
         $testDir = Join-Path $TestDrive "no-map-test"
