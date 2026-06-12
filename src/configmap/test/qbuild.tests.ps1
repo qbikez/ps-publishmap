@@ -545,3 +545,181 @@ Describe "qbuild !init" {
         }
     }
 }
+
+Describe "Format-QBuildCommand" {
+    It "builds qbuild with entry and switch parameters" {
+        InModuleScope ConfigMap {
+            Format-QBuildCommand -Entry 'build' -BoundParameters @{ NoRestore = $true } -RemainingArguments @() |
+                Should -Be 'qbuild build -NoRestore'
+        }
+    }
+
+    It "includes map path when map is a string" {
+        InModuleScope ConfigMap {
+            Format-QBuildCommand -Entry 'build.ui' -BoundParameters @{ map = '.\.build.map.ps1' } -RemainingArguments @() |
+                Should -Be "qbuild -map '.\.build.map.ps1' build.ui"
+        }
+    }
+
+    It "appends passthrough arguments after --" {
+        InModuleScope ConfigMap {
+            Format-QBuildCommand -Entry 'build' -BoundParameters @{} -RemainingArguments @('--config=Release') |
+                Should -Be 'qbuild build -- --config=Release'
+        }
+    }
+}
+
+Describe "qbuild tmux" {
+    It "runs entry locally when not inside tmux" {
+        InModuleScope ConfigMap {
+            Mock Write-Host
+            Mock Invoke-EntryCommand
+            Mock Invoke-TmuxCommand
+            Mock Get-TmuxInfo { return $null }
+
+            $targets = @{
+                "build.ui" = { Write-Host "ran build.ui" }
+            }
+            qbuild -map $targets "build.ui"
+
+            Should -Invoke Invoke-EntryCommand -Times 1 -Exactly
+            Should -Invoke Invoke-TmuxCommand -Times 0 -Exactly
+        }
+    }
+
+    It "runs entry locally when already in the target window" {
+        InModuleScope ConfigMap {
+            Mock Write-Host
+            Mock Invoke-EntryCommand
+            Mock Invoke-TmuxCommand
+            Mock Get-TmuxInfo { return [pscustomobject]@{ sessionName = 'dev'; windowName = 'build.ui' } }
+
+            $targets = @{
+                "build.ui" = { Write-Host "ran build.ui" }
+            }
+            qbuild -map $targets "build.ui"
+
+            Should -Invoke Invoke-EntryCommand -Times 1 -Exactly
+            Should -Invoke Invoke-TmuxCommand -Times 0 -Exactly
+        }
+    }
+
+    It "runs entry locally when map is an in-memory hashtable" {
+        InModuleScope ConfigMap {
+            Mock Write-Host
+            Mock Invoke-EntryCommand
+            Mock Invoke-TmuxCommand
+            Mock Get-TmuxInfo { return [pscustomobject]@{ sessionName = 'dev'; windowName = 'other' } }
+
+            $targets = @{
+                "build.ui" = { Write-Host "ran build.ui" }
+            }
+            qbuild -map $targets "build.ui"
+
+            Should -Invoke Invoke-EntryCommand -Times 1 -Exactly
+            Should -Invoke Invoke-TmuxCommand -Times 0 -Exactly
+        }
+    }
+
+    It "passes absolute working directory when delegating to tmux" {
+        $mapFile = Join-Path $TestDrive ".build.map.ps1"
+        $workDir = Join-Path $TestDrive "work"
+        New-Item -ItemType Directory -Path $workDir -Force | Out-Null
+        @'
+@{
+    "build.ui" = { Write-Host "ran build.ui" }
+}
+'@ | Set-Content $mapFile -Encoding utf8
+        $expectedDir = (Resolve-Path $workDir).Path
+
+        InModuleScope ConfigMap -ArgumentList $mapFile, $expectedDir {
+            param($MapFile, $ExpectedDir)
+            Mock Write-Host
+            Mock Invoke-EntryCommand
+            Mock Invoke-TmuxCommand
+            Mock Get-TmuxInfo { return [pscustomobject]@{ sessionName = 'dev'; windowName = 'other' } }
+
+            Push-Location $ExpectedDir
+            try {
+                qbuild -map $MapFile "build.ui"
+            }
+            finally {
+                Pop-Location
+            }
+
+            Should -Invoke Invoke-TmuxCommand -ParameterFilter {
+                $WorkingDirectory -eq $ExpectedDir
+            }
+        }
+    }
+
+    It "delegates to tmux window named after entry when in a different window" {
+        $mapFile = Join-Path $TestDrive ".build.map.ps1"
+        @'
+@{
+    "build.ui" = { Write-Host "ran build.ui" }
+}
+'@ | Set-Content $mapFile -Encoding utf8
+
+        InModuleScope ConfigMap -ArgumentList $mapFile {
+            param($MapFile)
+            Mock Write-Host
+            Mock Invoke-EntryCommand
+            Mock Invoke-TmuxCommand
+            Mock Get-TmuxInfo { return [pscustomobject]@{ sessionName = 'dev'; windowName = 'other' } }
+
+            qbuild -map $MapFile "build.ui"
+
+            Should -Invoke Invoke-TmuxCommand -Times 1 -Exactly -ParameterFilter {
+                $Session -eq 'dev' -and $Window -eq 'build.ui' -and $Command -match 'qbuild.*build\.ui'
+            }
+            Should -Invoke Invoke-EntryCommand -Times 0 -Exactly
+        }
+    }
+
+    It "passes qbuild arguments in the tmux command" {
+        $mapFile = Join-Path $TestDrive "map.ps1"
+        @'
+@{
+    "build" = { param([switch]$NoRestore) Write-Host "ran" }
+}
+'@ | Set-Content $mapFile -Encoding utf8
+
+        InModuleScope ConfigMap -ArgumentList $mapFile {
+            param($MapFile)
+            Mock Write-Host
+            Mock Invoke-EntryCommand
+            Mock Invoke-TmuxCommand
+            Mock Get-TmuxInfo { return [pscustomobject]@{ sessionName = 'dev'; windowName = 'other' } }
+
+            qbuild -map $MapFile "build" -NoRestore
+
+            Should -Invoke Invoke-TmuxCommand -ParameterFilter {
+                $Command -match 'qbuild' -and $Command -match 'build' -and $Command -match '-NoRestore'
+            }
+        }
+    }
+
+    It "passes passthrough arguments after -- in the tmux command" {
+        $mapFile = Join-Path $TestDrive "map.ps1"
+        @'
+@{
+    "build" = { param([switch]$NoRestore) Write-Host "ran" }
+}
+'@ | Set-Content $mapFile -Encoding utf8
+
+        InModuleScope ConfigMap -ArgumentList $mapFile {
+            param($MapFile)
+            Mock Write-Host
+            Mock Invoke-EntryCommand
+            Mock Invoke-TmuxCommand
+            Mock Get-TmuxInfo { return [pscustomobject]@{ sessionName = 'dev'; windowName = 'other' } }
+
+            qbuild -map $MapFile "build" -- --config=Release
+
+            Should -Invoke Invoke-TmuxCommand -ParameterFilter {
+                $Command -match '-- --config=Release'
+            }
+        }
+    }
+}

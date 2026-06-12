@@ -143,7 +143,7 @@ function Invoke-QBuild {
                 }
                 $bound._context['additionalArgs'] = @($passthrough)
             }
-            Invoke-EntryCommand -entry $targetEntry -key $command -bound $bound
+            Invoke-QBuildTarget -TargetKey $targetKey -TargetEntry $targetEntry -Command $command -Bound $bound -RemainingArguments $passthrough
         }
 
     }
