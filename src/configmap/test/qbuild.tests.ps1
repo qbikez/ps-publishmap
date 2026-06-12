@@ -569,6 +569,90 @@ Describe "Format-QBuildCommand" {
     }
 }
 
+Describe "qbuild all" {
+    It "adds virtual all entry for parent entries in completion list" {
+        InModuleScope ConfigMap {
+            $targets = @{
+                "build" = @{
+                    "ui"  = { Write-Host "ui" }
+                    "api" = { Write-Host "api" }
+                }
+            }
+
+            $completions = Get-CompletionList $targets -language "build" -leafsOnly:$true
+            $completions.Keys | Should -Contain "build.all"
+            $completions.Keys | Should -Contain "build.ui"
+            $completions.Keys | Should -Contain "build.api"
+            Test-BuildAllEntry $completions["build.all"] | Should -Be $true
+        }
+    }
+
+    It "does not add virtual all when parent already defines all" {
+        InModuleScope ConfigMap {
+            $targets = @{
+                "build" = @{
+                    "ui"  = { Write-Host "ui" }
+                    "all" = { Write-Host "custom all" }
+                }
+            }
+
+            $completions = Get-CompletionList $targets -language "build" -leafsOnly:$true
+            $completions.Keys | Should -Contain "build.all"
+            Test-BuildAllEntry $completions["build.all"] | Should -Be $false
+        }
+    }
+
+    It "does not add virtual all for configuration maps" {
+        InModuleScope ConfigMap {
+            $targets = @{
+                "db" = @{
+                    "local"  = @{ get = { "local" } }
+                    "remote" = @{ get = { "remote" } }
+                }
+            }
+
+            $completions = Get-CompletionList $targets -language "conf" -leafsOnly:$true
+            $completions.Keys | Should -Not -Contain "db.all"
+        }
+    }
+
+    It "expands build.all into all leaf child entries" {
+        InModuleScope ConfigMap {
+            Mock Write-Host
+            $targets = @{
+                "build" = @{
+                    "ui"  = { Write-Host "ui" }
+                    "api" = { Write-Host "api" }
+                }
+            }
+
+            qbuild -map $targets "build.all"
+
+            Should -Invoke Write-Host -Exactly 1 -ParameterFilter { $Object -eq "ui" }
+            Should -Invoke Write-Host -Exactly 1 -ParameterFilter { $Object -eq "api" }
+        }
+    }
+
+    It "expands nested build.all into descendant leaf entries" {
+        InModuleScope ConfigMap {
+            Mock Write-Host
+            $targets = @{
+                "dev" = @{
+                    "servers" = @{
+                        "ui"  = { Write-Host "ui" }
+                        "api" = { Write-Host "api" }
+                    }
+                }
+            }
+
+            qbuild -map $targets "dev.all"
+
+            Should -Invoke Write-Host -Exactly 1 -ParameterFilter { $Object -eq "ui" }
+            Should -Invoke Write-Host -Exactly 1 -ParameterFilter { $Object -eq "api" }
+        }
+    }
+}
+
 Describe "qbuild tmux" {
     BeforeEach {
         $script:qbuildTmuxAutoWindowBackup = $env:QCONF_TMUX_AUTOWINDOW
@@ -734,6 +818,33 @@ Describe "qbuild tmux" {
             Should -Invoke Invoke-TmuxCommand -ParameterFilter {
                 $Command -match '-- --config=Release'
             }
+        }
+    }
+
+    It "delegates each child when running build.all from a different window" {
+        $mapFile = Join-Path $TestDrive ".build.map.ps1"
+        @'
+@{
+    "build" = @{
+        "ui"  = { Write-Host "ui" }
+        "api" = { Write-Host "api" }
+    }
+}
+'@ | Set-Content $mapFile -Encoding utf8
+
+        InModuleScope ConfigMap -ArgumentList $mapFile {
+            param($MapFile)
+            Mock Write-Host
+            Mock Invoke-EntryCommand
+            Mock Invoke-TmuxCommand
+            Mock Get-TmuxInfo { return [pscustomobject]@{ sessionName = 'dev'; windowName = 'shell' } }
+
+            qbuild -map $MapFile "build.all"
+
+            Should -Invoke Invoke-TmuxCommand -Times 2 -Exactly
+            Should -Invoke Invoke-TmuxCommand -ParameterFilter { $Window -eq 'build.ui' }
+            Should -Invoke Invoke-TmuxCommand -ParameterFilter { $Window -eq 'build.api' }
+            Should -Invoke Invoke-EntryCommand -Times 0 -Exactly
         }
     }
 

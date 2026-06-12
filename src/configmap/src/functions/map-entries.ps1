@@ -1,3 +1,12 @@
+function New-BuildAllEntry {
+    return [ordered]@{ __buildAll = $true }
+}
+
+function Test-BuildAllEntry {
+    param($Entry)
+
+    return $Entry -is [System.Collections.IDictionary] -and $Entry.__buildAll
+}
 
 function Get-MapEntry(
     [ValidateScript({
@@ -27,10 +36,30 @@ function Get-MapEntries(
     $completions = Get-CompletionList $map -flatten:$flatten -leafsOnly:$leafsOnly -separator:$separator -language $language
 
     foreach ($key in @($keys)) {
-        $found = $completions.GetEnumerator() | ? { $_.key -eq $key }
-        if ($found) {
-            $results += $found
+        $found = @($completions.GetEnumerator() | Where-Object { $_.Key -eq $key })
+        if ($found.Count -eq 0) { continue }
+
+        $target = $found[0]
+        if ((Test-BuildAllEntry $target.Value) -and $language -eq 'build') {
+            $parentKey = if ($key -match '^(.*)\.all$') { $Matches[1] } else { '' }
+            $parentEntry = if ($parentKey) {
+                (Get-MapEntries $map $parentKey -separator $separator -language $language).Value
+            }
+            else {
+                $map
+            }
+
+            $children = Get-CompletionList $parentEntry -leafsOnly:$true -separator $separator -language $language
+            foreach ($child in $children.GetEnumerator()) {
+                if (Test-BuildAllEntry $child.Value) { continue }
+
+                $childKey = if ($parentKey) { "$parentKey$separator$($child.Key)" } else { $child.Key }
+                $results += [ordered]@{ Key = $childKey; Value = $child.Value }
+            }
+            continue
         }
+
+        $results += $target
     }
 
     if (!$results) {

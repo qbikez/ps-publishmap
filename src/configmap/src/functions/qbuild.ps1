@@ -108,7 +108,7 @@ function Invoke-QBuild {
             return
         }
 
-        $targets = Get-MapEntries $map $entry
+        $targets = Get-MapEntries $map $entry -language "build"
         
         # Validate that the entry exists
         if (!$targets -or $targets.Count -eq 0) {

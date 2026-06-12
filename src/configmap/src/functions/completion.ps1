@@ -85,6 +85,14 @@ function Get-CompletionList {
                     $subKey = $flatten ? $sub.Key : "$($kvp.key)$separator$($sub.Key)"
                     $result[$subKey] = $sub.value
                 }
+
+                if ($language -eq 'build' -and $entry -is [System.Collections.IDictionary] -and -not $entry.Contains('all')) {
+                    $leafChildren = Get-CompletionList $entry -listKey $listKey -leafsOnly:$true -separator $separator -language $language -maxDepth ($maxDepth - 1)
+                    if ($leafChildren.Count -gt 0) {
+                        $allKey = if ($flatten) { "$($kvp.key).all" } else { "$($kvp.key)${separator}all" }
+                        $result[$allKey] = New-BuildAllEntry
+                    }
+                }
             }
 
             return $result
