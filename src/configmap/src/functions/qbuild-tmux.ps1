@@ -45,6 +45,13 @@ function Format-QBuildCommand {
     return $parts -join ' '
 }
 
+function Test-QBuildTmuxAutoWindowEnabled {
+    switch ($env:QCONF_TMUX_AUTOWINDOW) {
+        { $_ -in '0', 'false', 'no', 'off' } { return $false }
+        default { return $true }
+    }
+}
+
 function Test-QBuildCanDelegateToTmux {
     param([hashtable]$Bound)
 
@@ -67,7 +74,8 @@ function Invoke-QBuildTarget {
     $tmuxInfo = Get-TmuxInfo
     if ($null -ne $tmuxInfo `
             -and $tmuxInfo.windowName -ne $TargetKey `
-            -and (Test-QBuildCanDelegateToTmux -Bound $Bound)) {
+            -and (Test-QBuildCanDelegateToTmux -Bound $Bound) `
+            -and (Test-QBuildTmuxAutoWindowEnabled)) {
         $qbuildCommand = Format-QBuildCommand -Entry $TargetKey -BoundParameters $Bound -RemainingArguments $RemainingArguments
         Invoke-TmuxCommand -Session $tmuxInfo.sessionName -Window $TargetKey -Command $qbuildCommand -WorkingDirectory (Get-Location).Path
         return

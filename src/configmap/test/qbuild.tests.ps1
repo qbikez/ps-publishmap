@@ -570,6 +570,20 @@ Describe "Format-QBuildCommand" {
 }
 
 Describe "qbuild tmux" {
+    BeforeEach {
+        $script:qbuildTmuxAutoWindowBackup = $env:QCONF_TMUX_AUTOWINDOW
+        Remove-Item env:QCONF_TMUX_AUTOWINDOW -ErrorAction SilentlyContinue
+    }
+
+    AfterEach {
+        if ($null -eq $script:qbuildTmuxAutoWindowBackup) {
+            Remove-Item env:QCONF_TMUX_AUTOWINDOW -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:QCONF_TMUX_AUTOWINDOW = $script:qbuildTmuxAutoWindowBackup
+        }
+    }
+
     It "runs entry locally when not inside tmux" {
         InModuleScope ConfigMap {
             Mock Write-Host
@@ -719,6 +733,70 @@ Describe "qbuild tmux" {
 
             Should -Invoke Invoke-TmuxCommand -ParameterFilter {
                 $Command -match '-- --config=Release'
+            }
+        }
+    }
+
+    It "runs entry locally when QCONF_TMUX_AUTOWINDOW is disabled" {
+        $mapFile = Join-Path $TestDrive ".build.map.ps1"
+        @'
+@{
+    "build.ui" = { Write-Host "ran build.ui" }
+}
+'@ | Set-Content $mapFile -Encoding utf8
+
+        $env:QCONF_TMUX_AUTOWINDOW = '0'
+
+        InModuleScope ConfigMap -ArgumentList $mapFile {
+            param($MapFile)
+            Mock Write-Host
+            Mock Invoke-EntryCommand
+            Mock Invoke-TmuxCommand
+            Mock Get-TmuxInfo { return [pscustomobject]@{ sessionName = 'dev'; windowName = 'other' } }
+
+            qbuild -map $MapFile "build.ui"
+
+            Should -Invoke Invoke-EntryCommand -Times 1 -Exactly
+            Should -Invoke Invoke-TmuxCommand -Times 0 -Exactly
+        }
+    }
+}
+
+Describe "Test-QBuildTmuxAutoWindowEnabled" {
+    BeforeEach {
+        $script:qbuildTmuxAutoWindowBackup = $env:QCONF_TMUX_AUTOWINDOW
+        Remove-Item env:QCONF_TMUX_AUTOWINDOW -ErrorAction SilentlyContinue
+    }
+
+    AfterEach {
+        if ($null -eq $script:qbuildTmuxAutoWindowBackup) {
+            Remove-Item env:QCONF_TMUX_AUTOWINDOW -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:QCONF_TMUX_AUTOWINDOW = $script:qbuildTmuxAutoWindowBackup
+        }
+    }
+
+    It "is enabled when the env var is unset" {
+        InModuleScope ConfigMap {
+            Test-QBuildTmuxAutoWindowEnabled | Should -Be $true
+        }
+    }
+
+    It "is disabled for falsy values" {
+        foreach ($value in '0', 'false', 'no', 'off', 'FALSE', 'OFF') {
+            $env:QCONF_TMUX_AUTOWINDOW = $value
+            InModuleScope ConfigMap {
+                Test-QBuildTmuxAutoWindowEnabled | Should -Be $false
+            }
+        }
+    }
+
+    It "is enabled for other values" {
+        foreach ($value in '1', 'true', 'yes', 'on') {
+            $env:QCONF_TMUX_AUTOWINDOW = $value
+            InModuleScope ConfigMap {
+                Test-QBuildTmuxAutoWindowEnabled | Should -Be $true
             }
         }
     }
