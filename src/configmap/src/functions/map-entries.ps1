@@ -8,6 +8,54 @@ function Test-BuildAllEntry {
     return $Entry -is [System.Collections.IDictionary] -and $Entry.__buildAll
 }
 
+function Test-IsInvokableBuildEntry {
+    param(
+        $Entry,
+        $ListKey = 'list'
+    )
+
+    $reservedKeys = (Get-MapLanguage 'build').reservedKeys + @('options', 'exec', 'list')
+
+    if (Test-BuildAllEntry $Entry) { return $false }
+    if ($Entry -is [scriptblock]) { return $true }
+    if ($Entry -is [System.Collections.IDictionary]) {
+        if ((Test-IsParentEntry $Entry $ListKey -reservedKeys $reservedKeys).IsParent) {
+            return $false
+        }
+
+        return $Entry.exec -is [scriptblock]
+    }
+
+    return $false
+}
+
+function Get-BuildAllChildren {
+    param(
+        [System.Collections.IDictionary]$ParentEntry,
+        [string]$ParentKey = '',
+        [string]$Separator = '.',
+        [string]$ListKey = 'list'
+    )
+
+    $reservedKeys = (Get-MapLanguage 'build').reservedKeys
+    $result = [ordered]@{}
+
+    foreach ($kvp in $ParentEntry.GetEnumerator()) {
+        if ($kvp.Key -in $reservedKeys -or $kvp.Key -eq $ListKey -or $kvp.Key -eq 'all') {
+            continue
+        }
+
+        if (!(Test-IsInvokableBuildEntry $kvp.Value $ListKey)) {
+            continue
+        }
+
+        $childKey = if ($ParentKey) { "$ParentKey$Separator$($kvp.Key)" } else { $kvp.Key }
+        $result[$childKey] = $kvp.Value
+    }
+
+    return $result
+}
+
 function Get-MapEntry(
     [ValidateScript({
             $_ -is [System.Collections.IDictionary] -or $_ -is [array]
@@ -49,12 +97,9 @@ function Get-MapEntries(
                 $map
             }
 
-            $children = Get-CompletionList $parentEntry -leafsOnly:$true -separator $separator -language $language
+            $children = Get-BuildAllChildren $parentEntry -ParentKey $parentKey -Separator $separator
             foreach ($child in $children.GetEnumerator()) {
-                if (Test-BuildAllEntry $child.Value) { continue }
-
-                $childKey = if ($parentKey) { "$parentKey$separator$($child.Key)" } else { $child.Key }
-                $results += [ordered]@{ Key = $childKey; Value = $child.Value }
+                $results += [ordered]@{ Key = $child.Key; Value = $child.Value }
             }
             continue
         }

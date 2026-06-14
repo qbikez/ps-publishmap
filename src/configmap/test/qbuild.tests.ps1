@@ -616,7 +616,7 @@ Describe "qbuild all" {
         }
     }
 
-    It "expands build.all into all leaf child entries" {
+    It "expands build.all into direct invokable child entries" {
         InModuleScope ConfigMap {
             Mock Write-Host
             $targets = @{
@@ -633,9 +633,29 @@ Describe "qbuild all" {
         }
     }
 
-    It "expands nested build.all into descendant leaf entries" {
+    It "includes hashtable entries with exec scriptblocks" {
         InModuleScope ConfigMap {
             Mock Write-Host
+            $targets = @{
+                "build" = @{
+                    "ui" = @{
+                        exec = { Write-Host "ui" }
+                    }
+                    "api" = @{
+                        exec = { Write-Host "api" }
+                    }
+                }
+            }
+
+            qbuild -map $targets "build.all"
+
+            Should -Invoke Write-Host -Exactly 1 -ParameterFilter { $Object -eq "ui" }
+            Should -Invoke Write-Host -Exactly 1 -ParameterFilter { $Object -eq "api" }
+        }
+    }
+
+    It "does not add virtual all when parent has only nested groups" {
+        InModuleScope ConfigMap {
             $targets = @{
                 "dev" = @{
                     "servers" = @{
@@ -645,10 +665,43 @@ Describe "qbuild all" {
                 }
             }
 
+            $completions = Get-CompletionList $targets -language "build" -leafsOnly:$true
+            $completions.Keys | Should -Not -Contain "dev.all"
+        }
+    }
+
+    It "does not run nested children when parent has mixed direct and grouped entries" {
+        InModuleScope ConfigMap {
+            Mock Write-Host
+            $targets = @{
+                "dev" = @{
+                    "ui" = { Write-Host "ui" }
+                    "servers" = @{
+                        "api" = { Write-Host "api" }
+                    }
+                }
+            }
+
             qbuild -map $targets "dev.all"
 
             Should -Invoke Write-Host -Exactly 1 -ParameterFilter { $Object -eq "ui" }
-            Should -Invoke Write-Host -Exactly 1 -ParameterFilter { $Object -eq "api" }
+            Should -Invoke Write-Host -Times 0 -ParameterFilter { $Object -eq "api" }
+        }
+    }
+
+    It "skips non-invokable metadata-only children" {
+        InModuleScope ConfigMap {
+            Mock Write-Host
+            $targets = @{
+                "build" = @{
+                    "ui"   = { Write-Host "ui" }
+                    "docs" = @{ description = "readme only" }
+                }
+            }
+
+            qbuild -map $targets "build.all"
+
+            Should -Invoke Write-Host -Exactly 1 -ParameterFilter { $Object -eq "ui" }
         }
     }
 }

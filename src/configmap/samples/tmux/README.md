@@ -30,6 +30,10 @@ qbuild list
 qbuild build.ui
 qbuild build.api -Configuration Release
 qbuild test.unit -Watch
+
+# Run all children of a parent entry (each in its own window)
+qbuild build.all
+qbuild test.all
 ```
 
 ## How It Works
@@ -61,6 +65,7 @@ Window names match the entry path exactly:
 | `qbuild build.api` | `build.api` |
 | `qbuild test.unit` | `test.unit` |
 | `qbuild dev.ui` | `dev.ui` |
+| `qbuild build.all` | `build.ui`, `build.api` (one window each) |
 
 If the session does not exist, it is created. If the session exists but the window does not, a new window is added.
 
@@ -120,6 +125,7 @@ Commands use `Start-Sleep` to simulate work so you can watch output appear in ea
 
 ## Notes
 
+- Tmux auto-window delegation is **enabled by default**. Set `$env:QCONF_TMUX_AUTOWINDOW` to a falsy value (`0`, `false`, `no`, or `off`) to run entries locally even inside tmux.
 - Delegation requires a **file-based** map (`-map` path or default `.build.map.ps1`). In-memory hashtable maps always run locally.
 - `help`, `list`, and `!init` are not delegated — they always run in the current shell.
 - Parent entries without `exec` (e.g. `qbuild build`) still show the subcommand chooser locally.
