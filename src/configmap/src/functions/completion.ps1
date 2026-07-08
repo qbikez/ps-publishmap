@@ -47,8 +47,9 @@ function Get-CompletionList {
     $list = $map.$listKey ? $map.$listKey : $map
     $list = $list -is [scriptblock] ? (Invoke-Command -ScriptBlock $list) : $list
 
-    $r = switch ($true) {
-        { $list -is [System.Collections.IDictionary] } {
+    # switch automatically iterates over the array, so we need to wrap it in a single element array
+    $r = switch (@(,$list)) {
+        { $_ -is [System.Collections.IDictionary] } {
             $result = [ordered]@{}
 
             foreach ($kvp in $list.GetEnumerator()) {
@@ -96,7 +97,7 @@ function Get-CompletionList {
 
             return $result
         }
-        { $list -is [array] } {
+        { $_ -is [array] } {
             $result = [ordered]@{}
             $subEntries = $list | ForEach-Object {
                 $r = [ordered]@{}
@@ -116,11 +117,11 @@ function Get-CompletionList {
             }
             return $result
         }
-        { $list -is [string] } {
+        { $_ -is [string] } {
             throw "string type not supported"
         }
         default {
-            throw "$($list.GetType().FullName) type not supported"
+            throw "$($_.GetType().FullName) type not supported"
         }
     }
 
