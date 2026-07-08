@@ -709,7 +709,9 @@ Describe "qbuild all" {
 Describe "qbuild tmux" {
     BeforeEach {
         $script:qbuildTmuxAutoWindowBackup = $env:QCONF_TMUX_AUTOWINDOW
+        $script:qbuildConcurrentlyBackup = $env:QCONF_CONCURRENTLY
         Remove-Item env:QCONF_TMUX_AUTOWINDOW -ErrorAction SilentlyContinue
+        $env:QCONF_CONCURRENTLY = '0'
     }
 
     AfterEach {
@@ -718,6 +720,12 @@ Describe "qbuild tmux" {
         }
         else {
             $env:QCONF_TMUX_AUTOWINDOW = $script:qbuildTmuxAutoWindowBackup
+        }
+        if ($null -eq $script:qbuildConcurrentlyBackup) {
+            Remove-Item env:QCONF_CONCURRENTLY -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:QCONF_CONCURRENTLY = $script:qbuildConcurrentlyBackup
         }
     }
 

@@ -88,6 +88,7 @@ function Invoke-QBuild {
             return
         }
 
+        $mapPath = $map
         $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" -ErrorAction Ignore | % {
             if ($_.source -eq "file") {
                 $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
@@ -117,6 +118,36 @@ function Invoke-QBuild {
         
         Write-Verbose "running targets: $($targets.Key)"
 
+        # FIXME: we already have the entry in $_.value, we know ITs own key, but we don't want to search for this key inside this object
+        # we should pass null instead?
+        #Invoke-EntryCommand -entry $_.value -key $_.Key $bound
+        $bound = $PSBoundParameters
+        $bound.Remove("entry") | Out-Null
+        $bound.Remove("RemainingArguments") | Out-Null
+        $passthrough = @($RemainingArguments) | Where-Object { $null -ne $_ }
+        if ($passthrough.Count -gt 0) {
+            if (-not $bound._context -or $bound._context -isnot [hashtable]) {
+                $bound._context = @{}
+            }
+            $bound._context['additionalArgs'] = @($passthrough)
+        }
+
+        $hookContext = @{
+            MainCommand        = 'qbuild'
+            Entry              = $entry
+            Targets            = @($targets)
+            Map                = $map
+            MapPath            = $mapPath
+            Command            = $command
+            Bound              = $bound
+            RemainingArguments = $passthrough
+        }
+
+        $hookResult = Invoke-ConfigMapPluginHooks -HookName 'InvokeQBuildTargets' -Context $hookContext
+        if ($hookResult.Handled) {
+            return $hookResult.Result
+        }
+
         @($targets) | % {
             $targetKey = $_.key
             $targetEntry = $_.value
@@ -130,19 +161,7 @@ function Invoke-QBuild {
                 return
             }
 
-            # FIXME: we already have the entry in $_.value, we know ITs own key, but we don't want to search for this key inside this object
-            # we should pass null instead?
-            #Invoke-EntryCommand -entry $_.value -key $_.Key $bound
-            $bound = $PSBoundParameters
-            $bound.Remove("entry") | Out-Null
-            $bound.Remove("RemainingArguments") | Out-Null
-            $passthrough = @($RemainingArguments) | Where-Object { $null -ne $_ }
-            if ($passthrough.Count -gt 0) {
-                if (-not $bound._context -or $bound._context -isnot [hashtable]) {
-                    $bound._context = @{}
-                }
-                $bound._context['additionalArgs'] = @($passthrough)
-            }
+            
             Invoke-EntryWrapper -MainCommand 'qbuild' -TargetKey $targetKey -TargetEntry $targetEntry -Command $command -Bound $bound -RemainingArguments $passthrough
         }
 
