@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pwsh:*)",
+      "Bash(git checkout:*)",
+      "Bash(mv:*)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(ls:*)",
+      "mcp__playwright__init-browser",
+      "WebFetch(domain:playwright.dev)"
+    ],
+    "deny": []
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs:*)",
+      "Bash(ls:*)",
+      "Bash(git -C /d/git/hmdev/ps-modules/publishmap log --oneline -10)",
+      "Bash(git -C /d/git/hmdev/ps-modules/publishmap ls-files)",
+      "Bash(git -C /d/git/hmdev/ps-modules/publishmap show HEAD:.build.map.ps1)"
+    ]
+  }
+}

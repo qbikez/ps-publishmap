@@ -116,3 +116,58 @@ function Invoke-TmuxCommand {
     $target = "$Session`:$Window"
     Invoke-TmuxSendKeys -Target $target -Keys $keys
 }
+
+function Format-TmuxCommand {
+    param(
+        [string]$mainCommand,
+        [string]$Entry,
+        [hashtable]$BoundParameters,
+        [string[]]$RemainingArguments
+    )
+
+    $parts = @($mainCommand)
+
+    if ($BoundParameters.map -is [string]) {
+        $parts += '-map'
+        $parts += "'$($BoundParameters.map -replace "'", "''")'"
+    }
+
+    $parts += $Entry
+
+    $skip = @(
+        'entry', 'map', 'command', 'RemainingArguments',
+        'Verbose', 'Debug', 'ErrorAction', 'WarningAction', 'InformationAction',
+        'OutVariable', 'OutBuffer', 'PipelineVariable'
+    )
+
+    foreach ($key in ($BoundParameters.Keys | Sort-Object)) {
+        if ($key -in $skip) { continue }
+
+        $val = $BoundParameters[$key]
+        if ($val -is [switch]) {
+            if ($val.IsPresent) { $parts += "-$key" }
+        }
+        elseif ($val -is [bool]) {
+            if ($val) { $parts += "-$key" }
+        }
+        else {
+            $parts += "-$key"
+            $parts += "'$($val.ToString() -replace "'", "''")'"
+        }
+    }
+
+    $passthrough = @($RemainingArguments) | Where-Object { $null -ne $_ }
+    if ($passthrough.Count -gt 0) {
+        $parts += '--'
+        $parts += $passthrough
+    }
+
+    return $parts -join ' '
+}
+
+function Test-TmuxAutoWindowEnabled {
+    switch ($env:QCONF_TMUX_AUTOWINDOW) {
+        { $_ -in '0', 'false', 'no', 'off' } { return $false }
+        default { return $true }
+    }
+}
