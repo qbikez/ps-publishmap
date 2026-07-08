@@ -11,16 +11,15 @@ function Test-BuildAllEntry {
 function Test-IsInvokableBuildEntry {
     param(
         $Entry,
-        [ValidateSet('build', 'conf')]$Language,
-        $ListKey = 'list'
+        [ValidateSet('build', 'conf')]$Language
     )
 
-    $reservedKeys = (Get-MapLanguage $Language).reservedKeys + @('options', 'exec', 'list')
+    $reservedKeys = (Get-MapLanguage $Language).reservedKeys
 
     if (Test-BuildAllEntry $Entry) { return $false }
     if ($Entry -is [scriptblock]) { return $true }
     if ($Entry -is [System.Collections.IDictionary]) {
-        if ((Test-IsParentEntry $Entry $ListKey -reservedKeys $reservedKeys).IsParent) {
+        if (Test-IsParentEntry $Entry -reservedKeys $reservedKeys) {
             return $false
         }
 
@@ -35,19 +34,18 @@ function Get-BuildAllChildren {
         [System.Collections.IDictionary]$ParentEntry,
         [ValidateSet('build', 'conf')]$Language,
         [string]$ParentKey = '',
-        [string]$Separator = '.',
-        [string]$ListKey = 'list'
+        [string]$Separator = '.'
     )
 
     $reservedKeys = (Get-MapLanguage $Language).reservedKeys
     $result = [ordered]@{}
 
     foreach ($kvp in $ParentEntry.GetEnumerator()) {
-        if ($kvp.Key -in $reservedKeys -or $kvp.Key -eq $ListKey -or $kvp.Key -eq 'all') {
+        if ($kvp.Key -in $reservedKeys -or $kvp.Key -eq 'all') {
             continue
         }
 
-        if (!(Test-IsInvokableBuildEntry $kvp.Value -Language $Language -ListKey $ListKey)) {
+        if (!(Test-IsInvokableBuildEntry $kvp.Value -Language $Language)) {
             continue
         }
 
@@ -156,49 +154,35 @@ function Test-IsParentEntry {
         Determines if an entry is a parent container (has nested commands) or a leaf (executable command)
     .PARAMETER Entry
         The map entry to test
-    .PARAMETER ListKey
-        The key used to identify nested lists (default: "list")
     .PARAMETER ReservedKeys
         Array of reserved keys that should be skipped during processing
     .OUTPUTS
-        [PSCustomObject] with IsParent (bool) and HasExplicitList (bool) properties
+        [bool] $true if the entry is a parent container
     #>
     param(
         $Entry,
-        $ListKey = "list",
         $ReservedKeys = @("options", "exec", "list")
     )
 
     # If entry is not a hashtable, it's a leaf (scriptblock or other)
     if ($Entry -isnot [System.Collections.IDictionary]) {
-        return [PSCustomObject]@{
-            IsParent        = $false
-            HasExplicitList = $false
-        }
+        return $false
     }
 
     # Check for explicit list key (traditional nested structure)
-    if ($Entry.$ListKey) {
-        return [PSCustomObject]@{
-            IsParent        = $true
-            HasExplicitList = $true
-        }
+    if ($Entry.list) {
+        return $true
     }
 
     # Check if entry contains nested commands (hashtables or scriptblocks)
-    $hasNestedCommands = $false
     foreach ($subKvp in $Entry.GetEnumerator()) {
-        if ($subKvp.Key -in $reservedKeys -or $subKvp.Key -eq $ListKey) {
+        if ($subKvp.Key -in $reservedKeys) {
             continue
         }
         if ($subKvp.Value -is [System.Collections.IDictionary] -or $subKvp.Value -is [scriptblock]) {
-            $hasNestedCommands = $true
-            break
+            return $true
         }
     }
 
-    return [PSCustomObject]@{
-        IsParent        = $hasNestedCommands
-        HasExplicitList = $false
-    }
+    return $false
 }

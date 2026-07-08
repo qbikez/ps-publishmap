@@ -23,9 +23,7 @@ BeforeAll {
 Describe "Test-IsParentEntry" {
     It "should identify scriptblock as leaf" {
         $entry = { Write-Host "Command" }
-        $result = Test-IsParentEntry $entry
-        $result.IsParent | Should -Be $false
-        $result.HasExplicitList | Should -Be $false
+        Test-IsParentEntry $entry | Should -Be $false
     }
 
     It "should identify command object with exec as leaf" {
@@ -33,9 +31,7 @@ Describe "Test-IsParentEntry" {
             exec        = { Write-Host "Command" }
             description = "A command"
         }
-        $result = Test-IsParentEntry $entry
-        $result.IsParent | Should -Be $false
-        $result.HasExplicitList | Should -Be $false
+        Test-IsParentEntry $entry | Should -Be $false
     }
 
     It "should identify explicit list as parent" {
@@ -45,9 +41,7 @@ Describe "Test-IsParentEntry" {
                 "cmd2" = { Write-Host "Command 2" }
             }
         }
-        $result = Test-IsParentEntry $entry
-        $result.IsParent | Should -Be $true
-        $result.HasExplicitList | Should -Be $true
+        Test-IsParentEntry $entry | Should -Be $true
     }
 
     It "should identify direct nested structure as parent" {
@@ -57,9 +51,7 @@ Describe "Test-IsParentEntry" {
                 exec = { Write-Host "Sub command 2" }
             }
         }
-        $result = Test-IsParentEntry $entry
-        $result.IsParent | Should -Be $true
-        $result.HasExplicitList | Should -Be $false
+        Test-IsParentEntry $entry | Should -Be $true
     }
 
     It "should identify data object as leaf" {
@@ -68,9 +60,7 @@ Describe "Test-IsParentEntry" {
             value = 42
             items = @("a", "b", "c")
         }
-        $result = Test-IsParentEntry $entry
-        $result.IsParent | Should -Be $false
-        $result.HasExplicitList | Should -Be $false
+        Test-IsParentEntry $entry | Should -Be $false
     }
 
     It "should identify mixed command object as parent when exec and subcommand is present" {
@@ -78,9 +68,7 @@ Describe "Test-IsParentEntry" {
             exec     = { Write-Host "Main command" }
             "subcmd" = { Write-Host "This should not make it a parent" }
         }
-        $result = Test-IsParentEntry $entry
-        $result.IsParent | Should -Be $true
-        $result.HasExplicitList | Should -Be $false
+        Test-IsParentEntry $entry | Should -Be $true
     }
 }
 
@@ -600,10 +588,9 @@ Describe "exec as list" {
 
     It "should treat entry with exec list as parent entry" {
         $entry = Get-MapEntry $buildTargets "build"
-        $result = Test-IsParentEntry $entry
         
         # Entry has both exec and subcommands, should be parent
-        $result.IsParent | Should -Be $true
+        Test-IsParentEntry $entry | Should -Be $true
     }
 
     It "should include subcommands in completion list" {

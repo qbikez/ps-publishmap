@@ -66,9 +66,8 @@ function Get-CompletionList {
                 }
 
                 $entry = $kvp.value
-                $entryInfo = Test-IsParentEntry $entry $listKey -reservedKeys $reservedKeys
 
-                if (!$entryInfo.IsParent) {
+                if (!(Test-IsParentEntry $entry -reservedKeys $reservedKeys)) {
                     $result["$($kvp.key)"] = $entry
                     continue
                 }
@@ -87,7 +86,7 @@ function Get-CompletionList {
                 }
 
                 if ($language -eq 'build' -and $entry -is [System.Collections.IDictionary] -and -not $entry.Contains('all')) {
-                    $invokableChildren = Get-BuildAllChildren $entry -Language $language -ParentKey $kvp.key -Separator $separator -ListKey $listKey
+                    $invokableChildren = Get-BuildAllChildren $entry -Language $language -ParentKey $kvp.key -Separator $separator
                     if ($invokableChildren.Count -gt 0) {
                         $allKey = if ($flatten) { "$($kvp.key).all" } else { "$($kvp.key)${separator}all" }
                         $result[$allKey] = New-BuildAllEntry

@@ -125,7 +125,7 @@ function Invoke-QBuild {
             if ($command -eq "exec" `
                     -and $targetEntry -is [System.Collections.IDictionary] `
                     -and -not (Get-EntryHasExec $targetEntry) `
-                    -and (Test-IsParentEntry $targetEntry).IsParent) {
+                    -and (Test-IsParentEntry $targetEntry)) {
                 Write-ChooseSubcommand -parentKey $targetKey -parentEntry $targetEntry -invocation $MyInvocation -language "build"
                 return
             }
