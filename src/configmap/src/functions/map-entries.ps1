@@ -118,6 +118,16 @@ function Get-MapEntries(
 }
 
 # TODO: key should be a hidden property of $entry
+function Get-EntryHasExec {
+    param($Entry)
+
+    if ($Entry -isnot [System.Collections.IDictionary]) { return $false }
+    $exec = $Entry.exec
+    if ($null -eq $exec) { return $false }
+    if ($exec -is [array]) { return $exec.Count -gt 0 }
+    return $true
+}
+
 function Get-EntryCommand(
     [ValidateScript({
             $_ -is [System.Collections.IDictionary] -or $_ -is [array] -or $_ -is [scriptblock]

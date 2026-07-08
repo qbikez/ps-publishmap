@@ -8,16 +8,18 @@ function Invoke-EntryWrapper {
         [string[]]$RemainingArguments
     )
 
-    $canDelegate = -not ($Bound.map -and $Bound.map -isnot [string])
-    if (Test-TmuxAutoWindowEnabled -and Test-InsideTmux -and $canDelegate) {
-        $tmuxInfo = Get-TmuxInfo
-        $shouldDelegate = $null -ne $tmuxInfo -and $tmuxInfo.windowName -ne $TargetKey
-        
-        if ($shouldDelegate) {    
-            $tmuxCommand = Format-TmuxCommand -mainCommand $MainCommand -Entry $TargetKey -BoundParameters $Bound -RemainingArguments $RemainingArguments
-            Invoke-TmuxCommand -Session $tmuxInfo.sessionName -Window $TargetKey -Command $tmuxCommand -WorkingDirectory (Get-Location).Path
-            return
-        }
+    if ($Bound.map -and $Bound.map -isnot [string]) {
+        Invoke-EntryCommand -entry $TargetEntry -key $Command -bound $Bound
+        return
+    }
+
+    $tmuxInfo = Get-TmuxInfo
+    if ($null -ne $tmuxInfo `
+            -and $tmuxInfo.windowName -ne $TargetKey `
+            -and (Test-TmuxAutoWindowEnabled)) {
+        $tmuxCommand = Format-TmuxCommand -mainCommand $MainCommand -Entry $TargetKey -BoundParameters $Bound -RemainingArguments $RemainingArguments
+        Invoke-TmuxCommand -Session $tmuxInfo.sessionName -Window $TargetKey -Command $tmuxCommand -WorkingDirectory (Get-Location).Path
+        return
     }
 
     Invoke-EntryCommand -entry $TargetEntry -key $Command -bound $Bound

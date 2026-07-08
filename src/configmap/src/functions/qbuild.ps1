@@ -120,11 +120,11 @@ function Invoke-QBuild {
         @($targets) | % {
             $targetKey = $_.key
             $targetEntry = $_.value
-            Write-Verbose "running entry '$targetKey'"
+            Write-Verbose "running entry '$targetKey' (type=$($targetEntry.GetType().Name))"
 
             if ($command -eq "exec" `
                     -and $targetEntry -is [System.Collections.IDictionary] `
-                    -and -not $targetEntry.exec `
+                    -and -not (Get-EntryHasExec $targetEntry) `
                     -and (Test-IsParentEntry $targetEntry).IsParent) {
                 Write-ChooseSubcommand -parentKey $targetKey -parentEntry $targetEntry -invocation $MyInvocation -language "build"
                 return

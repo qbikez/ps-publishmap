@@ -619,16 +619,17 @@ Describe "exec as list" {
                 "exec"  = @("build", "test")
                 "build" = { Write-Host "running build" }
                 "test"  = { Write-Host "running tests" }
-                "all"   = @("build", "test")
             }
         }
 
-        $o1 = qbuild -map $targets "subcommand" 
-        $o1 | Should -Contain "Resolved to commands: [build, test]"
+        qbuild -map $targets "subcommand"
+        Should -Invoke Write-Host -ParameterFilter { $Object -eq "running build" }
+        Should -Invoke Write-Host -ParameterFilter { $Object -eq "running tests" }
 
         { qbuild -map $targets "subcommand.all" } | Should -Not Throw
-        $o2 = qbuild -map $targets "subcommand.all" 
-        $o2 | Should -Contain "Resolved to commands: [build, test]"
+        qbuild -map $targets "subcommand.all"
+        Should -Invoke Write-Host -ParameterFilter { $Object -eq "running build" } -Times 2
+        Should -Invoke Write-Host -ParameterFilter { $Object -eq "running tests" } -Times 2
     }
 }
 
@@ -889,6 +890,7 @@ Describe "deep hierarchical execution" {
                 "db.migrate:exec"
                 "db.init"
                 "db.init:exec"
+                "db.all"
             )
         }
 
@@ -941,6 +943,7 @@ Describe "custom commands" {
             "db" # should "db" be included or not?
             "db.init"
             "db.migrate"
+            "db.all"
         )
     }
 
