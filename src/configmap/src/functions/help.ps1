@@ -23,7 +23,7 @@ function Write-MapHelp {
         $name = $item.Name
         $script = $item.Value
         try {
-            $entry = Get-EntryCommand $script
+            $entry = Get-EntryCommand $script "exec"
         }
         catch {
             $entry = $null

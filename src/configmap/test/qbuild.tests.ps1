@@ -124,7 +124,7 @@ Describe "qbuild dynamic parameters" {
     ) {
         param($EntryType)
         $entry = Get-MapEntry $buildTargets $EntryType
-        $scriptBlock = Get-EntryCommand $entry
+        $scriptBlock = Get-EntryCommand $entry "exec"
 
         $parameters = Get-ScriptArgs $ScriptBlock
         $parameters.Keys | Should -Contain "NewVersion"

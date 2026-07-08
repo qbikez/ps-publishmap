@@ -198,7 +198,7 @@ Describe "map execuction" {
     ) {
         It "<name> => exec-mock without args" {
             $entry = Get-MapEntry $map "build"
-            $s = Get-EntryCommand $entry
+            $s = Get-EntryCommand $entry "exec"
             $p = Get-ScriptArgs $s
 
             Invoke-EntryCommand $entry "build" -context @{ a = 1 }
@@ -466,7 +466,7 @@ Describe "qbuild dynamic parameters" {
     ) {
         param($EntryType)
         $entry = Get-MapEntry $buildTargets $EntryType
-        $scriptBlock = Get-EntryCommand $entry
+        $scriptBlock = Get-EntryCommand $entry "exec"
 
         $parameters = Get-ScriptArgs $ScriptBlock
         $parameters.Keys | Should -Contain "NewVersion"

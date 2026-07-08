@@ -2,10 +2,10 @@
 
 $script:languages = @{
     "build" = @{
-        reservedKeys = @("exec", "list", "#include", "_baseDir")
+        reservedKeys = @("exec", "list", "options", "#include", "_baseDir")
     }
     "conf"  = @{
-        reservedKeys = @("exec", "list", "#include", "_baseDir", "options", "get", "set", "validate")
+        reservedKeys = @("exec", "list", "options", "#include", "_baseDir", "get", "set", "validate")
     }
 }
 

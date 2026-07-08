@@ -130,8 +130,10 @@ function Get-EntryCommand(
     [ValidateScript({
             $_ -is [System.Collections.IDictionary] -or $_ -is [array] -or $_ -is [scriptblock]
         })]
+    [Parameter(Mandatory = $true)]
     $entry,
-    $commandKey = "exec"
+    [Parameter(Mandatory = $true)]
+    $commandKey
 ) {
     if (!$entry) { throw "entry is NULL" }
     if ($entry -is [scriptblock]) { return $entry }
