@@ -87,7 +87,7 @@ function Invoke-ConcurrentlyQBuild {
     }
 
     $a = @('--yes', 'concurrently')
-    $a += @("--shell", "pwsh")
+    $a += @("--shell", "pwsh", "--color")
     if ($Names.Count -gt 0) {
         $a += '-n'
         $a += ($Names -join ',')
@@ -95,11 +95,11 @@ function Invoke-ConcurrentlyQBuild {
     }
     foreach ($command in $Commands) {
         Write-Verbose "Adding command: $command"
-        $a += 'write-host dupa'
+        $a += $command
     }
     
     Write-Verbose "Running: npx $($a -join ' ')"
-    invoke-expression npx --yes "concurrently" --shell pwsh "write-host dupa"
+    & npx @a | out-host
     if ($LASTEXITCODE -ne 0) {
         throw "concurrently exited with code $LASTEXITCODE"
     }
