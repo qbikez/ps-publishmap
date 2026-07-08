@@ -120,7 +120,7 @@ function Invoke-QBuild {
         @($targets) | % {
             $targetKey = $_.key
             $targetEntry = $_.value
-            Write-Verbose "running entry '$targetKey' (type=$($targetEntry.GetType().Name))"
+            Write-Verbose "running entry '$targetKey'"
 
             if ($command -eq "exec" `
                     -and $targetEntry -is [System.Collections.IDictionary] `

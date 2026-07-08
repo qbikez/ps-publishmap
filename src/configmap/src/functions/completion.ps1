@@ -231,6 +231,7 @@ function Get-EntryDynamicParam(
 
     $selectedEntry = Get-MapEntry $map $key
     if (!$selectedEntry) { return @() }
+    if (Test-BuildAllEntry $selectedEntry) { return @() }
 
     # Use the command parameter to determine which command to extract, defaulting to "exec"
     $commandKey = $command ? $command : "exec"

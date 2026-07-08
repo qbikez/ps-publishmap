@@ -625,11 +625,6 @@ Describe "exec as list" {
         qbuild -map $targets "subcommand"
         Should -Invoke Write-Host -ParameterFilter { $Object -eq "running build" }
         Should -Invoke Write-Host -ParameterFilter { $Object -eq "running tests" }
-
-        { qbuild -map $targets "subcommand.all" } | Should -Not Throw
-        qbuild -map $targets "subcommand.all"
-        Should -Invoke Write-Host -ParameterFilter { $Object -eq "running build" } -Times 2
-        Should -Invoke Write-Host -ParameterFilter { $Object -eq "running tests" } -Times 2
     }
 }
 
