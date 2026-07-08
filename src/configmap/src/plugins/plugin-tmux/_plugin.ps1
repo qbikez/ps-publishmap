@@ -1,3 +1,5 @@
+. "$PSScriptRoot\tmux.ps1"
+
 @{
     name        = 'tmux'
     description = 'Tmux support'

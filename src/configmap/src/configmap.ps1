@@ -11,8 +11,7 @@ $helpersPath = (Split-Path -Parent $MyInvocation.MyCommand.Definition)
 . "$helpersPath\functions\invoke-entry.ps1"
 . "$helpersPath\functions\help.ps1"
 . "$helpersPath\functions\initialize.ps1"
-. "$helpersPath\functions\tmux.ps1"
 . "$helpersPath\functions\qbuild.ps1"
 . "$helpersPath\functions\qconf.ps1"
 
-Import-ConfigMapPlugins -PluginsPath "$helpersPath\plugins"
+. "$helpersPath\functions\plugins-init.ps1" -PluginsPath "$helpersPath\plugins"
