@@ -546,24 +546,24 @@ Describe "qbuild !init" {
     }
 }
 
-Describe "Format-QBuildCommand" {
+Describe "Format-TmuxCommand" {
     It "builds qbuild with entry and switch parameters" {
         InModuleScope ConfigMap {
-            Format-QBuildCommand -Entry 'build' -BoundParameters @{ NoRestore = $true } -RemainingArguments @() |
+            Format-TmuxCommand -mainCommand 'qbuild' -Entry 'build' -BoundParameters @{ NoRestore = $true } -RemainingArguments @() |
                 Should -Be 'qbuild build -NoRestore'
         }
     }
 
     It "includes map path when map is a string" {
         InModuleScope ConfigMap {
-            Format-QBuildCommand -Entry 'build.ui' -BoundParameters @{ map = '.\.build.map.ps1' } -RemainingArguments @() |
+            Format-TmuxCommand -mainCommand 'qbuild' -Entry 'build.ui' -BoundParameters @{ map = '.\.build.map.ps1' } -RemainingArguments @() |
                 Should -Be "qbuild -map '.\.build.map.ps1' build.ui"
         }
     }
 
     It "appends passthrough arguments after --" {
         InModuleScope ConfigMap {
-            Format-QBuildCommand -Entry 'build' -BoundParameters @{} -RemainingArguments @('--config=Release') |
+            Format-TmuxCommand -mainCommand 'qbuild' -Entry 'build' -BoundParameters @{} -RemainingArguments @('--config=Release') |
                 Should -Be 'qbuild build -- --config=Release'
         }
     }
@@ -926,7 +926,7 @@ Describe "qbuild tmux" {
     }
 }
 
-Describe "Test-QBuildTmuxAutoWindowEnabled" {
+Describe "Test-TmuxAutoWindowEnabled" {
     BeforeEach {
         $script:qbuildTmuxAutoWindowBackup = $env:QCONF_TMUX_AUTOWINDOW
         Remove-Item env:QCONF_TMUX_AUTOWINDOW -ErrorAction SilentlyContinue
@@ -943,7 +943,7 @@ Describe "Test-QBuildTmuxAutoWindowEnabled" {
 
     It "is enabled when the env var is unset" {
         InModuleScope ConfigMap {
-            Test-QBuildTmuxAutoWindowEnabled | Should -Be $true
+            Test-TmuxAutoWindowEnabled | Should -Be $true
         }
     }
 
@@ -951,7 +951,7 @@ Describe "Test-QBuildTmuxAutoWindowEnabled" {
         foreach ($value in '0', 'false', 'no', 'off', 'FALSE', 'OFF') {
             $env:QCONF_TMUX_AUTOWINDOW = $value
             InModuleScope ConfigMap {
-                Test-QBuildTmuxAutoWindowEnabled | Should -Be $false
+                Test-TmuxAutoWindowEnabled | Should -Be $false
             }
         }
     }
@@ -960,7 +960,7 @@ Describe "Test-QBuildTmuxAutoWindowEnabled" {
         foreach ($value in '1', 'true', 'yes', 'on') {
             $env:QCONF_TMUX_AUTOWINDOW = $value
             InModuleScope ConfigMap {
-                Test-QBuildTmuxAutoWindowEnabled | Should -Be $true
+                Test-TmuxAutoWindowEnabled | Should -Be $true
             }
         }
     }
