@@ -8,18 +8,18 @@ function Invoke-EntryWrapper {
         [string[]]$RemainingArguments
     )
 
-    if ($Bound.map -and $Bound.map -isnot [string]) {
-        Invoke-EntryCommand -entry $TargetEntry -key $Command -bound $Bound
-        return
+    $context = @{
+        MainCommand        = $MainCommand
+        TargetKey          = $TargetKey
+        TargetEntry        = $TargetEntry
+        Command            = $Command
+        Bound              = $Bound
+        RemainingArguments = $RemainingArguments
     }
 
-    $tmuxInfo = Get-TmuxInfo
-    if ($null -ne $tmuxInfo `
-            -and $tmuxInfo.windowName -ne $TargetKey `
-            -and (Test-TmuxAutoWindowEnabled)) {
-        $tmuxCommand = Format-TmuxCommand -mainCommand $MainCommand -Entry $TargetKey -BoundParameters $Bound -RemainingArguments $RemainingArguments
-        Invoke-TmuxCommand -Session $tmuxInfo.sessionName -Window $TargetKey -Command $tmuxCommand -WorkingDirectory (Get-Location).Path
-        return
+    $hookResult = Invoke-ConfigMapPluginHooks -HookName 'InvokeEntryWrapper' -Context $context
+    if ($hookResult.Handled) {
+        return $hookResult.Result
     }
 
     Invoke-EntryCommand -entry $TargetEntry -key $Command -bound $Bound
