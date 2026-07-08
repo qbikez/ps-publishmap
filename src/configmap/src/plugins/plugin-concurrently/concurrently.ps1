@@ -1,14 +1,23 @@
 function Test-ConcurrentlyEnabled {
+    Write-Verbose "Checking concurrently plugin toggle from QCONF_CONCURRENTLY='$($env:QCONF_CONCURRENTLY)'"
     switch ($env:QCONF_CONCURRENTLY) {
-        { $_ -in '0', 'false', 'no', 'off' } { return $false }
-        default { return $true }
+        { $_ -in '0', 'false', 'no', 'off' } {
+            Write-Verbose "Concurrently plugin disabled by environment toggle."
+            return $false
+        }
+        default {
+            Write-Verbose "Concurrently plugin enabled."
+            return $true
+        }
     }
 }
 
 function Test-VirtualBuildAllExpansion {
     param($Context)
 
-    return $Context.Entry -match '\.all$' -and @($Context.Targets).Count -gt 1
+    $isExpansion = $Context.Entry -match '\.all$' -and @($Context.Targets).Count -gt 1
+    Write-Verbose "Virtual .all expansion check for entry '$($Context.Entry)': $isExpansion"
+    return $isExpansion
 }
 
 function Format-QBuildCommand {
@@ -19,11 +28,13 @@ function Format-QBuildCommand {
         [string[]]$RemainingArguments
     )
 
+    Write-Verbose "Formatting qbuild command for entry '$Entry'"
     $parts = @($mainCommand)
 
     if ($BoundParameters.map -is [string]) {
         $parts += '-map'
         $parts += "'$($BoundParameters.map -replace "'", "''")'"
+        Write-Verbose "Included map argument: $($BoundParameters.map)"
     }
 
     $parts += $Entry
@@ -54,9 +65,12 @@ function Format-QBuildCommand {
     if ($passthrough.Count -gt 0) {
         $parts += '--'
         $parts += $passthrough
+        Write-Verbose "Included passthrough arguments: $($passthrough -join ' ')"
     }
 
-    return $parts -join ' '
+    $commandLine = $parts -join ' '
+    Write-Verbose "Formatted qbuild command: $commandLine"
+    return $commandLine
 }
 
 function Invoke-ConcurrentlyQBuild {
@@ -65,20 +79,29 @@ function Invoke-ConcurrentlyQBuild {
         [string[]]$Names
     )
 
+    Write-Verbose "Invoking concurrently for $($Commands.Count) command(s)."
     if ($null -ne $script:ConfigMapConcurrentlyInvoker) {
+        Write-Verbose "Using custom concurrently invoker script hook."
         & $script:ConfigMapConcurrentlyInvoker -Commands $Commands -Names $Names
         return
     }
 
-    $args = @('--yes', 'concurrently')
+    $a = @('--yes', 'concurrently')
+    $a += @("--shell", "pwsh")
     if ($Names.Count -gt 0) {
-        $args += '-n'
-        $args += ($Names -join ',')
+        $a += '-n'
+        $a += ($Names -join ',')
+        Write-Verbose "Using concurrently task names: $($Names -join ', ')"
     }
-    $args += $Commands
-
-    & npx @args
+    foreach ($command in $Commands) {
+        Write-Verbose "Adding command: $command"
+        $a += 'write-host dupa'
+    }
+    
+    Write-Verbose "Running: npx $($a -join ' ')"
+    invoke-expression npx --yes "concurrently" --shell pwsh "write-host dupa"
     if ($LASTEXITCODE -ne 0) {
         throw "concurrently exited with code $LASTEXITCODE"
     }
+    Write-Verbose "concurrently finished successfully."
 }
