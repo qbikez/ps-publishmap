@@ -71,14 +71,15 @@ function Invoke-QBuildTarget {
         [string[]]$RemainingArguments
     )
 
-    $tmuxInfo = Get-TmuxInfo
-    if ($null -ne $tmuxInfo `
-            -and $tmuxInfo.windowName -ne $TargetKey `
-            -and (Test-QBuildCanDelegateToTmux -Bound $Bound) `
-            -and (Test-QBuildTmuxAutoWindowEnabled)) {
-        $qbuildCommand = Format-QBuildCommand -Entry $TargetKey -BoundParameters $Bound -RemainingArguments $RemainingArguments
-        Invoke-TmuxCommand -Session $tmuxInfo.sessionName -Window $TargetKey -Command $qbuildCommand -WorkingDirectory (Get-Location).Path
-        return
+    if (Test-QBuildTmuxAutoWindowEnabled -and Test-InsideTmux -and (Test-QBuildCanDelegateToTmux -Bound $Bound)) {
+        $tmuxInfo = Get-TmuxInfo
+        $shouldDelegate = $null -ne $tmuxInfo -and $tmuxInfo.windowName -ne $TargetKey
+        
+        if ($shouldDelegate) {    
+            $qbuildCommand = Format-QBuildCommand -Entry $TargetKey -BoundParameters $Bound -RemainingArguments $RemainingArguments
+            Invoke-TmuxCommand -Session $tmuxInfo.sessionName -Window $TargetKey -Command $qbuildCommand -WorkingDirectory (Get-Location).Path
+            return
+        }
     }
 
     Invoke-EntryCommand -entry $TargetEntry -key $Command -bound $Bound
