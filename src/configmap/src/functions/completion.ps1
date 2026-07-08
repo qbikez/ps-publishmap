@@ -87,7 +87,7 @@ function Get-CompletionList {
                 }
 
                 if ($language -eq 'build' -and $entry -is [System.Collections.IDictionary] -and -not $entry.Contains('all')) {
-                    $invokableChildren = Get-BuildAllChildren $entry -ParentKey $kvp.key -Separator $separator -ListKey $listKey
+                    $invokableChildren = Get-BuildAllChildren $entry -Language $language -ParentKey $kvp.key -Separator $separator -ListKey $listKey
                     if ($invokableChildren.Count -gt 0) {
                         $allKey = if ($flatten) { "$($kvp.key).all" } else { "$($kvp.key)${separator}all" }
                         $result[$allKey] = New-BuildAllEntry

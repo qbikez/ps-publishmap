@@ -11,10 +11,11 @@ function Test-BuildAllEntry {
 function Test-IsInvokableBuildEntry {
     param(
         $Entry,
+        [ValidateSet('build', 'conf')]$Language,
         $ListKey = 'list'
     )
 
-    $reservedKeys = (Get-MapLanguage 'build').reservedKeys + @('options', 'exec', 'list')
+    $reservedKeys = (Get-MapLanguage $Language).reservedKeys + @('options', 'exec', 'list')
 
     if (Test-BuildAllEntry $Entry) { return $false }
     if ($Entry -is [scriptblock]) { return $true }
@@ -32,12 +33,13 @@ function Test-IsInvokableBuildEntry {
 function Get-BuildAllChildren {
     param(
         [System.Collections.IDictionary]$ParentEntry,
+        [ValidateSet('build', 'conf')]$Language,
         [string]$ParentKey = '',
         [string]$Separator = '.',
         [string]$ListKey = 'list'
     )
 
-    $reservedKeys = (Get-MapLanguage 'build').reservedKeys
+    $reservedKeys = (Get-MapLanguage $Language).reservedKeys
     $result = [ordered]@{}
 
     foreach ($kvp in $ParentEntry.GetEnumerator()) {
@@ -45,7 +47,7 @@ function Get-BuildAllChildren {
             continue
         }
 
-        if (!(Test-IsInvokableBuildEntry $kvp.Value $ListKey)) {
+        if (!(Test-IsInvokableBuildEntry $kvp.Value -Language $Language -ListKey $ListKey)) {
             continue
         }
 
@@ -97,7 +99,7 @@ function Get-MapEntries(
                 $map
             }
 
-            $children = Get-BuildAllChildren $parentEntry -ParentKey $parentKey -Separator $separator
+            $children = Get-BuildAllChildren $parentEntry -Language $language -ParentKey $parentKey -Separator $separator
             foreach ($child in $children.GetEnumerator()) {
                 $results += [ordered]@{ Key = $child.Key; Value = $child.Value }
             }
