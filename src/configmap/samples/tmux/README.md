@@ -126,6 +126,7 @@ Commands use `Start-Sleep` to simulate work so you can watch output appear in ea
 ## Notes
 
 - Tmux auto-window delegation is **enabled by default**. Set `$env:QCONF_TMUX_AUTOWINDOW` to a falsy value (`0`, `false`, `no`, or `off`) to run entries locally even inside tmux.
+- When inside tmux, tmux takes precedence over the concurrently plugin for virtual `.all` expansions (e.g. `build.all`). Outside tmux, `build.all` runs via `npx concurrently` when that plugin is enabled.
 - Delegation requires a **file-based** map (`-map` path or default `.build.map.ps1`). In-memory hashtable maps always run locally.
 - `help`, `list`, and `!init` are not delegated — they always run in the current shell.
 - Parent entries without `exec` (e.g. `qbuild build`) still show the subcommand chooser locally.

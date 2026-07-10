@@ -1,6 +1,6 @@
 @{
-    "init" = @{
-        exec = {
+    "init"    = @{
+        exec        = {
             Write-Host "Initializing repository dependencies..."
             
             # Update git submodules
@@ -16,15 +16,15 @@
     }
     
     "restore" = @{
-        exec = {
+        exec        = {
             Write-Host "Restoring project dependencies..."
             & "scripts\lib\restore.ps1" "."
         }
         description = "Install required PowerShell modules and dependencies"
     }
     
-    "build" = @{
-        exec = {
+    "build"   = @{
+        exec        = {
             Write-Host "Building C# native components..."
             
             Push-Location
@@ -50,8 +50,8 @@
         description = "Build the C# .NET components and copy to PowerShell module lib folder"
     }
     
-    "test" = @{
-        exec = {
+    "test"    = @{
+        exec        = {
             Write-Host "Running all tests..."
             
             # Ensure required modules are loaded
@@ -64,7 +64,7 @@
             Push-Location
             try {
                 Set-Location "src/publishmap.native/publishmap.test"
-                dotnet test
+                dotnet test 2>&1
                 if ($LASTEXITCODE -ne 0) {
                     Write-Warning "C# tests failed"
                 }
@@ -76,23 +76,24 @@
             # Run PowerShell tests
             if ($env:APPVEYOR_JOB_ID -ne $null) {
                 & "scripts/lib/test.appveyor.ps1"
-            } else {
+            }
+            else {
                 & "scripts/lib/test.ps1"
             }
         }
         description = "Run both C# unit tests and PowerShell Pester tests"
     }
     
-    "push" = @{
-        exec = {
+    "push"    = @{
+        exec        = {
             param([string]$path = $null, [switch]$NewVersion)
             
             Write-Host "Running push/publish workflow..."
             $a = @{
-                Verbose = $true
-                path = $path ? $path : "."
+                Verbose    = $true
+                path       = $path ? $path : "."
                 newversion = $NewVersion
-                }
+            }
             
             & "$psscriptroot\scripts\lib\push.ps1" @a
         }
@@ -100,15 +101,15 @@
     }
     
     "install" = @{
-        exec = {
+        exec        = {
             Write-Host "Installing module locally..."
             & "scripts\lib\install.ps1" "."
         }
         description = "Install the PowerShell module locally"
     }
     
-    "clean" = @{
-        exec = {
+    "clean"   = @{
+        exec        = {
             Write-Host "Cleaning build artifacts..."
             
             # Clean C# build outputs
@@ -133,7 +134,7 @@
     }
     
     "rebuild" = @{
-        exec = {
+        exec        = {
             Write-Host "Performing clean rebuild..."
             
             # Clean first
