@@ -11,6 +11,26 @@ function Test-ConcurrentlyEnabled {
     return $enabled
 }
 
+function Test-ConcurrentlyPackageAvailable {
+    & npx --no-install --loglevel error concurrently --version 2>$null | Out-Null
+    return $LASTEXITCODE -eq 0
+}
+
+function Test-ConcurrentlyAvailable {
+    if (-not (Get-Command npx -ErrorAction SilentlyContinue)) {
+        Write-Verbose "[concurrently] npx is not available on PATH."
+        return $false
+    }
+
+    if (-not (Test-ConcurrentlyPackageAvailable)) {
+        Write-Verbose "[concurrently] concurrently package is not available to npx."
+        return $false
+    }
+
+    Write-Verbose "[concurrently] npx and concurrently are available."
+    return $true
+}
+
 function Test-VirtualBuildAllExpansion {
     param($Context)
 

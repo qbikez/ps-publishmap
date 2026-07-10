@@ -22,6 +22,10 @@
                 return @{ Handled = $false }
             }
 
+            if (-not (Test-ConcurrentlyAvailable)) {
+                return @{ Handled = $false }
+            }
+
             $boundForCommand = @{}
             foreach ($key in $Context.Bound.Keys) {
                 $boundForCommand[$key] = $Context.Bound[$key]
