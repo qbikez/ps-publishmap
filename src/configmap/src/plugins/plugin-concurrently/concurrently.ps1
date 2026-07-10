@@ -1,12 +1,12 @@
 function Test-ConcurrentlyEnabled {
-    Write-Verbose "Checking concurrently plugin toggle from QCONF_CONCURRENTLY='$($env:QCONF_CONCURRENTLY)'"
+    Write-Verbose "[concurrently] Checking plugin toggle from QCONF_CONCURRENTLY='$($env:QCONF_CONCURRENTLY)'"
     switch ($env:QCONF_CONCURRENTLY) {
         { $_ -in '0', 'false', 'no', 'off' } {
-            Write-Verbose "Concurrently plugin disabled by environment toggle."
+            Write-Verbose "[concurrently] Plugin disabled by environment toggle."
             return $false
         }
         default {
-            Write-Verbose "Concurrently plugin enabled."
+            Write-Verbose "[concurrently] Plugin enabled."
             return $true
         }
     }
@@ -16,7 +16,7 @@ function Test-VirtualBuildAllExpansion {
     param($Context)
 
     $isExpansion = $Context.Entry -match '\.all$' -and @($Context.Targets).Count -gt 1
-    Write-Verbose "Virtual .all expansion check for entry '$($Context.Entry)': $isExpansion"
+    Write-Verbose "[concurrently] Virtual .all expansion check for entry '$($Context.Entry)': $isExpansion"
     return $isExpansion
 }
 
@@ -28,13 +28,13 @@ function Format-QBuildCommand {
         [string[]]$RemainingArguments
     )
 
-    Write-Verbose "Formatting qbuild command for entry '$Entry'"
+    Write-Verbose "[concurrently] Formatting qbuild command for entry '$Entry'"
     $parts = @($mainCommand)
 
     if ($BoundParameters.map -is [string]) {
         $parts += '-map'
         $parts += "'$($BoundParameters.map -replace "'", "''")'"
-        Write-Verbose "Included map argument: $($BoundParameters.map)"
+        Write-Verbose "[concurrently] Included map argument: $($BoundParameters.map)"
     }
 
     $parts += $Entry
@@ -65,11 +65,11 @@ function Format-QBuildCommand {
     if ($passthrough.Count -gt 0) {
         $parts += '--'
         $parts += $passthrough
-        Write-Verbose "Included passthrough arguments: $($passthrough -join ' ')"
+        Write-Verbose "[concurrently] Included passthrough arguments: $($passthrough -join ' ')"
     }
 
     $commandLine = $parts -join ' '
-    Write-Verbose "Formatted qbuild command: $commandLine"
+    Write-Verbose "[concurrently] Formatted qbuild command: $commandLine"
     return $commandLine
 }
 
@@ -79,9 +79,9 @@ function Invoke-ConcurrentlyQBuild {
         [string[]]$Names
     )
 
-    Write-Verbose "Invoking concurrently for $($Commands.Count) command(s)."
+    Write-Verbose "[concurrently] Invoking concurrently for $($Commands.Count) command(s)."
     if ($null -ne $script:ConfigMapConcurrentlyInvoker) {
-        Write-Verbose "Using custom concurrently invoker script hook."
+        Write-Verbose "[concurrently] Using custom concurrently invoker script hook."
         & $script:ConfigMapConcurrentlyInvoker -Commands $Commands -Names $Names
         return
     }
@@ -91,17 +91,17 @@ function Invoke-ConcurrentlyQBuild {
     if ($Names.Count -gt 0) {
         $a += '-n'
         $a += ($Names -join ',')
-        Write-Verbose "Using concurrently task names: $($Names -join ', ')"
+        Write-Verbose "[concurrently] Using concurrently task names: $($Names -join ', ')"
     }
     foreach ($command in $Commands) {
-        Write-Verbose "Adding command: $command"
+        Write-Verbose "[concurrently] Adding command: $command"
         $a += $command
     }
     
-    Write-Verbose "Running: npx $($a -join ' ')"
+    Write-Verbose "[concurrently] Running: npx $($a -join ' ')"
     & npx @a | out-host
     if ($LASTEXITCODE -ne 0) {
         throw "concurrently exited with code $LASTEXITCODE"
     }
-    Write-Verbose "concurrently finished successfully."
+    Write-Verbose "[concurrently] concurrently finished successfully."
 }
