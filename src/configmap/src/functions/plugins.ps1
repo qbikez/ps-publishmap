@@ -6,7 +6,11 @@ function Invoke-ConfigMapPluginHooks {
         [hashtable]$Context
     )
 
-    foreach ($plugin in $script:ConfigMapPlugins) {
+    $plugins = $script:ConfigMapPlugins | Sort-Object {
+        if ($null -ne $_.priority) { $_.priority } else { 100 }
+    }
+
+    foreach ($plugin in $plugins) {
         if (-not $plugin.hooks) { continue }
 
         $hook = $plugin.hooks[$HookName]

@@ -711,7 +711,7 @@ Describe "qbuild tmux" {
         $script:qbuildTmuxAutoWindowBackup = $env:QCONF_TMUX_AUTOWINDOW
         $script:qbuildConcurrentlyBackup = $env:QCONF_CONCURRENTLY
         Remove-Item env:QCONF_TMUX_AUTOWINDOW -ErrorAction SilentlyContinue
-        $env:QCONF_CONCURRENTLY = '0'
+        Remove-Item env:QCONF_CONCURRENTLY -ErrorAction SilentlyContinue
     }
 
     AfterEach {
@@ -905,6 +905,34 @@ Describe "qbuild tmux" {
             Should -Invoke Invoke-TmuxCommand -Times 2 -Exactly
             Should -Invoke Invoke-TmuxCommand -ParameterFilter { $Window -eq 'build.ui' }
             Should -Invoke Invoke-TmuxCommand -ParameterFilter { $Window -eq 'build.api' }
+            Should -Invoke Invoke-EntryCommand -Times 0 -Exactly
+        }
+    }
+
+    It "prefers tmux over concurrently for build.all when inside tmux" {
+        $mapFile = Join-Path $TestDrive ".build.map.ps1"
+        @'
+@{
+    "build" = @{
+        "ui"  = { Write-Host "ui" }
+        "api" = { Write-Host "api" }
+    }
+}
+'@ | Set-Content $mapFile -Encoding utf8
+
+        InModuleScope ConfigMap -ArgumentList $mapFile {
+            param($MapFile)
+            $script:ConfigMapConcurrentlyInvoker = {
+                throw 'concurrently should not run when tmux handles build.all'
+            }
+            Mock Write-Host
+            Mock Invoke-EntryCommand
+            Mock Invoke-TmuxCommand
+            Mock Get-TmuxInfo { return [pscustomobject]@{ sessionName = 'dev'; windowName = 'shell' } }
+
+            qbuild -map $MapFile "build.all"
+
+            Should -Invoke Invoke-TmuxCommand -Times 2 -Exactly
             Should -Invoke Invoke-EntryCommand -Times 0 -Exactly
         }
     }

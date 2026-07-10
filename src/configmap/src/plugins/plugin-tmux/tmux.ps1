@@ -171,3 +171,23 @@ function Test-TmuxAutoWindowEnabled {
         default { return $true }
     }
 }
+
+function Test-TmuxBatchDispatchEnabled {
+    param($Context)
+
+    if (-not (Test-TmuxAutoWindowEnabled)) {
+        return $false
+    }
+
+    $hasMap = $Context.Bound.map -and $Context.Bound.map -isnot [string]
+    if ($hasMap) {
+        return $false
+    }
+
+    $isExpansion = $Context.Entry -match '\.all$' -and @($Context.Targets).Count -gt 1
+    if (-not $isExpansion) {
+        return $false
+    }
+
+    return $null -ne (Get-TmuxInfo)
+}

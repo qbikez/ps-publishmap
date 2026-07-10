@@ -2,9 +2,32 @@
 
 @{
     name        = 'tmux'
+    priority    = 10
     description = 'Tmux support'
 
     hooks       = @{
+        InvokeQBuildTargets = {
+            param($Context)
+
+            if (-not (Test-TmuxBatchDispatchEnabled $Context)) {
+                Write-Verbose "[tmux] Batch dispatch is not applicable. Skipping tmux handling."
+                return @{ Handled = $false }
+            }
+
+            Write-Verbose "[tmux] Dispatching $($Context.Targets.Count) target(s) via tmux windows."
+            foreach ($target in $Context.Targets) {
+                Invoke-EntryWrapper `
+                    -MainCommand $Context.MainCommand `
+                    -TargetKey $target.Key `
+                    -TargetEntry $target.Value `
+                    -Command $Context.Command `
+                    -Bound $Context.Bound `
+                    -RemainingArguments $Context.RemainingArguments
+            }
+
+            return @{ Handled = $true }
+        }
+
         InvokeEntryWrapper = {
             param($Context)
 

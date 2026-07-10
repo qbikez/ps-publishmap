@@ -135,6 +135,7 @@ Describe "qbuild concurrently" {
                 }
             }
             Mock Invoke-EntryCommand
+            Mock Get-TmuxInfo { return $null }
 
             qbuild -map $MapFile "build.all"
 
@@ -143,6 +144,34 @@ Describe "qbuild concurrently" {
             $script:capturedConcurrently.Commands.Count | Should -Be 2
             ($script:capturedConcurrently.Commands | Where-Object { $_ -match "build\.ui$" }).Count | Should -Be 1
             ($script:capturedConcurrently.Commands | Where-Object { $_ -match "build\.api$" }).Count | Should -Be 1
+            Should -Invoke Invoke-EntryCommand -Times 0 -Exactly
+        }
+    }
+
+    It "prefers tmux over concurrently for build.all when inside tmux" {
+        $mapFile = Join-Path $TestDrive ".build.map.ps1"
+        @'
+@{
+    "build" = @{
+        "ui"  = { Write-Host "ui" }
+        "api" = { Write-Host "api" }
+    }
+}
+'@ | Set-Content $mapFile -Encoding utf8
+
+        InModuleScope ConfigMap -ArgumentList $mapFile {
+            param($MapFile)
+            $script:ConfigMapConcurrentlyInvoker = {
+                throw 'concurrently should not run when tmux handles build.all'
+            }
+            Mock Write-Host
+            Mock Invoke-EntryCommand
+            Mock Invoke-TmuxCommand
+            Mock Get-TmuxInfo { return [pscustomobject]@{ sessionName = 'dev'; windowName = 'shell' } }
+
+            qbuild -map $MapFile "build.all"
+
+            Should -Invoke Invoke-TmuxCommand -Times 2 -Exactly
             Should -Invoke Invoke-EntryCommand -Times 0 -Exactly
         }
     }
@@ -168,11 +197,14 @@ Describe "qbuild concurrently" {
                 }
             }
             Mock Invoke-EntryCommand
+            Mock Get-TmuxInfo { return $null }
 
             qbuild -map $MapFile "build.all" -NoRestore
 
-            $script:capturedConcurrently.Commands[0] | Should -Match '-NoRestore'
-            $script:capturedConcurrently.Commands[1] | Should -Match '-NoRestore'
+            $script:capturedConcurrently.Commands.Count | Should -Be 2
+            foreach ($command in $script:capturedConcurrently.Commands) {
+                $command | Should -Match '-NoRestore'
+            }
         }
     }
 

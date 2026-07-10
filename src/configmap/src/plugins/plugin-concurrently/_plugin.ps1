@@ -2,6 +2,7 @@
 
 @{
     name        = 'concurrently'
+    priority    = 50
     description = 'Concurrent execution support'
 
     hooks       = @{
