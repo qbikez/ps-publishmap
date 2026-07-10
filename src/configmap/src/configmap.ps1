@@ -1,5 +1,9 @@
 #requires -version 7.0
 
+# this is for piping utf-8 output to out-host (used when invoking concurretly). 
+# Otherwise, the UTF-8 characters will be garbled in the console.
+[System.Console]::OutputEncoding = $OutputEncoding
+
 $helpersPath = (Split-Path -Parent $MyInvocation.MyCommand.Definition)
 
 # Import all function files in dependency order
