@@ -8,6 +8,7 @@ $helpersPath = (Split-Path -Parent $MyInvocation.MyCommand.Definition)
 
 # Import all function files in dependency order
 . "$helpersPath\functions\plugins.ps1"
+. "$helpersPath\functions\settings.ps1"
 . "$helpersPath\functions\languages.ps1"
 . "$helpersPath\functions\resolve-map.ps1"
 . "$helpersPath\functions\completion.ps1"

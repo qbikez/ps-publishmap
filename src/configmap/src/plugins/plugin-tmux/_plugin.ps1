@@ -32,7 +32,7 @@
             param($Context)
 
             $hasMap = $Context.Bound.map -and $Context.Bound.map -isnot [string]
-            if (-not (Test-TmuxAutoWindowEnabled) -or $hasMap) {
+            if (-not (Test-ConfigMapFeatureEnabled -Name TmuxAutoWindow) -or $hasMap) {
                 Write-Verbose "[tmux] Auto-window is disabled or map argument is present. Skipping tmux handling."
                 return @{ Handled = $false }
             }
@@ -40,7 +40,7 @@
             $tmuxInfo = Get-TmuxInfo
             if ($null -eq $tmuxInfo `
                     -or $tmuxInfo.windowName -eq $Context.TargetKey `
-                    -or -not (Test-TmuxAutoWindowEnabled)) {
+                    -or -not (Test-ConfigMapFeatureEnabled -Name TmuxAutoWindow)) {
                 Write-Verbose "[tmux] Auto-window is disabled or already in the target window. Skipping tmux handling."
                 return @{ Handled = $false }
             }

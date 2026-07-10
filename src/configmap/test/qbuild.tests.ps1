@@ -962,7 +962,7 @@ Describe "qbuild tmux" {
     }
 }
 
-Describe "Test-TmuxAutoWindowEnabled" {
+Describe "Test-ConfigMapFeatureEnabled TmuxAutoWindow" {
     BeforeEach {
         $script:qbuildTmuxAutoWindowBackup = $env:QCONF_TMUX_AUTOWINDOW
         Remove-Item env:QCONF_TMUX_AUTOWINDOW -ErrorAction SilentlyContinue
@@ -979,7 +979,7 @@ Describe "Test-TmuxAutoWindowEnabled" {
 
     It "is enabled when the env var is unset" {
         InModuleScope ConfigMap {
-            Test-TmuxAutoWindowEnabled | Should -Be $true
+            Test-ConfigMapFeatureEnabled -Name TmuxAutoWindow | Should -Be $true
         }
     }
 
@@ -987,7 +987,7 @@ Describe "Test-TmuxAutoWindowEnabled" {
         foreach ($value in '0', 'false', 'no', 'off', 'FALSE', 'OFF') {
             $env:QCONF_TMUX_AUTOWINDOW = $value
             InModuleScope ConfigMap {
-                Test-TmuxAutoWindowEnabled | Should -Be $false
+                Test-ConfigMapFeatureEnabled -Name TmuxAutoWindow | Should -Be $false
             }
         }
     }
@@ -996,7 +996,7 @@ Describe "Test-TmuxAutoWindowEnabled" {
         foreach ($value in '1', 'true', 'yes', 'on') {
             $env:QCONF_TMUX_AUTOWINDOW = $value
             InModuleScope ConfigMap {
-                Test-TmuxAutoWindowEnabled | Should -Be $true
+                Test-ConfigMapFeatureEnabled -Name TmuxAutoWindow | Should -Be $true
             }
         }
     }

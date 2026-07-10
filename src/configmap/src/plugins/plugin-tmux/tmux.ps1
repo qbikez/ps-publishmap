@@ -165,17 +165,10 @@ function Format-TmuxCommand {
     return $parts -join ' '
 }
 
-function Test-TmuxAutoWindowEnabled {
-    switch ($env:QCONF_TMUX_AUTOWINDOW) {
-        { $_ -in '0', 'false', 'no', 'off' } { return $false }
-        default { return $true }
-    }
-}
-
 function Test-TmuxBatchDispatchEnabled {
     param($Context)
 
-    if (-not (Test-TmuxAutoWindowEnabled)) {
+    if (-not (Test-ConfigMapFeatureEnabled -Name TmuxAutoWindow)) {
         return $false
     }
 

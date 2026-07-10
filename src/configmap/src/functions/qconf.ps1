@@ -173,7 +173,7 @@ function Invoke-QConf {
                         $result | Write-Output
                     }
                     catch {
-                        if ($env:QCONF_DEBUG -eq "1") {
+                        if ((Get-ConfigMapSetting -Name Debug) -eq '1') {
                             throw $_
                         }
                         Write-Error "Error getting value for entry '$entry': $($_.Exception.Message)"
