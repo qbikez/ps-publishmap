@@ -116,6 +116,8 @@
             $paths = @(
                 "src\publishmap.native\publishmap.core\bin",
                 "src\publishmap.native\publishmap.core\obj",
+                "src\publishmap.native\publishmap.powershell\bin",
+                "src\publishmap.native\publishmap.powershell\obj",
                 "src\publishmap.native\publishmap.test\bin", 
                 "src\publishmap.native\publishmap.test\obj",
                 "src\publishmap\lib"

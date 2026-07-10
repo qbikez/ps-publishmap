@@ -1,15 +1,14 @@
 function Test-ConcurrentlyEnabled {
-    Write-Verbose "[concurrently] Checking plugin toggle from QCONF_CONCURRENTLY='$($env:QCONF_CONCURRENTLY)'"
-    switch ($env:QCONF_CONCURRENTLY) {
-        { $_ -in '0', 'false', 'no', 'off' } {
-            Write-Verbose "[concurrently] Plugin disabled by environment toggle."
-            return $false
-        }
-        default {
-            Write-Verbose "[concurrently] Plugin enabled."
-            return $true
-        }
+    $toggle = Get-ConfigMapSetting -Name Concurrently
+    Write-Verbose "[concurrently] Checking plugin toggle from QCONF_CONCURRENTLY='$toggle'"
+    $enabled = Test-ConfigMapFeatureEnabled -Name Concurrently
+    if ($enabled) {
+        Write-Verbose "[concurrently] Plugin enabled."
     }
+    else {
+        Write-Verbose "[concurrently] Plugin disabled by environment toggle."
+    }
+    return $enabled
 }
 
 function Test-VirtualBuildAllExpansion {
