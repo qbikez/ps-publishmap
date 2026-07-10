@@ -29,17 +29,17 @@
             
             Push-Location
             try {
-                Set-Location "src/publishmap.native/publishmap.core"
-                dotnet build
+                Set-Location "src/publishmap.native"
+                dotnet build publishmap.native.sln
                 if ($LASTEXITCODE -ne 0) { 
                     throw "dotnet build failed" 
                 }
 
-                $libpath = "..\..\publishmap\lib"
+                $libpath = "..\publishmap\lib"
                 if (!(Test-Path $libpath)) { 
                     $null = New-Item -Type Directory $libpath
                 }
-                Copy-Item "bin\Debug\net451\*" $libpath -Force
+                Copy-Item "publishmap.core\bin\Debug\netstandard2.0\*" $libpath -Force
                 
                 Write-Host "Build completed successfully"
             }
@@ -63,8 +63,8 @@
             # Run C# tests
             Push-Location
             try {
-                Set-Location "src/publishmap.native/publishmap.test"
-                dotnet test 2>&1
+                Set-Location "src/publishmap.native"
+                dotnet test publishmap.test/publishmap.test.csproj 2>&1
                 if ($LASTEXITCODE -ne 0) {
                     Write-Warning "C# tests failed"
                 }

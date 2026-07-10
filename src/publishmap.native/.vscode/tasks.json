@@ -1,32 +1,32 @@
 {
-    "version": "0.1.0",
-    "command": "dotnet",
-    "isShellCommand": true,
-    "args": [],
+    "version": "2.0.0",
     "tasks": [
         {
-            "taskName": "build",
+            "label": "build",
+            "command": "dotnet",
+            "type": "process",
             "args": [
-                "${workspaceRoot}\\publishmap.core\\project.json",
-                "${workspaceRoot}\\publishmap.test\\project.json",
-                "${workspaceRoot}\\publishmap.powershell\\project.json"
+                "build",
+                "${workspaceFolder}/publishmap.native.sln"
             ],
-            "isBuildCommand": true,
-            "problemMatcher": "$msCompile"
-        },
-         {
-            "taskName": "publish",
-            "args": [
-                "${workspaceRoot}\\publishmap.core\\project.json"
-            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
             "problemMatcher": "$msCompile"
         },
         {
-            "taskName": "test",
+            "label": "test",
+            "command": "dotnet",
+            "type": "process",
             "args": [
-                "${workspaceRoot}\\publishmap.test\\project.json"
+                "test",
+                "${workspaceFolder}/publishmap.test/publishmap.test.csproj"
             ],
-            "isTestCommand": true,
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
             "problemMatcher": "$msCompile"
         }
     ]
