@@ -1,5 +1,8 @@
 name: Publish configmap
 
+permissions:
+  contents: write
+
 on:
   push:
     branches: [master]
@@ -54,3 +57,15 @@ jobs:
           git add src/configmap/configmap.psd1
           git diff --cached --quiet || git commit -m "bump configmap version"
           git push
+
+      - name: Create GitHub release
+        if: ${{ !inputs.dryRun }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Import-PowerShellDataFile ./src/configmap/configmap.psd1).ModuleVersion
+          $tag = "configmap-v$version"
+          git tag $tag
+          git push origin $tag
+          gh release create $tag --title "configmap $version" --generate-notes
