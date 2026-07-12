@@ -1,18 +1,18 @@
 @{
     # Script module or binary module file associated with this manifest.
-    RootModule = 'configmap.psm1'
+    RootModule           = 'configmap.psm1'
 
     # Version number of this module.
-    ModuleVersion = '1.0.20.0'
+    ModuleVersion        = '1.0.21.0'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Core')
 
     # ID used to uniquely identify this module
-    GUID = '8b7f4c92-3d1e-4a85-9c6b-f2e8a7d4b1c3'
+    GUID                 = '8b7f4c92-3d1e-4a85-9c6b-f2e8a7d4b1c3'
 
     # Author of this module
-    Author = 'jakub.pawlowski'
+    Author               = 'jakub.pawlowski'
 
     # Company or vendor of this module
     # CompanyName = 'Unknown'
@@ -21,10 +21,10 @@
     # Copyright = '(c) 2025 jakub.pawlowski. All rights reserved.'
 
     # Description of the functionality provided by this module
-    Description = 'ConfigMap is a PowerShell module that extends publishmap functionality to provide build and configuration management capabilities through declarative map files.'
+    Description          = 'ConfigMap is a PowerShell module that extends publishmap functionality to provide build and configuration management capabilities through declarative map files.'
 
     # Minimum version of the PowerShell engine required by this module
-    PowerShellVersion = '7.0'
+    PowerShellVersion    = '7.0'
 
     # Name of the PowerShell host required by this module
     # PowerShellHostName = ''
@@ -60,18 +60,18 @@
     # NestedModules = @()
 
     # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
-    FunctionsToExport = @(
+    FunctionsToExport    = @(
         '*'
     )
 
     # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
-    CmdletsToExport = @()
+    CmdletsToExport      = @()
 
     # Variables to export from this module
-    VariablesToExport = @()
+    VariablesToExport    = @()
 
     # Aliases to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no aliases to export.
-    AliasesToExport = @('qbuild', 'qconf')
+    AliasesToExport      = @('qbuild', 'qconf')
 
     # DSC resources to export from this module
     # DscResourcesToExport = @()
@@ -83,16 +83,16 @@
     # FileList = @()
 
     # Private data to pass to the module specified in RootModule/ModuleToProcess. This may also contain a PSData hashtable with additional module metadata used by PowerShell.
-    PrivateData = @{
+    PrivateData          = @{
         PSData = @{
             # Tags applied to this module. These help with module discovery in online galleries.
-            Tags = @('Build', 'Configuration', 'CLI', 'PowerShell', 'ConfigMap', 'PublishMap')
+            Tags         = @('Build', 'Configuration', 'CLI', 'PowerShell', 'ConfigMap', 'PublishMap')
 
             # A URL to the license for this module.
             # LicenseUri = ''
 
             # A URL to the main website for this project.
-            ProjectUri = 'https://github.com/qbikez/ps-publishmap/tree/master/src/configmap'
+            ProjectUri   = 'https://github.com/qbikez/ps-publishmap/tree/master/src/configmap'
 
             # A URL to an icon representing this module.
             # IconUri = ''
