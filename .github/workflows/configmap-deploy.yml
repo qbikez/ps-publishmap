@@ -8,6 +8,12 @@ on:
       - '.github/workflows/configmap-deploy.yml'
 
   workflow_dispatch:
+    inputs:
+      dryRun:
+        description: 'Run tests without publishing or committing a version bump'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   publish:
@@ -33,6 +39,7 @@ jobs:
           Run_Path: ./src/configmap/test
 
       - name: Publish configmap
+        if: ${{ !inputs.dryRun }}
         shell: pwsh
         env:
           PS_PUBLISH_REPO_KEY: ${{ secrets.PS_PUBLISH_REPO_KEY }}
@@ -40,6 +47,7 @@ jobs:
           scripts/lib/push.ps1 -path ./src/configmap/configmap.psd1 -newversion -Verbose
 
       - name: Commit version bump
+        if: ${{ !inputs.dryRun }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
