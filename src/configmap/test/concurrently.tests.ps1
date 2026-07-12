@@ -216,6 +216,7 @@ Describe "qbuild concurrently" {
             }
             Mock Invoke-EntryCommand
             Mock Get-TmuxInfo { return $null }
+            Mock Test-ConcurrentlyAvailable { return $true }
 
             qbuild -map $MapFile "build.all"
 
@@ -278,6 +279,7 @@ Describe "qbuild concurrently" {
             }
             Mock Invoke-EntryCommand
             Mock Get-TmuxInfo { return $null }
+            Mock Test-ConcurrentlyAvailable { return $true }
 
             qbuild -map $MapFile "build.all" -NoRestore
 
