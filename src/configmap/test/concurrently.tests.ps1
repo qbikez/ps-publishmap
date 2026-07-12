@@ -29,6 +29,86 @@ Describe "Format-QBuildCommand" {
     }
 }
 
+Describe "Test-ConcurrentlyAvailable" {
+    It "returns false when npx is not available" {
+        InModuleScope ConfigMap {
+            Mock Get-Command { return $null }
+            Test-ConcurrentlyAvailable | Should -Be $false
+        }
+    }
+
+    It "returns false when concurrently is not available" {
+        InModuleScope ConfigMap {
+            Mock Get-Command { return [pscustomobject]@{ Name = 'npx' } }
+            Mock Test-ConcurrentlyPackageAvailable { return $false }
+            Test-ConcurrentlyAvailable | Should -Be $false
+        }
+    }
+
+    It "returns true when npx and concurrently are available" {
+        InModuleScope ConfigMap {
+            Mock Get-Command { return [pscustomobject]@{ Name = 'npx' } }
+            Mock Test-ConcurrentlyPackageAvailable { return $true }
+            Test-ConcurrentlyAvailable | Should -Be $true
+        }
+    }
+
+    It "falls back to local execution when npx is not available" {
+        $mapFile = Join-Path $TestDrive ".build.map.ps1"
+        @'
+@{
+    "build" = @{
+        "ui"  = { Write-Host "ui" }
+        "api" = { Write-Host "api" }
+    }
+}
+'@ | Set-Content $mapFile -Encoding utf8
+
+        InModuleScope ConfigMap -ArgumentList $mapFile {
+            param($MapFile)
+            $script:ConfigMapConcurrentlyInvoker = {
+                throw 'concurrently should not run'
+            }
+            Mock Get-Command { return $null }
+            Mock Write-Host
+            Mock Get-TmuxInfo { return $null }
+
+            qbuild -map $MapFile "build.all"
+
+            Should -Invoke Write-Host -Exactly 1 -ParameterFilter { $Object -eq "ui" }
+            Should -Invoke Write-Host -Exactly 1 -ParameterFilter { $Object -eq "api" }
+        }
+    }
+
+    It "falls back to local execution when concurrently package is missing" {
+        $mapFile = Join-Path $TestDrive ".build.map.ps1"
+        @'
+@{
+    "build" = @{
+        "ui"  = { Write-Host "ui" }
+        "api" = { Write-Host "api" }
+    }
+}
+'@ | Set-Content $mapFile -Encoding utf8
+
+        InModuleScope ConfigMap -ArgumentList $mapFile {
+            param($MapFile)
+            $script:ConfigMapConcurrentlyInvoker = {
+                throw 'concurrently should not run'
+            }
+            Mock Get-Command { return [pscustomobject]@{ Name = 'npx' } }
+            Mock Test-ConcurrentlyPackageAvailable { return $false }
+            Mock Write-Host
+            Mock Get-TmuxInfo { return $null }
+
+            qbuild -map $MapFile "build.all"
+
+            Should -Invoke Write-Host -Exactly 1 -ParameterFilter { $Object -eq "ui" }
+            Should -Invoke Write-Host -Exactly 1 -ParameterFilter { $Object -eq "api" }
+        }
+    }
+}
+
 Describe "Test-ConcurrentlyEnabled" {
     BeforeEach {
         $script:concurrentlyBackup = $env:QCONF_CONCURRENTLY
