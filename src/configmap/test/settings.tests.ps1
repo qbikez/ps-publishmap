@@ -100,6 +100,16 @@ Describe 'ConfigMap settings' {
         }
     }
 
+    It 'includes qbuild !settings in entry completions without a build map' {
+        $completer = (Get-Command qbuild).Parameters['entry'].Attributes |
+            Where-Object { $_ -is [System.Management.Automation.ArgumentCompleterAttribute] } |
+            Select-Object -First 1
+
+        $completions = & $completer.ScriptBlock 'qbuild' 'entry' '!set' $null @{}
+
+        $completions | Should -Contain '!settings'
+    }
+
     It 'makes map-level settings available to build scripts without leaking them' {
         InModuleScope ConfigMap {
             $map = @{

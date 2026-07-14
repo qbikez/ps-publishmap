@@ -7,9 +7,14 @@ function Invoke-QBuild {
                     $mapPath = if ($fakeBoundParameters.map) { $fakeBoundParameters.map } else { "./.build.map.ps1" }
                     $localMapExists = Test-Path $mapPath
 
-                    $resolved = Resolve-ConfigMap $fakeBoundParameters.map -fallback "./.build.map.ps1" -ErrorAction Ignore
+                    $resolved = try {
+                        Resolve-ConfigMap $fakeBoundParameters.map -fallback "./.build.map.ps1" -ErrorAction Stop
+                    }
+                    catch {
+                        $null
+                    }
                     if (!$resolved -or ($resolved.source -eq "file" -and !(Test-Path $resolved.sourceFile))) {
-                        return @("!init", "help", "list") | ? { $_.startswith($wordToComplete) }
+                        return @("!init", "!settings", "help", "list") | ? { $_.startswith($wordToComplete) }
                     }
                     $map = $resolved | % {
                         if ($_.source -eq "file") {
@@ -23,7 +28,7 @@ function Invoke-QBuild {
                     if (!$localMapExists) {
                         $completions = @("!init" | ? { $_.startswith($wordToComplete) }) + $completions
                     }
-                    return $completions
+                    return @("!settings" | ? { $_.startswith($wordToComplete) }) + $completions
                 }
                 catch {
                     return "ERROR [-entry]: $($_.Exception.Message) $($_.ScriptStackTrace)"
