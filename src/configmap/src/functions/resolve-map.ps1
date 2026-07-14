@@ -131,7 +131,7 @@ function Add-BaseDir {
 
     $map._baseDir = $baseDir
 
-    $reservedKeys = @("exec", "set", "get", "options", "list", "description", "#include")
+    $reservedKeys = @("exec", "set", "get", "options", "list", "description", "#include", "_settings")
     
     foreach ($key in @($map.Keys)) {
         $value = $map[$key]
@@ -144,7 +144,7 @@ function Add-BaseDir {
         # If value is a bare scriptblock (leaf entry), wrap it with _baseDir
         if ($value -is [scriptblock]) {
             $map[$key] = @{
-                exec = $value
+                exec     = $value
                 _baseDir = $baseDir
             }
             continue

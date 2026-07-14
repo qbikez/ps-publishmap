@@ -1,31 +1,67 @@
-$script:ConfigMapSettingDefinitions = @{
-    TmuxAutoWindow = @{
-        EnvVar = 'QCONF_TMUX_AUTOWINDOW'
-        Kind   = 'FeatureToggle'
-    }
-    Concurrently   = @{
-        EnvVar = 'QCONF_CONCURRENTLY'
-        Kind   = 'FeatureToggle'
-    }
-    Debug          = @{
-        EnvVar = 'QCONF_DEBUG'
-        Kind   = 'Debug'
-    }
-}
-
 $script:ConfigMapSettings = $null
 
-function Update-ConfigMapSettings {
-    $settings = [ordered]@{}
+function New-ConfigMapSettings {
+    param(
+        $BaseSettings,
+        [System.Collections.IDictionary]$Overrides = @{}
+    )
 
-    foreach ($definition in $script:ConfigMapSettingDefinitions.GetEnumerator()) {
-        $settings[$definition.Key] = (Get-Item -Path "env:$($definition.Value.EnvVar)" -ErrorAction SilentlyContinue).Value
+    $settings = @{
+        Debug          = $false
+        Concurrently   = $false
+        TmuxAutoWindow = $false
     }
 
-    $script:ConfigMapSettings = [pscustomobject]$settings
-    $script:ConfigMapSettings.PSObject.TypeNames.Insert(0, 'ConfigMap.Settings')
+    foreach ($propertyName in @($settings.Keys)) {
+        $envPath = "env:QCONF_$propertyName"
+        if (Test-Path -Path $envPath) {
+            $settings[$propertyName] = (Get-Item -Path $envPath).Value
+        }
+    }
+
+    if ($BaseSettings) {
+        foreach ($propertyName in @($settings.Keys)) {
+            $settings[$propertyName] = $BaseSettings.PSObject.Properties[$propertyName].Value
+        }
+    }
+
+    foreach ($override in $Overrides.GetEnumerator()) {
+        if (-not $settings.ContainsKey($override.Key)) {
+            throw "Unknown ConfigMap setting '$($override.Key)'."
+        }
+
+        $settings[$override.Key] = $override.Value
+    }
+
+    $settingsObject = [pscustomobject]$settings
+    $settingsObject.PSObject.TypeNames.Insert(0, 'ConfigMap.Settings')
+
+    return $settingsObject
+}
+
+function Update-ConfigMapSettings {
+    $script:ConfigMapSettings = New-ConfigMapSettings
 
     return $script:ConfigMapSettings
+}
+
+function Enter-ConfigMapSettingsScope {
+    param(
+        [System.Collections.IDictionary]$Settings
+    )
+
+    $previousSettings = $script:ConfigMapSettings
+    if ($Settings) {
+        $script:ConfigMapSettings = New-ConfigMapSettings -BaseSettings $previousSettings -Overrides $Settings
+    }
+
+    return $previousSettings
+}
+
+function Exit-ConfigMapSettingsScope {
+    param($PreviousSettings)
+
+    $script:ConfigMapSettings = $PreviousSettings
 }
 
 function Get-ConfigMapSettings {
@@ -39,12 +75,8 @@ function Get-ConfigMapSetting {
         [string]$Name
     )
 
-    $definition = $script:ConfigMapSettingDefinitions[$Name]
-    if (-not $definition) {
-        throw "Unknown ConfigMap setting '$Name'."
-    }
-
-    return (Get-ConfigMapSettings).PSObject.Properties[$Name].Value
+    $settings = Get-ConfigMapSettings
+    return $settings.PSObject.Properties[$Name].Value
 }
 
 function Test-ConfigMapFeatureEnabled {
@@ -55,8 +87,9 @@ function Test-ConfigMapFeatureEnabled {
     )
 
     switch (Get-ConfigMapSetting -Name $Name) {
-        { $_ -in '0', 'false', 'no', 'off' } { return $false }
-        default { return $true }
+        $true { return $true }
+        { $_ -in '1', 'true', 'yes', 'on' } { return $true }
+        default { return $false }
     }
 }
 

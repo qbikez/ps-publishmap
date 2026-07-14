@@ -111,8 +111,8 @@ Describe "Test-ConcurrentlyAvailable" {
 
 Describe "Test-ConcurrentlyEnabled" {
     BeforeEach {
-        $script:concurrentlyBackup = $env:QCONF_CONCURRENTLY
-        Remove-Item env:QCONF_CONCURRENTLY -ErrorAction SilentlyContinue
+        $script:concurrentlyBackup = $env:QCONF_Concurrently
+        Remove-Item env:QCONF_Concurrently -ErrorAction SilentlyContinue
         InModuleScope ConfigMap {
             Update-ConfigMapSettings | Out-Null
         }
@@ -120,10 +120,10 @@ Describe "Test-ConcurrentlyEnabled" {
 
     AfterEach {
         if ($null -eq $script:concurrentlyBackup) {
-            Remove-Item env:QCONF_CONCURRENTLY -ErrorAction SilentlyContinue
+            Remove-Item env:QCONF_Concurrently -ErrorAction SilentlyContinue
         }
         else {
-            $env:QCONF_CONCURRENTLY = $script:concurrentlyBackup
+            $env:QCONF_Concurrently = $script:concurrentlyBackup
         }
 
         InModuleScope ConfigMap {
@@ -131,15 +131,15 @@ Describe "Test-ConcurrentlyEnabled" {
         }
     }
 
-    It "is enabled when the env var is unset" {
+    It "is disabled when the env var is unset" {
         InModuleScope ConfigMap {
-            Test-ConcurrentlyEnabled | Should -Be $true
+            Test-ConcurrentlyEnabled | Should -Be $false
         }
     }
 
     It "is disabled for falsy values" {
         foreach ($value in '0', 'false', 'no', 'off', 'FALSE', 'OFF') {
-            $env:QCONF_CONCURRENTLY = $value
+            $env:QCONF_Concurrently = $value
             InModuleScope ConfigMap {
                 Update-ConfigMapSettings | Out-Null
                 Test-ConcurrentlyEnabled | Should -Be $false
@@ -150,9 +150,9 @@ Describe "Test-ConcurrentlyEnabled" {
 
 Describe "qbuild concurrently" {
     BeforeEach {
-        $script:concurrentlyBackup = $env:QCONF_CONCURRENTLY
+        $script:concurrentlyBackup = $env:QCONF_Concurrently
         $script:capturedConcurrently = $null
-        Remove-Item env:QCONF_CONCURRENTLY -ErrorAction SilentlyContinue
+        $env:QCONF_Concurrently = '1'
         InModuleScope ConfigMap {
             Update-ConfigMapSettings | Out-Null
         }
@@ -160,10 +160,10 @@ Describe "qbuild concurrently" {
 
     AfterEach {
         if ($null -eq $script:concurrentlyBackup) {
-            Remove-Item env:QCONF_CONCURRENTLY -ErrorAction SilentlyContinue
+            Remove-Item env:QCONF_Concurrently -ErrorAction SilentlyContinue
         }
         else {
-            $env:QCONF_CONCURRENTLY = $script:concurrentlyBackup
+            $env:QCONF_Concurrently = $script:concurrentlyBackup
         }
 
         InModuleScope ConfigMap {
@@ -245,6 +245,7 @@ Describe "qbuild concurrently" {
         $mapFile = Join-Path $TestDrive ".build.map.ps1"
         @'
 @{
+    "_settings" = @{ "TmuxAutoWindow" = $true }
     "build" = @{
         "ui"  = { Write-Host "ui" }
         "api" = { Write-Host "api" }
@@ -302,7 +303,7 @@ Describe "qbuild concurrently" {
         }
     }
 
-    It "runs entry locally when QCONF_CONCURRENTLY is disabled" {
+    It "runs entry locally when QCONF_Concurrently is disabled" {
         $mapFile = Join-Path $TestDrive ".build.map.ps1"
         @'
 @{
@@ -313,7 +314,7 @@ Describe "qbuild concurrently" {
 }
 '@ | Set-Content $mapFile -Encoding utf8
 
-        $env:QCONF_CONCURRENTLY = '0'
+        $env:QCONF_Concurrently = '0'
 
         InModuleScope ConfigMap -ArgumentList $mapFile {
             param($MapFile)

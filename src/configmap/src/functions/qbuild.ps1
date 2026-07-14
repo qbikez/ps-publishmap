@@ -143,26 +143,31 @@ function Invoke-QBuild {
             RemainingArguments = $passthrough
         }
 
-        $hookResult = Invoke-ConfigMapPluginHooks -HookName 'InvokeQBuildTargets' -Context $hookContext
-        if ($hookResult.Handled) {
-            return $hookResult.Result
-        }
-
-        @($targets) | % {
-            $targetKey = $_.key
-            $targetEntry = $_.value
-            Write-Verbose "running entry '$targetKey'"
-
-            if ($command -eq "exec" `
-                    -and $targetEntry -is [System.Collections.IDictionary] `
-                    -and -not (Get-EntryHasExec $targetEntry) `
-                    -and (Test-IsParentEntry $targetEntry)) {
-                Write-ChooseSubcommand -parentKey $targetKey -parentEntry $targetEntry -invocation $MyInvocation -language "build"
-                return
+        $settingsScope = Enter-ConfigMapSettingsScope -Settings $map._settings
+        try {
+            $hookResult = Invoke-ConfigMapPluginHooks -HookName 'InvokeQBuildTargets' -Context $hookContext
+            if ($hookResult.Handled) {
+                return $hookResult.Result
             }
 
-            
-            Invoke-EntryWrapper -MainCommand 'qbuild' -TargetKey $targetKey -TargetEntry $targetEntry -Command $command -Bound $bound -RemainingArguments $passthrough
+            @($targets) | % {
+                $targetKey = $_.key
+                $targetEntry = $_.value
+                Write-Verbose "running entry '$targetKey'"
+
+                if ($command -eq "exec" `
+                        -and $targetEntry -is [System.Collections.IDictionary] `
+                        -and -not (Get-EntryHasExec $targetEntry) `
+                        -and (Test-IsParentEntry $targetEntry)) {
+                    Write-ChooseSubcommand -parentKey $targetKey -parentEntry $targetEntry -invocation $MyInvocation -language "build"
+                    return
+                }
+
+                Invoke-EntryWrapper -MainCommand 'qbuild' -TargetKey $targetKey -TargetEntry $targetEntry -Command $command -Bound $bound -RemainingArguments $passthrough
+            }
+        }
+        finally {
+            Exit-ConfigMapSettingsScope -PreviousSettings $settingsScope
         }
 
     }

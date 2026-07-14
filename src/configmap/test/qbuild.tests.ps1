@@ -708,24 +708,31 @@ Describe "qbuild all" {
 
 Describe "qbuild tmux" {
     BeforeEach {
-        $script:qbuildTmuxAutoWindowBackup = $env:QCONF_TMUX_AUTOWINDOW
-        $script:qbuildConcurrentlyBackup = $env:QCONF_CONCURRENTLY
-        Remove-Item env:QCONF_TMUX_AUTOWINDOW -ErrorAction SilentlyContinue
-        Remove-Item env:QCONF_CONCURRENTLY -ErrorAction SilentlyContinue
+        $script:qbuildTmuxAutoWindowBackup = $env:QCONF_TmuxAutoWindow
+        $script:qbuildConcurrentlyBackup = $env:QCONF_Concurrently
+        $env:QCONF_TmuxAutoWindow = '1'
+        Remove-Item env:QCONF_Concurrently -ErrorAction SilentlyContinue
+        InModuleScope ConfigMap {
+            Update-ConfigMapSettings | Out-Null
+        }
     }
 
     AfterEach {
         if ($null -eq $script:qbuildTmuxAutoWindowBackup) {
-            Remove-Item env:QCONF_TMUX_AUTOWINDOW -ErrorAction SilentlyContinue
+            Remove-Item env:QCONF_TmuxAutoWindow -ErrorAction SilentlyContinue
         }
         else {
-            $env:QCONF_TMUX_AUTOWINDOW = $script:qbuildTmuxAutoWindowBackup
+            $env:QCONF_TmuxAutoWindow = $script:qbuildTmuxAutoWindowBackup
         }
         if ($null -eq $script:qbuildConcurrentlyBackup) {
-            Remove-Item env:QCONF_CONCURRENTLY -ErrorAction SilentlyContinue
+            Remove-Item env:QCONF_Concurrently -ErrorAction SilentlyContinue
         }
         else {
-            $env:QCONF_CONCURRENTLY = $script:qbuildConcurrentlyBackup
+            $env:QCONF_Concurrently = $script:qbuildConcurrentlyBackup
+        }
+
+        InModuleScope ConfigMap {
+            Update-ConfigMapSettings | Out-Null
         }
     }
 
@@ -937,7 +944,7 @@ Describe "qbuild tmux" {
         }
     }
 
-    It "runs entry locally when QCONF_TMUX_AUTOWINDOW is disabled" {
+    It "runs entry locally when QCONF_TmuxAutoWindow is disabled" {
         $mapFile = Join-Path $TestDrive ".build.map.ps1"
         @'
 @{
@@ -945,7 +952,7 @@ Describe "qbuild tmux" {
 }
 '@ | Set-Content $mapFile -Encoding utf8
 
-        $env:QCONF_TMUX_AUTOWINDOW = '0'
+        $env:QCONF_TmuxAutoWindow = '0'
 
         InModuleScope ConfigMap -ArgumentList $mapFile {
             param($MapFile)
@@ -965,8 +972,8 @@ Describe "qbuild tmux" {
 
 Describe "Test-ConfigMapFeatureEnabled TmuxAutoWindow" {
     BeforeEach {
-        $script:qbuildTmuxAutoWindowBackup = $env:QCONF_TMUX_AUTOWINDOW
-        Remove-Item env:QCONF_TMUX_AUTOWINDOW -ErrorAction SilentlyContinue
+        $script:qbuildTmuxAutoWindowBackup = $env:QCONF_TmuxAutoWindow
+        Remove-Item env:QCONF_TmuxAutoWindow -ErrorAction SilentlyContinue
         InModuleScope ConfigMap {
             Update-ConfigMapSettings | Out-Null
         }
@@ -974,10 +981,10 @@ Describe "Test-ConfigMapFeatureEnabled TmuxAutoWindow" {
 
     AfterEach {
         if ($null -eq $script:qbuildTmuxAutoWindowBackup) {
-            Remove-Item env:QCONF_TMUX_AUTOWINDOW -ErrorAction SilentlyContinue
+            Remove-Item env:QCONF_TmuxAutoWindow -ErrorAction SilentlyContinue
         }
         else {
-            $env:QCONF_TMUX_AUTOWINDOW = $script:qbuildTmuxAutoWindowBackup
+            $env:QCONF_TmuxAutoWindow = $script:qbuildTmuxAutoWindowBackup
         }
 
         InModuleScope ConfigMap {
@@ -985,15 +992,15 @@ Describe "Test-ConfigMapFeatureEnabled TmuxAutoWindow" {
         }
     }
 
-    It "is enabled when the env var is unset" {
+    It "is disabled when the env var is unset" {
         InModuleScope ConfigMap {
-            Test-ConfigMapFeatureEnabled -Name TmuxAutoWindow | Should -Be $true
+            Test-ConfigMapFeatureEnabled -Name TmuxAutoWindow | Should -Be $false
         }
     }
 
     It "is disabled for falsy values" {
         foreach ($value in '0', 'false', 'no', 'off', 'FALSE', 'OFF') {
-            $env:QCONF_TMUX_AUTOWINDOW = $value
+            $env:QCONF_TmuxAutoWindow = $value
             InModuleScope ConfigMap {
                 Update-ConfigMapSettings | Out-Null
                 Test-ConfigMapFeatureEnabled -Name TmuxAutoWindow | Should -Be $false
@@ -1001,9 +1008,9 @@ Describe "Test-ConfigMapFeatureEnabled TmuxAutoWindow" {
         }
     }
 
-    It "is enabled for other values" {
+    It "is enabled for truthy values" {
         foreach ($value in '1', 'true', 'yes', 'on') {
-            $env:QCONF_TMUX_AUTOWINDOW = $value
+            $env:QCONF_TmuxAutoWindow = $value
             InModuleScope ConfigMap {
                 Update-ConfigMapSettings | Out-Null
                 Test-ConfigMapFeatureEnabled -Name TmuxAutoWindow | Should -Be $true

@@ -134,55 +134,60 @@ function Invoke-QConf {
 
         Write-Verbose "entry=$entry command=$command"
 
-
-        switch ($command) {
-            "set" {
-                $subEntry = $map.$entry
-                if (!$subEntry) {
-                    throw "Entry '$entry' not found. Run 'qconf list' to see all available entries."
-                }
-
-                $optionKey = $value
-                $options = Get-CompletionList $subEntry -listKey "options" -language "conf" -maxDepth 1
-                $optionValue = $options.$optionKey
-
-                $bound = $PSBoundParameters
-                $bound.key = $optionKey
-                $bound.value = $optionValue
-                Invoke-Set $subEntry -ordered "", $optionValue, $optionKey -bound $bound
-            }
-            "get" {
-                $entries = $entry
-                if (!$entries) {
-                    # not passing -listKey "options" here, as we don't want to expand options - we just need top-level keys
-                    $entries = (Get-CompletionList $map -language "conf").Keys
-                }
-
-                foreach ($entry in @($entries)) {
-                    try {
-                        $subEntry = $map.$entry
-
-                        $options = Get-CompletionList $subEntry -listKey "options" -language "conf" -maxDepth 1
-
-                        $bound = $PSBoundParameters
-                        $bound.options = $options
-
-                        $value = Invoke-Get $subEntry -bound $bound
-
-                        $result = ConvertTo-MapResult $value $entry $subEntry $options
-                        $result | Write-Output
+        $settingsScope = Enter-ConfigMapSettingsScope -Settings $map._settings
+        try {
+            switch ($command) {
+                "set" {
+                    $subEntry = $map.$entry
+                    if (!$subEntry) {
+                        throw "Entry '$entry' not found. Run 'qconf list' to see all available entries."
                     }
-                    catch {
-                        if ((Get-ConfigMapSetting -Name Debug) -eq '1') {
-                            throw $_
+
+                    $optionKey = $value
+                    $options = Get-CompletionList $subEntry -listKey "options" -language "conf" -maxDepth 1
+                    $optionValue = $options.$optionKey
+
+                    $bound = $PSBoundParameters
+                    $bound.key = $optionKey
+                    $bound.value = $optionValue
+                    Invoke-Set $subEntry -ordered "", $optionValue, $optionKey -bound $bound
+                }
+                "get" {
+                    $entries = $entry
+                    if (!$entries) {
+                        # not passing -listKey "options" here, as we don't want to expand options - we just need top-level keys
+                        $entries = (Get-CompletionList $map -language "conf").Keys
+                    }
+
+                    foreach ($entry in @($entries)) {
+                        try {
+                            $subEntry = $map.$entry
+
+                            $options = Get-CompletionList $subEntry -listKey "options" -language "conf" -maxDepth 1
+
+                            $bound = $PSBoundParameters
+                            $bound.options = $options
+
+                            $value = Invoke-Get $subEntry -bound $bound
+
+                            $result = ConvertTo-MapResult $value $entry $subEntry $options
+                            $result | Write-Output
                         }
-                        Write-Error "Error getting value for entry '$entry': $($_.Exception.Message)"
+                        catch {
+                            if ((Get-ConfigMapSetting -Name Debug) -eq '1') {
+                                throw $_
+                            }
+                            Write-Error "Error getting value for entry '$entry': $($_.Exception.Message)"
+                        }
                     }
                 }
+                default {
+                    throw "command '$command' not supported"
+                }
             }
-            default {
-                throw "command '$command' not supported"
-            }
+        }
+        finally {
+            Exit-ConfigMapSettingsScope -PreviousSettings $settingsScope
         }
 
     }
