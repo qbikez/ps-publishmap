@@ -113,6 +113,9 @@ Describe "Test-ConcurrentlyEnabled" {
     BeforeEach {
         $script:concurrentlyBackup = $env:QCONF_CONCURRENTLY
         Remove-Item env:QCONF_CONCURRENTLY -ErrorAction SilentlyContinue
+        InModuleScope ConfigMap {
+            Update-ConfigMapSettings | Out-Null
+        }
     }
 
     AfterEach {
@@ -121,6 +124,10 @@ Describe "Test-ConcurrentlyEnabled" {
         }
         else {
             $env:QCONF_CONCURRENTLY = $script:concurrentlyBackup
+        }
+
+        InModuleScope ConfigMap {
+            Update-ConfigMapSettings | Out-Null
         }
     }
 
@@ -134,6 +141,7 @@ Describe "Test-ConcurrentlyEnabled" {
         foreach ($value in '0', 'false', 'no', 'off', 'FALSE', 'OFF') {
             $env:QCONF_CONCURRENTLY = $value
             InModuleScope ConfigMap {
+                Update-ConfigMapSettings | Out-Null
                 Test-ConcurrentlyEnabled | Should -Be $false
             }
         }
@@ -145,6 +153,9 @@ Describe "qbuild concurrently" {
         $script:concurrentlyBackup = $env:QCONF_CONCURRENTLY
         $script:capturedConcurrently = $null
         Remove-Item env:QCONF_CONCURRENTLY -ErrorAction SilentlyContinue
+        InModuleScope ConfigMap {
+            Update-ConfigMapSettings | Out-Null
+        }
     }
 
     AfterEach {
@@ -156,6 +167,7 @@ Describe "qbuild concurrently" {
         }
 
         InModuleScope ConfigMap {
+            Update-ConfigMapSettings | Out-Null
             $script:ConfigMapConcurrentlyInvoker = $null
         }
     }
@@ -305,6 +317,7 @@ Describe "qbuild concurrently" {
 
         InModuleScope ConfigMap -ArgumentList $mapFile {
             param($MapFile)
+            Update-ConfigMapSettings | Out-Null
             $script:ConfigMapConcurrentlyInvoker = {
                 throw 'concurrently should not run'
             }

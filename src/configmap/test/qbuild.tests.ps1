@@ -949,6 +949,7 @@ Describe "qbuild tmux" {
 
         InModuleScope ConfigMap -ArgumentList $mapFile {
             param($MapFile)
+            Update-ConfigMapSettings | Out-Null
             Mock Write-Host
             Mock Invoke-EntryCommand
             Mock Invoke-TmuxCommand
@@ -966,6 +967,9 @@ Describe "Test-ConfigMapFeatureEnabled TmuxAutoWindow" {
     BeforeEach {
         $script:qbuildTmuxAutoWindowBackup = $env:QCONF_TMUX_AUTOWINDOW
         Remove-Item env:QCONF_TMUX_AUTOWINDOW -ErrorAction SilentlyContinue
+        InModuleScope ConfigMap {
+            Update-ConfigMapSettings | Out-Null
+        }
     }
 
     AfterEach {
@@ -974,6 +978,10 @@ Describe "Test-ConfigMapFeatureEnabled TmuxAutoWindow" {
         }
         else {
             $env:QCONF_TMUX_AUTOWINDOW = $script:qbuildTmuxAutoWindowBackup
+        }
+
+        InModuleScope ConfigMap {
+            Update-ConfigMapSettings | Out-Null
         }
     }
 
@@ -987,6 +995,7 @@ Describe "Test-ConfigMapFeatureEnabled TmuxAutoWindow" {
         foreach ($value in '0', 'false', 'no', 'off', 'FALSE', 'OFF') {
             $env:QCONF_TMUX_AUTOWINDOW = $value
             InModuleScope ConfigMap {
+                Update-ConfigMapSettings | Out-Null
                 Test-ConfigMapFeatureEnabled -Name TmuxAutoWindow | Should -Be $false
             }
         }
@@ -996,6 +1005,7 @@ Describe "Test-ConfigMapFeatureEnabled TmuxAutoWindow" {
         foreach ($value in '1', 'true', 'yes', 'on') {
             $env:QCONF_TMUX_AUTOWINDOW = $value
             InModuleScope ConfigMap {
+                Update-ConfigMapSettings | Out-Null
                 Test-ConfigMapFeatureEnabled -Name TmuxAutoWindow | Should -Be $true
             }
         }
