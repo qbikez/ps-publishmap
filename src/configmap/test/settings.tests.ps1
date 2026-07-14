@@ -75,7 +75,7 @@ Describe 'ConfigMap settings' {
         }
     }
 
-    It 'refreshes every setting and retains default values for unset environment variables' {
+    It 'refreshes every setting and retains defaults for unset environment variables' {
         $env:QCONF_TmuxAutoWindow = '1'
         $env:QCONF_Concurrently = 'off'
 
@@ -117,7 +117,7 @@ Describe 'ConfigMap settings' {
             $result = qconf -command get -entry sample -map $map
 
             $result.Value | Should -Be 'map-debug'
-            Get-ConfigMapSetting -Name Debug | Should -Be $false
+            Get-ConfigMapSetting -Name Debug | Should -be $false
         }
     }
 

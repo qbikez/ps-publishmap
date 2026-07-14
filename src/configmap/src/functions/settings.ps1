@@ -71,7 +71,6 @@ function Get-ConfigMapSettings {
 function Get-ConfigMapSetting {
     param(
         [Parameter(Mandatory)]
-        [ValidateSet('TmuxAutoWindow', 'Concurrently', 'Debug')]
         [string]$Name
     )
 
