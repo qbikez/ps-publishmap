@@ -87,6 +87,9 @@ function Invoke-QBuild {
             Initialize-BuildMap -file $map
             return
         }
+        if ($entry -eq "!settings") {
+            return Get-ConfigMapSettings
+        }
 
         $mapPath = $map
         $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" -ErrorAction Ignore | % {

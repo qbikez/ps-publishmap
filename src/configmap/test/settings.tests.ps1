@@ -89,6 +89,17 @@ Describe 'ConfigMap settings' {
         }
     }
 
+    It 'returns the current settings object for qbuild !settings' {
+        InModuleScope ConfigMap {
+            $settings = qbuild '!settings'
+
+            $settings.PSTypeNames | Should -Contain 'ConfigMap.Settings'
+            $settings.Debug | Should -Be $false
+            $settings.Concurrently | Should -Be $false
+            $settings.TmuxAutoWindow | Should -Be $false
+        }
+    }
+
     It 'makes map-level settings available to build scripts without leaking them' {
         InModuleScope ConfigMap {
             $map = @{
@@ -117,7 +128,7 @@ Describe 'ConfigMap settings' {
             $result = qconf -command get -entry sample -map $map
 
             $result.Value | Should -Be 'map-debug'
-            Get-ConfigMapSetting -Name Debug | Should -be $false
+            Get-ConfigMapSetting -Name Debug | Should -Be $false
         }
     }
 
