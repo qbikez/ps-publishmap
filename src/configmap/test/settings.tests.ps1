@@ -100,6 +100,26 @@ Describe 'ConfigMap settings' {
         }
     }
 
+    It 'returns settings inherited by an optional qbuild !settings command path' {
+        InModuleScope ConfigMap {
+            $map = @{
+                _settings = @{ Debug = $true }
+                my        = @{
+                    _settings = @{ Concurrently = $true }
+                    something = { Write-Host 'doing something' }
+                }
+            }
+
+            $rootSettings = qbuild -map $map '!settings'
+            $pathSettings = qbuild -map $map '!settings' 'my.something'
+
+            $rootSettings.Debug | Should -Be $true
+            $rootSettings.Concurrently | Should -Be $false
+            $pathSettings.Debug | Should -Be $true
+            $pathSettings.Concurrently | Should -Be $true
+        }
+    }
+
     It 'includes qbuild !settings in entry completions without a build map' {
         $completer = (Get-Command qbuild).Parameters['entry'].Attributes |
             Where-Object { $_ -is [System.Management.Automation.ArgumentCompleterAttribute] } |

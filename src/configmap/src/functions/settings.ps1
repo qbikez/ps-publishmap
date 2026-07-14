@@ -68,6 +68,39 @@ function Get-ConfigMapSettings {
     return $script:ConfigMapSettings
 }
 
+function Get-ConfigMapSettingsForPath {
+    param(
+        [Parameter(Mandatory)]
+        [System.Collections.IDictionary]$Map,
+        [string]$Path
+    )
+
+    $settings = Get-ConfigMapSettings
+    $current = $Map
+
+    if ($current._settings) {
+        $settings = New-ConfigMapSettings -BaseSettings $settings -Overrides $current._settings
+    }
+
+    $segments = @($Path -split '\.' | Where-Object { $_ })
+    for ($index = 0; $index -lt $segments.Count; $index++) {
+        $current = $current[$segments[$index]]
+        if ($null -eq $current) {
+            throw "Entry '$Path' not found."
+        }
+
+        if ($current -is [System.Collections.IDictionary] -and $current._settings) {
+            $settings = New-ConfigMapSettings -BaseSettings $settings -Overrides $current._settings
+        }
+
+        if ($index -lt $segments.Count - 1 -and $current -isnot [System.Collections.IDictionary]) {
+            throw "Entry '$Path' not found."
+        }
+    }
+
+    return $settings
+}
+
 function Get-ConfigMapSetting {
     param(
         [Parameter(Mandatory)]
