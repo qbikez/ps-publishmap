@@ -92,31 +92,33 @@ function Format-QBuildCommand {
     return $commandLine
 }
 
-function Invoke-ConcurrentlyQBuild {
+function Invoke-Concurrently {
     param(
-        [string[]]$Commands,
-        [string[]]$Names
+        [Parameter(Mandatory)]
+        [System.Collections.IDictionary]$Commands
     )
 
     Write-Verbose "[concurrently] Invoking concurrently for $($Commands.Count) command(s)."
     if ($null -ne $script:ConfigMapConcurrentlyInvoker) {
         Write-Verbose "[concurrently] Using custom concurrently invoker script hook."
-        & $script:ConfigMapConcurrentlyInvoker -Commands $Commands -Names $Names
+        & $script:ConfigMapConcurrentlyInvoker -Commands $Commands
         return
     }
 
+    $names = @($Commands.Keys)
     $a = @('--yes', 'concurrently')
     $a += @("--shell", "pwsh", "--color")
-    if ($Names.Count -gt 0) {
+    if ($names.Count -gt 0) {
         $a += '-n'
-        $a += ($Names -join ',')
-        Write-Verbose "[concurrently] Using concurrently task names: $($Names -join ', ')"
+        $a += ($names -join ',')
+        Write-Verbose "[concurrently] Using concurrently task names: $($names -join ', ')"
     }
-    foreach ($command in $Commands) {
+    foreach ($name in $names) {
+        $command = $Commands[$name]
         Write-Verbose "[concurrently] Adding command: $command"
         $a += $command
     }
-    
+
     Write-Verbose "[concurrently] Running: npx $($a -join ' ')"
     & npx @a | out-host
     if ($LASTEXITCODE -ne 0) {

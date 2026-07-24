@@ -220,11 +220,8 @@ Describe "qbuild concurrently" {
         InModuleScope ConfigMap -ArgumentList $mapFile {
             param($MapFile)
             $script:ConfigMapConcurrentlyInvoker = {
-                param($Commands, $Names)
-                $script:capturedConcurrently = @{
-                    Commands = $Commands
-                    Names    = $Names
-                }
+                param($Commands)
+                $script:capturedConcurrently = $Commands
             }
             Mock Invoke-EntryCommand
             Mock Get-TmuxInfo { return $null }
@@ -232,11 +229,11 @@ Describe "qbuild concurrently" {
 
             qbuild -map $MapFile "build.all"
 
-            $script:capturedConcurrently.Names | Should -Contain 'build.ui'
-            $script:capturedConcurrently.Names | Should -Contain 'build.api'
-            $script:capturedConcurrently.Commands.Count | Should -Be 2
-            ($script:capturedConcurrently.Commands | Where-Object { $_ -match "build\.ui$" }).Count | Should -Be 1
-            ($script:capturedConcurrently.Commands | Where-Object { $_ -match "build\.api$" }).Count | Should -Be 1
+            $script:capturedConcurrently.Keys | Should -Contain 'build.ui'
+            $script:capturedConcurrently.Keys | Should -Contain 'build.api'
+            $script:capturedConcurrently.Count | Should -Be 2
+            $script:capturedConcurrently['build.ui'] | Should -Match "build\.ui$"
+            $script:capturedConcurrently['build.api'] | Should -Match "build\.api$"
             Should -Invoke Invoke-EntryCommand -Times 0 -Exactly
         }
     }
@@ -284,11 +281,8 @@ Describe "qbuild concurrently" {
         InModuleScope ConfigMap -ArgumentList $mapFile {
             param($MapFile)
             $script:ConfigMapConcurrentlyInvoker = {
-                param($Commands, $Names)
-                $script:capturedConcurrently = @{
-                    Commands = $Commands
-                    Names    = $Names
-                }
+                param($Commands)
+                $script:capturedConcurrently = $Commands
             }
             Mock Invoke-EntryCommand
             Mock Get-TmuxInfo { return $null }
@@ -296,8 +290,8 @@ Describe "qbuild concurrently" {
 
             qbuild -map $MapFile "build.all" -NoRestore
 
-            $script:capturedConcurrently.Commands.Count | Should -Be 2
-            foreach ($command in $script:capturedConcurrently.Commands) {
+            $script:capturedConcurrently.Count | Should -Be 2
+            foreach ($command in $script:capturedConcurrently.Values) {
                 $command | Should -Match '-NoRestore'
             }
         }
