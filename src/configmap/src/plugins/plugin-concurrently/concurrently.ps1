@@ -119,7 +119,7 @@ function Invoke-Concurrently {
         $a += $command
     }
 
-    Write-Verbose "[concurrently] Running: npx $($a -join ' ')"
+    Write-Verbose "[concurrently] Running: npx $($a | % { "'$_'" } -join ' ')"
     & npx @a | out-host
     if ($LASTEXITCODE -ne 0) {
         throw "concurrently exited with code $LASTEXITCODE"
