@@ -25,18 +25,17 @@ function Invoke-EntryWrapper {
             return $hookResult.Result
         }
 
-        Invoke-EntryCommand -entry $TargetEntry -key $Command -bound $Bound -settingsScopeEntered:$true
+        Invoke-EntryCommand -entry $TargetEntry -key $Command -bound $Bound
     }
     finally {
         Exit-ConfigMapSettingsScope -PreviousSettings $settingsScope
     }
 }
 
-function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}, [switch]$settingsScopeEntered) {
-    if (-not $settingsScopeEntered) {
-        $settings = if ($entry -is [System.Collections.IDictionary]) { $entry._settings } else { $null }
-        $settingsScope = Enter-ConfigMapSettingsScope -Settings $settings
-    }
+function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}) {
+    $settings = if ($entry -is [System.Collections.IDictionary]) { $entry._settings } else { $null }
+    $settingsScope = Enter-ConfigMapSettingsScope -Settings $settings
+    
     try {
         $command = Get-EntryCommand $entry $key
         
@@ -113,9 +112,7 @@ function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}
         }
     }
     finally {
-        if (-not $settingsScopeEntered) {
-            Exit-ConfigMapSettingsScope -PreviousSettings $settingsScope
-        }
+        Exit-ConfigMapSettingsScope -PreviousSettings $settingsScope
     }
 }
 
