@@ -67,7 +67,8 @@ function Exit-ConfigMapSettingsScope {
 function Enter-ConfigMapAncestorSettingsScopes {
     param(
         [System.Collections.IDictionary]$Map,
-        [string]$EntryKey
+        [string]$EntryKey,
+        [switch]$IncludeTarget
     )
 
     $scopes = @()
@@ -75,7 +76,8 @@ function Enter-ConfigMapAncestorSettingsScopes {
     $entry = $Map
 
     try {
-        for ($index = 0; $index -lt $segments.Count - 1; $index++) {
+        $lastIndex = if ($IncludeTarget) { $segments.Count - 1 } else { $segments.Count - 2 }
+        for ($index = 0; $index -le $lastIndex; $index++) {
             if ($entry -isnot [System.Collections.IDictionary]) {
                 break
             }

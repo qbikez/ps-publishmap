@@ -153,9 +153,16 @@ function Invoke-QBuild {
 
         $settingsScope = Enter-ConfigMapSettingsScope -Settings $map._settings
         try {
-            $hookResult = Invoke-ConfigMapPluginHooks -HookName 'InvokeQBuildTargets' -Context $hookContext
-            if ($hookResult.Handled) {
-                return $hookResult.Result
+            $hookEntry = if ($entry -match '^(.*)\.all$') { $Matches[1] } else { $entry }
+            $hookSettingsScopes = @(Enter-ConfigMapAncestorSettingsScopes -Map $map -EntryKey $hookEntry -IncludeTarget)
+            try {
+                $hookResult = Invoke-ConfigMapPluginHooks -HookName 'InvokeQBuildTargets' -Context $hookContext
+                if ($hookResult.Handled) {
+                    return $hookResult.Result
+                }
+            }
+            finally {
+                Exit-ConfigMapSettingsScopes -Scopes $hookSettingsScopes
             }
 
             @($targets) | % {
