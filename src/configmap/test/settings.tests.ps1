@@ -42,7 +42,7 @@ Describe 'ConfigMap settings' {
 
     It 'restores nested settings scopes in LIFO order' {
         InModuleScope ConfigMap {
-            $scope1 = Enter-ConfigMapSettingsScope -Settings @{ Debug = 'scope1', Concurrently = 'scope1' }
+            $scope1 = Enter-ConfigMapSettingsScope -Settings @{ Debug = 'scope1'; Concurrently = 'scope1' }
             try {
                 Get-ConfigMapSetting -Name Debug | Should -Be 'scope1'
                 Get-ConfigMapSetting -Name Concurrently | Should -Be 'scope1'
