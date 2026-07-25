@@ -64,6 +64,46 @@ function Exit-ConfigMapSettingsScope {
     $script:ConfigMapSettings = $PreviousSettings
 }
 
+function Enter-ConfigMapAncestorSettingsScopes {
+    param(
+        [System.Collections.IDictionary]$Map,
+        [string]$EntryKey
+    )
+
+    $scopes = @()
+    $segments = $EntryKey -split '\.'
+    $entry = $Map
+
+    for ($index = 0; $index -lt $segments.Count - 1; $index++) {
+        if ($entry -isnot [System.Collections.IDictionary]) {
+            break
+        }
+
+        if ($entry.list) {
+            $entry = $entry.list
+        }
+
+        if (-not $entry.Contains($segments[$index])) {
+            break
+        }
+
+        $entry = $entry[$segments[$index]]
+        if ($entry -is [System.Collections.IDictionary] -and $entry._settings) {
+            $scopes += Enter-ConfigMapSettingsScope -Settings $entry._settings
+        }
+    }
+
+    return $scopes
+}
+
+function Exit-ConfigMapSettingsScopes {
+    param($Scopes)
+
+    for ($index = $Scopes.Count - 1; $index -ge 0; $index--) {
+        Exit-ConfigMapSettingsScope -PreviousSettings $Scopes[$index]
+    }
+}
+
 function Get-ConfigMapSettings {
     return $script:ConfigMapSettings
 }

@@ -129,14 +129,21 @@ Describe 'ConfigMap settings' {
             $map = @{
                 _settings      = @{ TmuxAutoWindow = $true; Debug = 'parent' }
                 'do_something' = @{
-                    "inner" = @{
+                    "inner"  = @{
                         _settings = @{ TmuxAutoWindow = $false }
                         "exec"    = {
                             Get-ConfigMapSetting -Name TmuxAutoWindow
                             Get-ConfigMapSetting -Name Debug
                         }
                     }
-                    "exec"  = {
+                    "inner2" = @{
+                        _settings = @{ TmuxAutoWindow = $false }
+                        "a"       = {
+                            Get-ConfigMapSetting -Name TmuxAutoWindow
+                            Get-ConfigMapSetting -Name Debug
+                        }
+                    }
+                    "exec"   = {
                         Get-ConfigMapSetting -Name TmuxAutoWindow
                     }
                 }
@@ -144,7 +151,7 @@ Describe 'ConfigMap settings' {
 
             qbuild -map $map 'do_something' | Should -Be $true
             qbuild -map $map 'do_something.inner' | Should -Be @($false, 'parent')
-            Get-ConfigMapSetting -Name TmuxAutoWindow | Should -Be $false
+            qbuild -map $map 'do_something.inner2.a' | Should -Be @($false, 'parent')
         }
     }
 

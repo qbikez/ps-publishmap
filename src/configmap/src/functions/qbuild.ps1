@@ -171,7 +171,13 @@ function Invoke-QBuild {
                     return
                 }
 
-                Invoke-EntryWrapper -MainCommand 'qbuild' -TargetKey $targetKey -TargetEntry $targetEntry -Command $command -Bound $bound -RemainingArguments $passthrough
+                $ancestorSettingsScopes = @(Enter-ConfigMapAncestorSettingsScopes -Map $map -EntryKey $targetKey)
+                try {
+                    Invoke-EntryWrapper -MainCommand 'qbuild' -TargetKey $targetKey -TargetEntry $targetEntry -Command $command -Bound $bound -RemainingArguments $passthrough
+                }
+                finally {
+                    Exit-ConfigMapSettingsScopes -Scopes $ancestorSettingsScopes
+                }
             }
         }
         finally {
