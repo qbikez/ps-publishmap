@@ -25,7 +25,7 @@ function Invoke-EntryWrapper {
             return $hookResult.Result
         }
 
-        Invoke-EntryCommand -entry $TargetEntry -key $Command -bound $Bound -settingsScopeEntered $true
+        Invoke-EntryCommand -entry $TargetEntry -key $Command -bound $Bound -settingsScopeEntered:$true
     }
     finally {
         Exit-ConfigMapSettingsScope -PreviousSettings $settingsScope
@@ -102,6 +102,8 @@ function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}
             }
         }
         
+        Write-Verbose "ordered args: $( $ordered -join ', ' )"
+        Write-Verbose "filtered args: $( $filtered.Keys -join ', ' )"
         try {
             pushd $baseDir
             return & $command @ordered @filtered

@@ -165,7 +165,7 @@ function Invoke-QBuild {
                 Exit-ConfigMapSettingsScopes -Scopes $hookSettingsScopes
             }
 
-            @($targets) | % {
+            foreach ($_ in $targets) {
                 $targetKey = $_.key
                 $targetEntry = $_.value
                 Write-Verbose "running entry '$targetKey'"
