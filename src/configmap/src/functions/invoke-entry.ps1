@@ -26,76 +26,83 @@ function Invoke-EntryWrapper {
 }
 
 function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}) {
-    $command = Get-EntryCommand $entry $key
-    
-    if (!$command) {
-        throw "Command '$key' not found"
-    }
-    
-    # Handle exec as list of subcommand names
-    if ($command -is [array]) {
-        if ($entry -isnot [System.Collections.IDictionary]) {
-            throw "Entry must be a hashtable when exec is an array"
+    $settings = if ($entry -is [System.Collections.IDictionary]) { $entry._settings } else { $null }
+    $settingsScope = Enter-ConfigMapSettingsScope -Settings $settings
+    try {
+        $command = Get-EntryCommand $entry $key
+        
+        if (!$command) {
+            throw "Command '$key' not found"
         }
-
-        $commandList = $command -join ", "
-        Write-Host "Resolved to commands: [$commandList]" -ForegroundColor Cyan
-
-        for ($i = 0; $i -lt $command.Count; $i++) {
-            $subCommandName = $command[$i]
-            Write-Host "[$($i + 1)/$($command.Count)] Running '$subCommandName'..." -ForegroundColor Yellow
-
-            if (!$entry.$subCommandName) {
-                throw "Subcommand '$subCommandName' not found in entry"
+        
+        # Handle exec as list of subcommand names
+        if ($command -is [array]) {
+            if ($entry -isnot [System.Collections.IDictionary]) {
+                throw "Entry must be a hashtable when exec is an array"
             }
 
-            $subEntry = $entry.$subCommandName
-            Invoke-EntryCommand -entry $subEntry -ordered $ordered -bound $bound
+            $commandList = $command -join ", "
+            Write-Host "Resolved to commands: [$commandList]" -ForegroundColor Cyan
+
+            for ($i = 0; $i -lt $command.Count; $i++) {
+                $subCommandName = $command[$i]
+                Write-Host "[$($i + 1)/$($command.Count)] Running '$subCommandName'..." -ForegroundColor Yellow
+
+                if (!$entry.$subCommandName) {
+                    throw "Subcommand '$subCommandName' not found in entry"
+                }
+
+                $subEntry = $entry.$subCommandName
+                Invoke-EntryCommand -entry $subEntry -ordered $ordered -bound $bound
+            }
+
+            return
+        }
+        
+        # Normal scriptblock execution
+        $scriptArgs = Get-ScriptArgs $command -exclude @()
+
+        if ($command -isnot [scriptblock]) {
+            throw "Entry '$key' of type $($command.GetType().Name) is not supported"
         }
 
-        return
-    }
-    
-    # Normal scriptblock execution
-    $scriptArgs = Get-ScriptArgs $command -exclude @()
+        if (!$bound) { $bound = @{} }
+        if (!$bound._context) { $bound._context = @{} }
+        if (!$bound._context.self) { $bound._context.self = $entry }
 
-    if ($command -isnot [scriptblock]) {
-        throw "Entry '$key' of type $($command.GetType().Name) is not supported"
-    }
-
-    if (!$bound) { $bound = @{} }
-    if (!$bound._context) { $bound._context = @{} }
-    if (!$bound._context.self) { $bound._context.self = $entry }
-
-    $baseDir = $null
-    if ($entry -is [System.Collections.IDictionary] -and $entry._baseDir) {
-        $baseDir = $entry._baseDir
-    }
-    if (!$baseDir) {
-        $baseDir = Get-Location
-    }
-    if (!$bound._context.workDir) { $bound._context.workDir = (Get-Location).Path }
-
-    # Always pass special parameters (_context, _self) plus any that match script params
-    $specialParams = @("_context", "_self") | ? { $scriptArgs.Keys -contains $_ }
-    $filtered = @{}
-    Write-Verbose "script args: $( $scriptArgs.Keys -join ', ' )"
-    foreach ($boundKey in $bound.Keys) {
-        if ($boundKey -in $scriptArgs.Keys -or $boundKey -in $specialParams) {
-            Write-Verbose "adding '$boundKey'"
-            $filtered[$boundKey] = $bound[$boundKey]
+        $baseDir = $null
+        if ($entry -is [System.Collections.IDictionary] -and $entry._baseDir) {
+            $baseDir = $entry._baseDir
         }
-        else {
-            Write-Verbose "skipping '$boundKey'"
+        if (!$baseDir) {
+            $baseDir = Get-Location
         }
-    }
-    
-    try {
-        pushd $baseDir
-        return & $command @ordered @filtered
+        if (!$bound._context.workDir) { $bound._context.workDir = (Get-Location).Path }
+
+        # Always pass special parameters (_context, _self) plus any that match script params
+        $specialParams = @("_context", "_self") | ? { $scriptArgs.Keys -contains $_ }
+        $filtered = @{}
+        Write-Verbose "script args: $( $scriptArgs.Keys -join ', ' )"
+        foreach ($boundKey in $bound.Keys) {
+            if ($boundKey -in $scriptArgs.Keys -or $boundKey -in $specialParams) {
+                Write-Verbose "adding '$boundKey'"
+                $filtered[$boundKey] = $bound[$boundKey]
+            }
+            else {
+                Write-Verbose "skipping '$boundKey'"
+            }
+        }
+        
+        try {
+            pushd $baseDir
+            return & $command @ordered @filtered
+        }
+        finally {
+            popd
+        }
     }
     finally {
-        popd
+        Exit-ConfigMapSettingsScope -PreviousSettings $settingsScope
     }
 }
 

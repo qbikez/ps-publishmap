@@ -113,13 +113,37 @@ Describe 'ConfigMap settings' {
     It 'makes map-level settings available to build scripts without leaking them' {
         InModuleScope ConfigMap {
             $map = @{
-                _settings      = @{ TmuxAutoWindow = $false }
+                _settings      = @{ TmuxAutoWindow = $true }
                 'do_something' = {
                     Get-ConfigMapSetting -Name TmuxAutoWindow
                 }
             }
 
-            qbuild -map $map 'do_something' | Should -Be $false
+            qbuild -map $map 'do_something' | Should -Be $true
+            Get-ConfigMapSetting -Name TmuxAutoWindow | Should -Be $false
+        }
+    }
+
+    It 'respect children settings' {
+        InModuleScope ConfigMap {
+            $map = @{
+                _settings      = @{ TmuxAutoWindow = $true; Debug = 'parent' }
+                'do_something' = @{
+                    "inner" = @{
+                        _settings = @{ TmuxAutoWindow = $false }
+                        "exec"    = {
+                            Get-ConfigMapSetting -Name TmuxAutoWindow
+                            Get-ConfigMapSetting -Name Debug
+                        }
+                    }
+                    "exec"  = {
+                        Get-ConfigMapSetting -Name TmuxAutoWindow
+                    }
+                }
+            }
+
+            qbuild -map $map 'do_something' | Should -Be $true
+            qbuild -map $map 'do_something.inner' | Should -Be @($false, 'parent')
             Get-ConfigMapSetting -Name TmuxAutoWindow | Should -Be $false
         }
     }
