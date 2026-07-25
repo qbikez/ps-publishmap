@@ -74,23 +74,32 @@ function Enter-ConfigMapAncestorSettingsScopes {
     $segments = $EntryKey -split '\.'
     $entry = $Map
 
-    for ($index = 0; $index -lt $segments.Count - 1; $index++) {
-        if ($entry -isnot [System.Collections.IDictionary]) {
-            break
-        }
+    try {
+        for ($index = 0; $index -lt $segments.Count - 1; $index++) {
+            if ($entry -isnot [System.Collections.IDictionary]) {
+                break
+            }
 
-        if ($entry.list) {
-            $entry = $entry.list
-        }
+            if ($entry.list) {
+                $entry = $entry.list
+                if ($entry -isnot [System.Collections.IDictionary]) {
+                    break
+                }
+            }
 
-        if (-not $entry.Contains($segments[$index])) {
-            break
-        }
+            if (-not $entry.Contains($segments[$index])) {
+                break
+            }
 
-        $entry = $entry[$segments[$index]]
-        if ($entry -is [System.Collections.IDictionary] -and $entry._settings) {
-            $scopes += Enter-ConfigMapSettingsScope -Settings $entry._settings
+            $entry = $entry[$segments[$index]]
+            if ($entry -is [System.Collections.IDictionary] -and $entry._settings) {
+                $scopes += Enter-ConfigMapSettingsScope -Settings $entry._settings
+            }
         }
+    }
+    catch {
+        Exit-ConfigMapSettingsScopes -Scopes $scopes
+        throw
     }
 
     return $scopes

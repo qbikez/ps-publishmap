@@ -152,6 +152,44 @@ Describe 'ConfigMap settings' {
             qbuild -map $map 'do_something' | Should -Be $true
             qbuild -map $map 'do_something.inner' | Should -Be @($false, 'parent')
             qbuild -map $map 'do_something.inner2.a' | Should -Be @($false, 'parent')
+            qbuild -map $map 'do_something.inner2.all' | Should -Be @($false, 'parent')
+        }
+    }
+
+    It 'makes child settings available to entry plugins' {
+        InModuleScope ConfigMap {
+            $previousPlugins = $script:ConfigMapPlugins
+            $script:entryPluginSetting = $null
+            $script:ConfigMapPlugins = @(
+                @{
+                    name  = 'settings-test'
+                    hooks = @{
+                        InvokeEntryWrapper = {
+                            param($context)
+                            $script:entryPluginSetting = Get-ConfigMapSetting -Name TmuxAutoWindow
+                            return @{ Handled = $false }
+                        }
+                    }
+                }
+            )
+
+            try {
+                $map = @{
+                    _settings = @{ TmuxAutoWindow = $true }
+                    child     = @{
+                        _settings = @{ TmuxAutoWindow = $false }
+                        exec      = {
+                            Get-ConfigMapSetting -Name TmuxAutoWindow
+                        }
+                    }
+                }
+
+                qbuild -map $map child | Should -Be $false
+                $script:entryPluginSetting | Should -Be $false
+            }
+            finally {
+                $script:ConfigMapPlugins = $previousPlugins
+            }
         }
     }
 
