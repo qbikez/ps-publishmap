@@ -40,6 +40,43 @@ Describe 'ConfigMap settings' {
         }
     }
 
+    It 'restores nested settings scopes in LIFO order' {
+        InModuleScope ConfigMap {
+            $scope1 = Enter-ConfigMapSettingsScope -Settings @{ Debug = 'scope1', Concurrently = 'scope1' }
+            try {
+                Get-ConfigMapSetting -Name Debug | Should -Be 'scope1'
+                Get-ConfigMapSetting -Name Concurrently | Should -Be 'scope1'
+
+                $scope2 = Enter-ConfigMapSettingsScope -Settings @{ Concurrently = 'scope2' }
+                try {
+                    Get-ConfigMapSetting -Name Debug | Should -Be 'scope1'
+                    Get-ConfigMapSetting -Name Concurrently | Should -Be 'scope2'
+
+                    $scope3 = Enter-ConfigMapSettingsScope -Settings @{ Debug = 'scope3' }
+                    try {
+                        Get-ConfigMapSetting -Name Debug | Should -Be 'scope3'
+                        Get-ConfigMapSetting -Name Concurrently | Should -Be 'scope2'
+                    }
+                    finally {
+                        Exit-ConfigMapSettingsScope -PreviousSettings $scope3
+                    }
+
+                    Get-ConfigMapSetting -Name Debug | Should -Be 'scope1'
+                    Get-ConfigMapSetting -Name Concurrently | Should -Be 'scope2'
+                }
+                finally {
+                    Exit-ConfigMapSettingsScope -PreviousSettings $scope2
+                }
+
+                Get-ConfigMapSetting -Name Debug | Should -Be 'scope1'
+                Get-ConfigMapSetting -Name Concurrently | Should -Be 'scope1'
+            }
+            finally {
+                Exit-ConfigMapSettingsScope -PreviousSettings $scope1
+            }
+        }
+    }
+
     It 'constructs the settings object from environment variables during module initialization' {
         $env:QCONF_TmuxAutoWindow = '0'
         $env:QCONF_Concurrently = 'false'
