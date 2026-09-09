@@ -3,9 +3,10 @@
 # the entry path (e.g. build.ui, test.unit). See README.md for details.
 
 $targets = @{
-    "build" = @{
-        "ui" = @{
-            exec = {
+    _settings      = @{ TmuxAutoWindow = $true }
+    "build"        = @{
+        "ui"  = @{
+            exec        = {
                 param([ValidateSet("Debug", "Release")]$Configuration = "Debug")
                 Write-Host "[$Configuration] Building UI..." -ForegroundColor Cyan
                 Start-Sleep -Seconds 2
@@ -15,7 +16,7 @@ $targets = @{
         }
 
         "api" = @{
-            exec = {
+            exec        = {
                 param([ValidateSet("Debug", "Release")]$Configuration = "Debug")
                 Write-Host "[$Configuration] Building API..." -ForegroundColor Cyan
                 Start-Sleep -Seconds 2
@@ -25,8 +26,8 @@ $targets = @{
         }
     }
 
-    "test" = @{
-        "unit" = {
+    "test"         = @{
+        "unit"        = {
             param([switch]$Watch)
             Write-Host "Running unit tests$(if ($Watch) { ' (watch)' })..." -ForegroundColor Yellow
             Start-Sleep -Seconds 2
@@ -40,8 +41,8 @@ $targets = @{
         }
     }
 
-    "dev" = @{
-        "ui" = {
+    "dev"          = @{
+        "ui"  = {
             Write-Host "Starting UI dev server (Ctrl+C to stop)..." -ForegroundColor Magenta
             1..5 | ForEach-Object {
                 Write-Host "  [ui] serving on http://localhost:3000 (tick $_)"
@@ -55,6 +56,20 @@ $targets = @{
                 Write-Host "  [api] listening on http://localhost:5000 (tick $_)"
                 Start-Sleep -Seconds 1
             }
+        }
+    }
+
+    "concurrently" = @{
+        "manual" = {
+            invoke-concurrently -commands @{
+                "echo1" = "echo 'Hello, World eins!'"
+                "echo2" = "echo 'Hello, World zwei!'"
+            }    
+        }
+        "auto"   = @{
+            _settings = @{ Concurrently = $true }
+            "echo1"   = { echo 'Hello, World eins!'; }
+            "echo2"   = { echo 'Hello, World zwei!'; }
         }
     }
 }

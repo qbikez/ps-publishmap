@@ -175,12 +175,19 @@ function Invoke-QBuild {
 
         $settingsScope = Enter-ConfigMapSettingsScope -Settings $map._settings
         try {
-            $hookResult = Invoke-ConfigMapPluginHooks -HookName 'InvokeQBuildTargets' -Context $hookContext
-            if ($hookResult.Handled) {
-                return $hookResult.Result
+            $hookEntry = if ($entry -match '^(.*)\.all$') { $Matches[1] } else { $entry }
+            $hookSettingsScopes = @(Enter-ConfigMapAncestorSettingsScopes -Map $map -EntryKey $hookEntry -IncludeTarget)
+            try {
+                $hookResult = Invoke-ConfigMapPluginHooks -HookName 'InvokeQBuildTargets' -Context $hookContext
+                if ($hookResult.Handled) {
+                    return $hookResult.Result
+                }
+            }
+            finally {
+                Exit-ConfigMapSettingsScopes -Scopes $hookSettingsScopes
             }
 
-            @($targets) | % {
+            foreach ($_ in $targets) {
                 $targetKey = $_.key
                 $targetEntry = $_.value
                 Write-Verbose "running entry '$targetKey'"
@@ -193,7 +200,13 @@ function Invoke-QBuild {
                     return
                 }
 
-                Invoke-EntryWrapper -MainCommand 'qbuild' -TargetKey $targetKey -TargetEntry $targetEntry -Command $command -Bound $bound -RemainingArguments $passthrough
+                $ancestorSettingsScopes = @(Enter-ConfigMapAncestorSettingsScopes -Map $map -EntryKey $targetKey)
+                try {
+                    Invoke-EntryWrapper -MainCommand 'qbuild' -TargetKey $targetKey -TargetEntry $targetEntry -Command $command -Bound $bound -RemainingArguments $passthrough
+                }
+                finally {
+                    Exit-ConfigMapSettingsScopes -Scopes $ancestorSettingsScopes
+                }
             }
         }
         finally {

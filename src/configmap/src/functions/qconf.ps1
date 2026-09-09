@@ -150,7 +150,7 @@ function Invoke-QConf {
                     $bound = $PSBoundParameters
                     $bound.key = $optionKey
                     $bound.value = $optionValue
-                    Invoke-Set $subEntry -ordered "", $optionValue, $optionKey -bound $bound
+                    Invoke-Set $subEntry -ordered @("", $optionValue, $optionKey) -bound $bound
                 }
                 "get" {
                     $entries = $entry

@@ -40,6 +40,43 @@ Describe 'ConfigMap settings' {
         }
     }
 
+    It 'restores nested settings scopes in LIFO order' {
+        InModuleScope ConfigMap {
+            $scope1 = Enter-ConfigMapSettingsScope -Settings @{ Debug = 'scope1'; Concurrently = 'scope1' }
+            try {
+                Get-ConfigMapSetting -Name Debug | Should -Be 'scope1'
+                Get-ConfigMapSetting -Name Concurrently | Should -Be 'scope1'
+
+                $scope2 = Enter-ConfigMapSettingsScope -Settings @{ Concurrently = 'scope2' }
+                try {
+                    Get-ConfigMapSetting -Name Debug | Should -Be 'scope1'
+                    Get-ConfigMapSetting -Name Concurrently | Should -Be 'scope2'
+
+                    $scope3 = Enter-ConfigMapSettingsScope -Settings @{ Debug = 'scope3' }
+                    try {
+                        Get-ConfigMapSetting -Name Debug | Should -Be 'scope3'
+                        Get-ConfigMapSetting -Name Concurrently | Should -Be 'scope2'
+                    }
+                    finally {
+                        Exit-ConfigMapSettingsScope -PreviousSettings $scope3
+                    }
+
+                    Get-ConfigMapSetting -Name Debug | Should -Be 'scope1'
+                    Get-ConfigMapSetting -Name Concurrently | Should -Be 'scope2'
+                }
+                finally {
+                    Exit-ConfigMapSettingsScope -PreviousSettings $scope2
+                }
+
+                Get-ConfigMapSetting -Name Debug | Should -Be 'scope1'
+                Get-ConfigMapSetting -Name Concurrently | Should -Be 'scope1'
+            }
+            finally {
+                Exit-ConfigMapSettingsScope -PreviousSettings $scope1
+            }
+        }
+    }
+
     It 'constructs the settings object from environment variables during module initialization' {
         $env:QCONF_TmuxAutoWindow = '0'
         $env:QCONF_Concurrently = 'false'
@@ -133,14 +170,134 @@ Describe 'ConfigMap settings' {
     It 'makes map-level settings available to build scripts without leaking them' {
         InModuleScope ConfigMap {
             $map = @{
-                _settings      = @{ TmuxAutoWindow = $false }
+                _settings      = @{ TmuxAutoWindow = $true }
                 'do_something' = {
                     Get-ConfigMapSetting -Name TmuxAutoWindow
                 }
             }
 
-            qbuild -map $map 'do_something' | Should -Be $false
+            qbuild -map $map 'do_something' | Should -Be $true
             Get-ConfigMapSetting -Name TmuxAutoWindow | Should -Be $false
+        }
+    }
+
+    It 'respect children settings' {
+        InModuleScope ConfigMap {
+            $map = @{
+                _settings      = @{ TmuxAutoWindow = $true; Debug = 'parent' }
+                'do_something' = @{
+                    "inner"  = @{
+                        _settings = @{ TmuxAutoWindow = $false }
+                        "exec"    = {
+                            Get-ConfigMapSetting -Name TmuxAutoWindow
+                            Get-ConfigMapSetting -Name Debug
+                        }
+                    }
+                    "inner2" = @{
+                        _settings = @{ TmuxAutoWindow = $false }
+                        "a"       = {
+                            Get-ConfigMapSetting -Name TmuxAutoWindow
+                            Get-ConfigMapSetting -Name Debug
+                        }
+                    }
+                    "exec"   = {
+                        Get-ConfigMapSetting -Name TmuxAutoWindow
+                    }
+                }
+            }
+
+            qbuild -map $map 'do_something' | Should -Be $true
+            qbuild -map $map 'do_something.inner' | Should -Be @($false, 'parent')
+            qbuild -map $map 'do_something.inner2.a' | Should -Be @($false, 'parent')
+            qbuild -map $map 'do_something.inner2.all' | Should -Be @($false, 'parent')
+        }
+    }
+
+    It 'makes child settings available to InvokeEntryWrapper hook' {
+        InModuleScope ConfigMap {
+            $previousPlugins = $script:ConfigMapPlugins
+            $script:entryPluginSetting = $null
+            $script:ConfigMapPlugins = @(
+                @{
+                    name  = 'settings-test'
+                    hooks = @{
+                        InvokeEntryWrapper = {
+                            param($context)
+                            $tmuxEnabled = Get-ConfigMapSetting -Name TmuxAutoWindow
+                            return @{ Handled = $tmuxEnabled }
+                        }
+                    }
+                }
+            )
+
+            try {
+                $map = @{
+                    _settings  = @{ TmuxAutoWindow = $false }
+                    notSkipped = {
+                        echo "plugin passed through"
+                    }
+                    child      = @{
+                        _settings = @{ TmuxAutoWindow = $true }
+                        exec      = {
+                            echo "plugin passed through"
+                        }
+                        "a"       = {
+                            echo "plugin passed through"
+                        }
+                    }
+                }
+
+                qbuild -map $map notSkipped | Should -Be "plugin passed through"
+                qbuild -map $map child | Should -BeNullOrEmpty
+                qbuild -map $map child.a | Should -BeNullOrEmpty
+                qbuild -map $map child.all | Should -BeNullOrEmpty
+            }
+            finally {
+                $script:ConfigMapPlugins = $previousPlugins
+            }
+        }
+    }
+
+    It 'makes map settings available to InvokeQBuildTargets hook' {
+        InModuleScope ConfigMap {
+            $previousPlugins = $script:ConfigMapPlugins
+            $script:ConfigMapPlugins = @(
+                @{
+                    name  = 'settings-test'
+                    hooks = @{
+                        InvokeQBuildTargets = {
+                            param($context)
+                            $tmuxEnabled = Get-ConfigMapSetting -Name TmuxAutoWindow
+                            return @{ Handled = $tmuxEnabled }
+                        }
+                    }
+                }
+            )
+
+            try {
+                $map = @{
+                    _settings = @{ TmuxAutoWindow = $false }
+                    build     = {
+                        echo "plugin passed through"
+                    }
+                    child     = @{
+                        _settings = @{ TmuxAutoWindow = $true }
+                        exec      = {
+                            echo "plugin passed through"
+                        }
+                        "a"       = {
+                            echo "plugin passed through"
+                        }
+                    }
+                }
+                qbuild -map $map build | Should -Be "plugin passed through"
+                qbuild -map $map child | Should -BeNullOrEmpty
+                qbuild -map $map child.a | Should -BeNullOrEmpty
+                qbuild -map $map child.all | Should -BeNullOrEmpty
+            }
+            finally {
+                $script:ConfigMapPlugins = $previousPlugins
+            }
         }
     }
 

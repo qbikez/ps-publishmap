@@ -1,5 +1,7 @@
 $targets = @{
-    "build" = {
+    _settings = @{ Concurrently = $false }
+    
+    "build"   = {
         param($ctx, [bool][switch]$noRestore)
 
         $a = @()
@@ -8,6 +10,7 @@ $targets = @{
         }
         dotnet build @a
     }
+
     # NPM_SCRIPTS_PLACEHOLDER
 }
 

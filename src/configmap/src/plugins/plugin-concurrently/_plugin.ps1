@@ -34,18 +34,16 @@
                 $boundForCommand.map = $Context.MapPath
             }
 
-            $commands = @()
-            $names = @()
+            $commands = [ordered]@{}
             foreach ($target in $Context.Targets) {
-                $names += $target.Key
-                $commands += Format-QBuildCommand `
+                $commands[$target.Key] = Format-QBuildCommand `
                     -mainCommand $Context.MainCommand `
                     -Entry $target.Key `
                     -BoundParameters $boundForCommand `
                     -RemainingArguments $Context.RemainingArguments
             }
 
-            Invoke-ConcurrentlyQBuild -Commands $commands -Names $names
+            Invoke-Concurrently -Commands $commands
             return @{ Handled = $true }
         }
     }
