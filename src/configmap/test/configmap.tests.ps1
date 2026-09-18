@@ -650,6 +650,46 @@ Describe "qbuild list with exec list entries" {
             } -ArgumentList $buildTargets, $invocation
         } | Should -Not -Throw
     }
+
+    It "keeps command order from ordered maps" {
+        $orderedMap = [ordered]@{
+            zebra = @{ exec = { }; description = "z" }
+            apple = @{ exec = { }; description = "a" }
+            mango = @{ exec = { }; description = "m" }
+        }
+
+        $names = [System.Collections.Generic.List[string]]::new()
+        Mock Write-Host -ModuleName ConfigMap {
+            $text = "$Object".Trim()
+            if ($text -match '^(zebra|apple|mango)\b') {
+                $names.Add($Matches[1])
+            }
+        }
+
+        qbuild -map $orderedMap list
+
+        $names | Should -Be @('zebra', 'apple', 'mango')
+    }
+
+    It "sorts commands alphabetically for unordered maps" {
+        $unorderedMap = @{
+            zebra = @{ exec = { }; description = "z" }
+            apple = @{ exec = { }; description = "a" }
+            mango = @{ exec = { }; description = "m" }
+        }
+
+        $names = [System.Collections.Generic.List[string]]::new()
+        Mock Write-Host -ModuleName ConfigMap {
+            $text = "$Object".Trim()
+            if ($text -match '^(zebra|apple|mango)\b') {
+                $names.Add($Matches[1])
+            }
+        }
+
+        qbuild -map $unorderedMap list
+
+        $names | Should -Be @('apple', 'mango', 'zebra')
+    }
 }
 
 Describe "exec as list - streaming output" {

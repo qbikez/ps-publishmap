@@ -16,10 +16,15 @@ function Write-MapHelp {
     Write-Host ""
     Write-Host "COMMANDS:" -ForegroundColor Yellow
 
-    # Sort scripts alphabetically
-    $sortedScripts = $scripts.GetEnumerator() | Sort-Object Name
+    # Keep definition order for [ordered] maps; sort alphabetically otherwise
+    $scriptItems = if ($map -is [System.Collections.Specialized.OrderedDictionary]) {
+        @($scripts.GetEnumerator())
+    }
+    else {
+        @($scripts.GetEnumerator() | Sort-Object Name)
+    }
 
-    foreach ($item in $sortedScripts) {
+    foreach ($item in $scriptItems) {
         $name = $item.Name
         $script = $item.Value
         try {
