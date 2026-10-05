@@ -9,5 +9,6 @@ Export-ModuleMember `
     Invoke-EntryCommand, Invoke-Set, Invoke-Get, Get-EntryCompletion, Get-EntryDynamicParam, `
     Invoke-Entry, Invoke-QBuild, Invoke-QConf, ConvertTo-MapResult, `
     Initialize-ConfigMap, Initialize-BuildMap, Get-MapLanguage, Merge-IncludeDirectives, Add-BaseDir `
-    -Alias *
+    -Alias * `
+    -Variable ImportConfigMap
     

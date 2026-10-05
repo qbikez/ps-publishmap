@@ -7,21 +7,23 @@ function Invoke-QBuild {
                     $mapPath = if ($fakeBoundParameters.map) { $fakeBoundParameters.map } else { "./.build.map.ps1" }
                     $localMapExists = Test-Path $mapPath
 
-                    $resolved = try {
-                        Resolve-ConfigMap $fakeBoundParameters.map -fallback "./.build.map.ps1" -ErrorAction Stop
+                    $mapNotFound = $false
+                    $map = try {
+                        . $ImportConfigMap -Map $fakeBoundParameters.map -Fallback "./.build.map.ps1" -ErrorAction Stop
                     }
                     catch {
-                        $null
+                        if ($_.Exception.Message -match '^map file .* not found$|^No map provided and fallback .* not found$|^map is null and defaultMapFile is not provided$') {
+                            $mapNotFound = $true
+                            $null
+                        }
+                        else {
+                            throw
+                        }
                     }
-                    if (!$resolved -or ($resolved.source -eq "file" -and !(Test-Path $resolved.sourceFile))) {
+                    if ($mapNotFound) {
                         return @("!init", "!settings", "help", "list") | ? { $_.startswith($wordToComplete) }
                     }
-                    $map = $resolved | % {
-                        if ($_.source -eq "file") {
-                            $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-                        }
-                        $_
-                    } | % { $_.map } | Assert-ConfigMap
+                    $map = $map | Assert-ConfigMap
 
                     $completions = Get-EntryCompletion $map -language "build" @PSBoundParameters
                     # Include !init if no local map file exists
@@ -45,12 +47,7 @@ function Invoke-QBuild {
     )
     dynamicparam {
         try {
-            $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" | % {
-                if ($_.source -eq "file") {
-                    $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-                }
-                $_
-            } | % { $_.map } | Assert-ConfigMap
+            $map = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" | Assert-ConfigMap
             $result = Get-EntryDynamicParam $map $entry $command -skip 0 -bound $PSBoundParameters
             Write-Debug "Dynamic parameters for entry '$entry': $($result.Keys -join ', ')"
             return $result
@@ -70,12 +67,7 @@ function Invoke-QBuild {
             return
         }
         if ($entry -eq "list") {
-            $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" | % {
-                if ($_.source -eq "file") {
-                    $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-                }
-                $_
-            } | % { $_.map }
+            $map = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1"
             if (!$map) {
                 $invocation = $MyInvocation
                 Write-Help -invocation $invocation -mapPath "./.build.map.ps1"
@@ -97,12 +89,7 @@ function Invoke-QBuild {
         }
 
         $mapPath = $map
-        $map = Resolve-ConfigMap $map -fallback "./.build.map.ps1" -ErrorAction Ignore | % {
-            if ($_.source -eq "file") {
-                $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-            }
-            $_
-        } | % { $_.map }
+        $map = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" -ErrorAction Ignore
         if (!$map) {
             $invocation = $MyInvocation
             $commandName = $invocation.Statement

@@ -1034,12 +1034,7 @@ Describe "#include directives" {
 
     It "should execute included prefixed entry" {
         $mapPath = Join-Path $importSampleDir ".build.map.ps1"
-        $map = Resolve-ConfigMap $mapPath | % {
-            if ($_.source -eq "file") {
-                $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-            }
-            $_
-        } | % { $_.map }
+        $map = . $ImportConfigMap -Map $mapPath
 
         $entry = Get-MapEntry $map "child.inner-task-1" -language "build"
         $entry | Should -Not -BeNullOrEmpty
@@ -1075,12 +1070,7 @@ Describe "#include directives" {
 
     It "should inject _baseDir into included entries" {
         $mapPath = Join-Path $importSampleDir ".build.map.ps1"
-        $map = Resolve-ConfigMap $mapPath | % {
-            if ($_.source -eq "file") {
-                $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-            }
-            $_
-        } | % { $_.map }
+        $map = . $ImportConfigMap -Map $mapPath
 
         $entry = Get-MapEntry $map "child.inner-task-1" -language "build"
         $entry | Should -Not -BeNullOrEmpty
@@ -1106,12 +1096,7 @@ Describe "#include directives" {
 
     It "should change directory when executing included entry" {
         $mapPath = Join-Path $importSampleDir ".build.map.ps1"
-        $map = Resolve-ConfigMap $mapPath | % {
-            if ($_.source -eq "file") {
-                $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-            }
-            $_
-        } | % { $_.map }
+        $map = . $ImportConfigMap -Map $mapPath
         $initialDir = (Get-Location).Path
 
         $entry = Get-MapEntry $map "child.inner-task-1" -language "build"
@@ -1176,13 +1161,7 @@ Describe "#include with parent directory traversal" {
     It "should resolve #include relative to map file directory, not CWD" {
         pushd $nomapDir
         try {
-            $resolved = Resolve-ConfigMap -fallback "./.build.map.ps1"
-            $map = $resolved | % {
-                if ($_.source -eq "file") {
-                    $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-                }
-                $_
-            } | % { $_.map }
+            $map = . $ImportConfigMap -Fallback "./.build.map.ps1"
 
             $completions = Get-CompletionList $map -language "build"
 
@@ -1197,13 +1176,7 @@ Describe "#include with parent directory traversal" {
     It "should execute included entry when invoked from subdirectory" {
         pushd $nomapDir
         try {
-            $resolved = Resolve-ConfigMap -fallback "./.build.map.ps1"
-            $map = $resolved | % {
-                if ($_.source -eq "file") {
-                    $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-                }
-                $_
-            } | % { $_.map }
+            $map = . $ImportConfigMap -Fallback "./.build.map.ps1"
 
             $entry = Get-MapEntry $map "child.child-task" -language "build"
             $entry | Should -Not -BeNullOrEmpty
@@ -1214,6 +1187,37 @@ Describe "#include with parent directory traversal" {
         finally {
             popd
         }
+    }
+}
+
+Describe "ImportConfigMap" {
+    It "keeps functions dot-sourced by a map file visible to the entry" {
+        $dir = Join-Path $TestDrive "import-configmap-scope"
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        Set-Content -Path (Join-Path $dir "helpers.ps1") -Value 'function Get-ImportedFromMap { "imported" }'
+        Set-Content -Path (Join-Path $dir ".build.map.ps1") -Value @'
+. "$PSScriptRoot/helpers.ps1"
+@{
+    "run" = { Get-ImportedFromMap }
+}
+'@
+        Push-Location $dir
+        try {
+            qbuild -map "./.build.map.ps1" "run" | Should -Be "imported"
+        }
+        finally {
+            Pop-Location
+        }
+    }
+
+    It "returns an object map without loading a file" {
+        $map = @{
+            "run" = { "from-object" }
+        }
+
+        $loaded = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1"
+        $loaded | Should -Be $map
+        $loaded._baseDir | Should -BeNullOrEmpty
     }
 }
 

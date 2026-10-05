@@ -1,6 +1,3 @@
-# in order to make imports from the map file work globally, we have to call dot-source from top-level scope.
-# hence this pattern:
-# $map = Resolve-ConfigMap $map | % { if ($_.source -eq "file") { $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile }; $_ } | % { $_.map }
 function Resolve-ConfigMap {
     [OutputType([PSCustomObject])]
     param(
@@ -158,4 +155,32 @@ function Add-BaseDir {
     }
     
     return $map
+}
+
+# Dot-source this scriptblock. A function would drop map-file imports when it returned.
+# . $ImportConfigMap -Map $map -Fallback './.build.map.ps1'
+$script:ImportConfigMap = {
+    [CmdletBinding()]
+    param(
+        $Map,
+        $Fallback
+    )
+
+    $importConfigMapResult = $null
+    try {
+        $importConfigMapResolved = Resolve-ConfigMap -map $Map -fallback $Fallback
+        if ($importConfigMapResolved.source -eq 'file') {
+            $importConfigMapSourceFile = $importConfigMapResolved.sourceFile
+            $importConfigMapResult = . $importConfigMapSourceFile | Add-BaseDir -baseDir $importConfigMapSourceFile
+        }
+        else {
+            $importConfigMapResult = $importConfigMapResolved.map
+        }
+    }
+    finally {
+        Remove-Variable importConfigMapResolved, importConfigMapSourceFile, Fallback -ErrorAction SilentlyContinue
+    }
+
+    $importConfigMapResult
+    Remove-Variable importConfigMapResult -ErrorAction SilentlyContinue
 }
