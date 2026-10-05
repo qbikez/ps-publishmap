@@ -320,4 +320,117 @@ Describe 'ConfigMap settings' {
             { qbuild -map $map build } | Should -Throw "Unknown ConfigMap setting 'Unknown'."
         }
     }
+
+    It 'restores settings when a build script throws' {
+        InModuleScope ConfigMap {
+            $map = @{
+                _settings = @{ Debug = 'map' }
+                build     = { throw 'boom' }
+            }
+
+            { qbuild -map $map build } | Should -Throw 'boom'
+            Get-ConfigMapSetting -Name Debug | Should -Be $false
+        }
+    }
+
+    It 'applies an exec subcommand''s own settings' {
+        InModuleScope ConfigMap {
+            $map = @{
+                _settings = @{ Debug = 'map' }
+                build     = @{
+                    _settings = @{ Debug = 'parent' }
+                    exec      = @('frontend', 'backend')
+                    frontend  = @{
+                        _settings = @{ Debug = 'front' }
+                        exec      = { Get-ConfigMapSetting -Name Debug }
+                    }
+                    backend   = @{
+                        _settings = @{ Debug = 'back' }
+                        exec      = { Get-ConfigMapSetting -Name Debug }
+                    }
+                }
+            }
+
+            qbuild -map $map build | Should -Be @('front', 'back')
+            Get-ConfigMapSetting -Name Debug | Should -Be $false
+        }
+    }
+
+    It 'applies ancestor settings for a nested configuration entry' {
+        InModuleScope ConfigMap {
+            $map = @{
+                _settings = @{ Debug = 'map'; Concurrently = $true }
+                group     = @{
+                    _settings = @{ Debug = 'group' }
+                    sample    = @{
+                        _settings = @{ Concurrently = $false }
+                        get       = {
+                            "$(Get-ConfigMapSetting -Name Debug)|$(Get-ConfigMapSetting -Name Concurrently)"
+                        }
+                    }
+                }
+            }
+
+            $result = qconf -command get -entry group.sample -map $map
+
+            $result.Value | Should -Be 'group|False'
+            Get-ConfigMapSetting -Name Debug | Should -Be $false
+            Get-ConfigMapSetting -Name Concurrently | Should -Be $false
+        }
+    }
+}
+
+Describe 'included map settings' {
+    BeforeAll {
+        $script:includeRoot = Join-Path $TestDrive 'settings-include'
+        $childDir = Join-Path $script:includeRoot 'child'
+        New-Item -ItemType Directory -Path $childDir -Force | Out-Null
+        Set-Content -Encoding utf8 -Path (Join-Path $childDir '.build.map.ps1') @'
+@{
+    _settings = @{ Debug = 'included' }
+    group = @{
+        _settings = @{ TmuxAutoWindow = $true }
+        task = {
+            $debug = Get-ConfigMapSetting -Name Debug
+            $tmux = Get-ConfigMapSetting -Name TmuxAutoWindow
+            $concurrent = Get-ConfigMapSetting -Name Concurrently
+            "$debug|$tmux|$concurrent"
+        }
+    }
+}
+'@
+    }
+
+    It 'applies root, included, and group settings for a prefixed include' {
+        InModuleScope ConfigMap -ArgumentList $script:includeRoot {
+            param($Root)
+            $map = @{
+                _baseDir   = $Root
+                _settings  = @{ Debug = 'root'; Concurrently = $true }
+                '#include' = @{
+                    child = @{ prefix = $true }
+                }
+            }
+
+            qbuild -map $map 'child.group.task' | Should -Be 'included|True|True'
+            Get-ConfigMapSetting -Name Debug | Should -Be $false
+            Get-ConfigMapSetting -Name Concurrently | Should -Be $false
+        }
+    }
+
+    It 'applies included map settings when the include has no prefix' {
+        InModuleScope ConfigMap -ArgumentList $script:includeRoot {
+            param($Root)
+            $map = @{
+                _baseDir   = $Root
+                _settings  = @{ Debug = 'root'; Concurrently = $true }
+                '#include' = @{
+                    child = @{ prefix = $false }
+                }
+            }
+
+            qbuild -map $map 'group.task' | Should -Be 'included|True|True'
+            Get-ConfigMapSetting -Name Debug | Should -Be $false
+        }
+    }
 }
