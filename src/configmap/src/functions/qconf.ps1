@@ -10,24 +10,7 @@ function Invoke-QConf {
                     $mapPath = if ($fakeBoundParameters.map) { $fakeBoundParameters.map } else { "./.configuration.map.ps1" }
                     $localMapExists = Test-Path $mapPath
 
-                    $inputMap = $fakeBoundParameters.map
-                    $resolved = if ($inputMap -is [System.Collections.IDictionary]) {
-                        [PSCustomObject]@{ source = "object"; map = $inputMap }
-                    }
-                    else {
-                        Resolve-ConfigMap $inputMap -fallback ".configuration.map.ps1" -ErrorAction Ignore
-                    }
-
-                    if (!$resolved -or ($resolved.source -eq "file" -and !(Test-Path $resolved.sourceFile))) {
-                        return @("!init", "help", "list") | ? { $_.startswith($wordToComplete) }
-                    }
-
-                    $map = $resolved | % {
-                        if ($_.source -eq "file") {
-                            $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-                        }
-                        $_
-                    } | % { $_.map } | Assert-ConfigMap
+                    $map = . $ImportConfigMap -Map $fakeBoundParameters.map -Fallback ".configuration.map.ps1" -ErrorAction Ignore | Assert-ConfigMap
 
                     $completions = Get-EntryCompletion $map -language "conf" @PSBoundParameters
                     # Include !init if no local map file exists
@@ -49,13 +32,7 @@ function Invoke-QConf {
                         return @()
                     }
 
-                    $map = $fakeBoundParameters.map
-                    $map = Resolve-ConfigMap $map -fallback ".configuration.map.ps1" | % {
-                        if ($_.source -eq "file") {
-                            $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-                        }
-                        $_
-                    } | % { $_.map } | Assert-ConfigMap
+                    $map = . $ImportConfigMap -Map $fakeBoundParameters.map -Fallback ".configuration.map.ps1" | Assert-ConfigMap
                     $entry = $fakeBoundParameters.entry
                     $entry = Get-MapEntry $map $entry
                     if (!$entry) {
@@ -80,12 +57,7 @@ function Invoke-QConf {
             if ( !$entry) {
                 return @()
             }
-            $map = Resolve-ConfigMap $map -fallback ".configuration.map.ps1" | % {
-                if ($_.source -eq "file") {
-                    $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-                }
-                $_
-            } | % { $_.map } | Assert-ConfigMap
+            $map = . $ImportConfigMap -Map $map -Fallback ".configuration.map.ps1" | Assert-ConfigMap
             $skip = switch ($command) {
                 "set" { 3 }
                 default { 0 }
@@ -116,12 +88,7 @@ function Invoke-QConf {
             return
         }
 
-        $map = $map -is [System.Collections.IDictionary] ? $map : (Resolve-ConfigMap $map | % {
-                if ($_.source -eq "file") {
-                    $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-                }
-                $_
-            } | % { $_.map } | Assert-ConfigMap)
+        $map = . $ImportConfigMap -Map $map | Assert-ConfigMap
 
         if (-not $entry -and -not $command) {
             Write-MapHelp -map $map -invocation $MyInvocation -language "conf"
