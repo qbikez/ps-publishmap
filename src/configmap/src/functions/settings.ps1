@@ -281,6 +281,34 @@ function Get-ConfigMapSettings {
     return $script:ConfigMapSettings
 }
 
+function Get-ConfigMapSettingsForPath {
+    param(
+        [Parameter(Mandatory)]
+        [System.Collections.IDictionary]$Map,
+        [string]$Path,
+        [hashtable]$OperationContext
+    )
+
+    $operationContext = if ($OperationContext) { $OperationContext } else { New-ConfigMapOperationContext }
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return Invoke-WithEntrySettings -Map $Map -EntryKey '' -Entry $null -OperationContext $operationContext -ScriptBlock {
+            Get-ConfigMapSettings
+        }
+    }
+
+    # Match qbuild: foo.all inspects the parent entry's effective settings.
+    $entryKey = if ($Path -match '^(.*)\.all$') { $Matches[1] } else { $Path }
+    $targets = @(Get-MapEntries $Map $entryKey -language 'build' -OperationContext $operationContext)
+    if ($targets.Count -eq 0) {
+        throw "Entry '$Path' not found."
+    }
+
+    return Invoke-WithEntrySettings -Map $Map -EntryKey $entryKey -Entry $targets[0].Value -OperationContext $operationContext -ScriptBlock {
+        Get-ConfigMapSettings
+    }
+}
+
 function Get-ConfigMapSetting {
     param(
         [Parameter(Mandatory)]

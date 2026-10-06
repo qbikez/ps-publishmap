@@ -85,7 +85,17 @@ function Invoke-QBuild {
             return
         }
         if ($entry -eq "!settings") {
-            return Get-ConfigMapSettings
+            $settingsPath = @($RemainingArguments | Where-Object { $_ })
+            if ($settingsPath.Count -gt 1) {
+                throw "!settings accepts at most one command path."
+            }
+
+            $settingsMap = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" -ErrorAction Ignore
+            if (!$settingsMap) {
+                return Get-ConfigMapSettings
+            }
+
+            return Get-ConfigMapSettingsForPath -Map $settingsMap -Path $settingsPath[0]
         }
 
         $mapPath = $map
