@@ -47,7 +47,7 @@ function Invoke-QBuild {
     )
     dynamicparam {
         try {
-            $map = Import-ConfigMap -Map $map -Fallback "./.build.map.ps1" | Assert-ConfigMap
+            $map = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" | Assert-ConfigMap
             $result = Get-EntryDynamicParam $map $entry $command -skip 0 -bound $PSBoundParameters
             Write-Debug "Dynamic parameters for entry '$entry': $($result.Keys -join ', ')"
             return $result
@@ -67,7 +67,7 @@ function Invoke-QBuild {
             return
         }
         if ($entry -eq "list") {
-            $map = Import-ConfigMap -Map $map -Fallback "./.build.map.ps1"
+            $map = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1"
             if (!$map) {
                 $invocation = $MyInvocation
                 Write-Help -invocation $invocation -mapPath "./.build.map.ps1"
