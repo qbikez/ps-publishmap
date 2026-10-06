@@ -34,6 +34,34 @@ ConfigMap is a PowerShell module that extends publishmap functionality to provid
    qbuild deploy -Environment staging
    ```
 
+## Agent / automation
+
+AI agents and scripts should discover commands via structured catalog output, not by scraping `qbuild list` host text:
+
+```powershell
+qbuild !describe                          # all commands as objects
+qbuild !describe build                    # one command
+qbuild !describe | ConvertTo-Json -Depth 6
+```
+
+Programmatic equivalent:
+
+```powershell
+$map = Import-ConfigMap ".build.map.ps1"
+Get-ConfigMapCommandCatalog -Map $map -Language build
+Get-ConfigMapCommandCatalog -Map $map -Path build -Language build
+```
+
+Each catalog object includes `Name`, `Description`, `IsParent`, and `Parameters` (`Name`, `Type`, `IsSwitch`, `ValidateSet`, `DefaultValue`).
+
+### Cursor skill
+
+Copy the shipped skill into a consumer project so agents follow the discovery playbook:
+
+```text
+skills/qbuild-discover/SKILL.md  →  .cursor/skills/qbuild-discover/SKILL.md
+```
+
 ## Sample Map File
 
 Here's a sample build map file (`.build.map.ps1`):
@@ -290,6 +318,13 @@ Invoke-EntryCommand $entry "exec" -bound $parameters
 Extracts available entries for tab completion:
 ```powershell
 $entries = Get-CompletionList $buildMap -flatten
+```
+
+### Get-ConfigMapCommandCatalog
+Returns structured command metadata for agents and automation:
+```powershell
+Get-ConfigMapCommandCatalog -Map $buildMap -Language build
+Get-ConfigMapCommandCatalog -Map $buildMap -Path build -Language build
 ```
 
 ## Entry Types
