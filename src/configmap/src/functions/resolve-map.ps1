@@ -213,11 +213,7 @@ $script:ImportConfigMap = {
         $importConfigMapResolved = Resolve-ConfigMap -map $Map -fallback $Fallback -lookUp:$LookUp
         if ($importConfigMapResolved.source -eq 'file') {
             $importConfigMapSourceFile = $importConfigMapResolved.sourceFile
-            $importConfigMapResult = & $ExecutionContext.SessionState.Module {
-                param($SourceFile)
-
-                . $SourceFile
-            } $importConfigMapSourceFile | Add-BaseDir -baseDir $importConfigMapSourceFile
+            $importConfigMapResult = . $importConfigMapSourceFile | Add-BaseDir -baseDir $importConfigMapSourceFile
         }
         else {
             $importConfigMapResult = $importConfigMapResolved.map
