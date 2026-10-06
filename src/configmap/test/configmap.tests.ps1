@@ -21,6 +21,17 @@ BeforeAll {
 }
 
 Describe "Test-IsParentEntry" {
+    It "should ignore build entry metadata" {
+        $entry = @{
+            exec        = { Write-Host "Command" }
+            description = "A command"
+            validate    = { $true }
+            _settings   = @{ mode = "test" }
+        }
+
+        Test-IsParentEntry $entry | Should -Be $false
+    }
+
     It "should identify scriptblock as leaf" {
         $entry = { Write-Host "Command" }
         Test-IsParentEntry $entry | Should -Be $false
@@ -974,6 +985,23 @@ Describe "custom commands" {
         $entries.Count | Should -Be 1
         $entries[0].Key | Should -Be "db.init"
         $entries[0].Value | Should -BeOfType [ScriptBlock]
+    }
+
+    It "should resolve entries without invoking the completion formatter" {
+        InModuleScope ConfigMap {
+            Mock Get-CompletionList { throw "Entry resolution must not invoke the completion formatter" }
+            $map = @{
+                db = @{
+                    init = { Write-Host "db init" }
+                }
+            }
+
+            $entries = Get-MapEntries $map "db.init" -language build
+
+            $entries.Count | Should -Be 1
+            $entries[0].Key | Should -Be "db.init"
+            Should -Invoke Get-CompletionList -Times 0 -Exactly
+        }
     }
 
     It "should execute custom command" {

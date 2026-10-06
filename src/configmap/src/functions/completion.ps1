@@ -1,7 +1,7 @@
-function Get-CompletionList {
+function Get-MapEntryList {
     <#
     .SYNOPSIS
-        Gets a flattened or hierarchical list of commands from a configuration map
+        Walks a configuration map and returns its entries in flattened or hierarchical form
     .PARAMETER map
         The configuration map to process. Can be a dictionary, array, scriptblock or string
     .PARAMETER flatten
@@ -79,7 +79,7 @@ function Get-CompletionList {
                 }
 
                 # Get nested entries and add them with appropriate prefixes
-                $subEntries = Get-CompletionList $entry -listKey $listKey -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language -maxDepth ($maxDepth - 1)
+                $subEntries = Get-MapEntryList $entry -listKey $listKey -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language -maxDepth ($maxDepth - 1)
 
                 foreach ($sub in $subEntries.GetEnumerator()) {
                     $subKey = $flatten ? $sub.Key : "$($kvp.key)$separator$($sub.Key)"
@@ -128,6 +128,22 @@ function Get-CompletionList {
     return $r
 }
 
+function Get-CompletionList {
+    [OutputType([System.Collections.Specialized.OrderedDictionary])]
+    param(
+        $map,
+        [switch][bool]$flatten = $false,
+        [switch][bool]$leafsOnly = $false,
+        $separator = ".",
+        $groupMarker = $null,
+        $listKey = "list",
+        $language = $null,
+        $maxDepth = -1
+    )
+
+    return Get-MapEntryList @PSBoundParameters
+}
+
 function Merge-IncludeDirectives {
     <#
     .SYNOPSIS
@@ -174,7 +190,7 @@ function Merge-IncludeDirectives {
         $includedMap = Add-BaseDir $includedMap $includePath
 
         # Process the included map
-        $includedEntries = Get-CompletionList $includedMap -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language
+        $includedEntries = Get-MapEntryList $includedMap -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language
 
         # Apply prefix if configured
         $usePrefix = $false
@@ -347,4 +363,3 @@ function Get-ScriptArgs {
     
     return $paramDictionary
 }
-

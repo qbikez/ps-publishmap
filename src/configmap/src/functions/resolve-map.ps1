@@ -128,7 +128,7 @@ function Add-BaseDir {
 
     $map._baseDir = $baseDir
 
-    $reservedKeys = @("exec", "set", "get", "options", "list", "description", "#include", "_settings")
+    $reservedKeys = (Get-MapLanguage build).reservedKeys
     
     foreach ($key in @($map.Keys)) {
         $value = $map[$key]

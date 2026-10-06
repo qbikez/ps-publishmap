@@ -81,15 +81,15 @@ function Get-MapEntries(
 ) {
     $results = @()
 
-    $completions = Get-CompletionList $map -flatten:$flatten -leafsOnly:$leafsOnly -separator:$separator -language $language
+    $entries = Get-MapEntryList $map -flatten:$flatten -leafsOnly:$leafsOnly -separator:$separator -language $language
 
     foreach ($key in @($keys)) {
-        $found = @($completions.GetEnumerator() | Where-Object { $_.Key -eq $key })
+        $found = @($entries.GetEnumerator() | Where-Object { $_.Key -eq $key })
         if ($found.Count -eq 0) { continue }
 
         $target = $found[0]
         if ((Test-BuildAllEntry $target.Value) -and $language -eq 'build') {
-            $parentKey = if ($key -match '^(.*)\.all$') { $Matches[1] } else { '' }
+            $parentKey = if ($key -match "^(.*)$([regex]::Escape($separator))all$") { $Matches[1] } else { '' }
             $parentEntry = if ($parentKey) {
                 (Get-MapEntries $map $parentKey -separator $separator -language $language).Value
             }
@@ -108,8 +108,7 @@ function Get-MapEntries(
     }
 
     if (!$results) {
-        $completions = Get-CompletionList $map -flatten:$flatten -leafsOnly:$leafsOnly -separator:$separator -language $language
-        Write-Verbose "entry '$keys' not found in ($($completions.Keys))"
+        Write-Verbose "entry '$keys' not found in ($($entries.Keys))"
     }
 
     return $results
@@ -163,8 +162,14 @@ function Test-IsParentEntry {
     #>
     param(
         $Entry,
-        $ReservedKeys = @("options", "exec", "list")
+        [ValidateSet('build', 'conf')]
+        $Language = 'build',
+        $ReservedKeys
     )
+
+    if (!$PSBoundParameters.ContainsKey('ReservedKeys')) {
+        $ReservedKeys = (Get-MapLanguage $Language).reservedKeys
+    }
 
     # If entry is not a hashtable, it's a leaf (scriptblock or other)
     if ($Entry -isnot [System.Collections.IDictionary]) {
