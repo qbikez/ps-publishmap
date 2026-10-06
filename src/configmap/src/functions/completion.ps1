@@ -1,7 +1,7 @@
-function Get-CompletionList {
+function Get-MapEntryList {
     <#
     .SYNOPSIS
-        Gets a flattened or hierarchical list of commands from a configuration map
+        Walks a configuration map and returns its entries in flattened or hierarchical form
     .PARAMETER map
         The configuration map to process. Can be a dictionary, array, scriptblock or string
     .PARAMETER flatten
@@ -79,7 +79,7 @@ function Get-CompletionList {
                 }
 
                 # Get nested entries and add them with appropriate prefixes
-                $subEntries = Get-CompletionList $entry -listKey $listKey -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language -maxDepth ($maxDepth - 1)
+                $subEntries = Get-MapEntryList $entry -listKey $listKey -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language -maxDepth ($maxDepth - 1)
 
                 foreach ($sub in $subEntries.GetEnumerator()) {
                     $subKey = $flatten ? $sub.Key : "$($kvp.key)$separator$($sub.Key)"
@@ -128,6 +128,22 @@ function Get-CompletionList {
     return $r
 }
 
+function Get-CompletionList {
+    [OutputType([System.Collections.Specialized.OrderedDictionary])]
+    param(
+        $map,
+        [switch][bool]$flatten = $false,
+        [switch][bool]$leafsOnly = $false,
+        $separator = ".",
+        $groupMarker = $null,
+        $listKey = "list",
+        $language = $null,
+        $maxDepth = -1
+    )
+
+    return Get-MapEntryList @PSBoundParameters
+}
+
 function Merge-IncludeDirectives {
     <#
     .SYNOPSIS
@@ -154,27 +170,13 @@ function Merge-IncludeDirectives {
         $dirName = $kvp.Key
         $includeConfig = $kvp.Value
 
-        # Resolve the include directory path
-        $includePath = Join-Path $baseDir $dirName
-        if (!(Test-Path $includePath -PathType Container)) {
-            Write-Warning "Include directory not found: $includePath"
+        $includedMap = Import-IncludedConfigMap -DirectoryName $dirName -BaseDir $baseDir -Cache @{} -Loading @{}
+        if (!$includedMap) {
             continue
         }
-
-        # Look for map file in the included directory
-        $mapFile = Join-Path $includePath ".build.map.ps1"
-        if (!(Test-Path $mapFile)) {
-            Write-Warning "Map file not found in include directory: $mapFile"
-            continue
-        }
-
-        # Load the map from the included directory
-        $includedMap = . $mapFile
-        
-        $includedMap = Add-BaseDir $includedMap $includePath
 
         # Process the included map
-        $includedEntries = Get-CompletionList $includedMap -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language
+        $includedEntries = Get-MapEntryList $includedMap -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language
 
         # Apply prefix if configured
         $usePrefix = $false
@@ -210,14 +212,17 @@ function Get-EntryCompletion(
     $commandAst,
     $fakeBoundParameters
 ) {
-    # For hierarchical completion, we need both flattened and tree structures
-    $flatList = Get-CompletionList $map -flatten:$true -language $language
-    $treeList = Get-CompletionList $map -flatten:$false -language $language
+    $allKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($entryList in @(
+            (Get-MapEntryList -map $map -language $language),
+            (Get-MapEntryList -map $map -flatten -language $language)
+        )) {
+        foreach ($key in $entryList.Keys) {
+            $allKeys.Add($key) | Out-Null
+        }
+    }
 
-    # Combine both lists and remove duplicates
-    $allKeys = @($flatList.Keys) + @($treeList.Keys) | Sort-Object -Unique
-
-    return $allKeys | ? { $_.startswith($wordToComplete) }
+    return $allKeys | Sort-Object | ? { $_.startswith($wordToComplete) }
 }
 
 function Get-EntryDynamicParam(
@@ -347,4 +352,3 @@ function Get-ScriptArgs {
     
     return $paramDictionary
 }
-

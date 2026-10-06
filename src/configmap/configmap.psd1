@@ -3,7 +3,7 @@
     RootModule           = 'configmap.psm1'
 
     # Version number of this module.
-    ModuleVersion = '1.1.9.0'
+    ModuleVersion = '1.2.2.0'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Core')
@@ -61,14 +61,35 @@
 
     # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
     FunctionsToExport    = @(
-        '*'
+        'Import-ConfigMap',
+        'Resolve-ConfigMap',
+        'Assert-ConfigMap',
+        'Test-IsParentEntry',
+        'Get-CompletionList',
+        'Get-ScriptArgs',
+        'Get-MapEntries',
+        'Get-MapEntry',
+        'Get-EntryCommand',
+        'Invoke-EntryCommand',
+        'Invoke-Set',
+        'Invoke-Get',
+        'Get-EntryCompletion',
+        'Get-EntryDynamicParam',
+        'Invoke-QBuild',
+        'Invoke-QConf',
+        'ConvertTo-MapResult',
+        'Initialize-ConfigMap',
+        'Initialize-BuildMap',
+        'Get-MapLanguage',
+        'Merge-IncludeDirectives',
+        'Add-BaseDir'
     )
 
     # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
     CmdletsToExport      = @()
 
     # Variables to export from this module
-    VariablesToExport    = @()
+    VariablesToExport    = @('ImportConfigMap')
 
     # Aliases to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no aliases to export.
     AliasesToExport      = @('qbuild', 'qconf')
@@ -147,6 +168,7 @@ Initial release of ConfigMap module providing:
     # Default prefix for commands exported from this module. Override the default prefix using Import-Module -Prefix.
     # DefaultCommandPrefix = ''
 }
+
 
 
 

@@ -21,6 +21,17 @@ BeforeAll {
 }
 
 Describe "Test-IsParentEntry" {
+    It "should ignore build entry metadata" {
+        $entry = @{
+            exec        = { Write-Host "Command" }
+            description = "A command"
+            validate    = { $true }
+            _settings   = @{ mode = "test" }
+        }
+
+        Test-IsParentEntry $entry | Should -Be $false
+    }
+
     It "should identify scriptblock as leaf" {
         $entry = { Write-Host "Command" }
         Test-IsParentEntry $entry | Should -Be $false
@@ -650,6 +661,46 @@ Describe "qbuild list with exec list entries" {
             } -ArgumentList $buildTargets, $invocation
         } | Should -Not -Throw
     }
+
+    It "keeps command order from ordered maps" {
+        $orderedMap = [ordered]@{
+            zebra = @{ exec = { }; description = "z" }
+            apple = @{ exec = { }; description = "a" }
+            mango = @{ exec = { }; description = "m" }
+        }
+
+        $names = [System.Collections.Generic.List[string]]::new()
+        Mock Write-Host -ModuleName ConfigMap {
+            $text = "$Object".Trim()
+            if ($text -match '^(zebra|apple|mango)\b') {
+                $names.Add($Matches[1])
+            }
+        }
+
+        qbuild -map $orderedMap list
+
+        $names | Should -Be @('zebra', 'apple', 'mango')
+    }
+
+    It "sorts commands alphabetically for unordered maps" {
+        $unorderedMap = @{
+            zebra = @{ exec = { }; description = "z" }
+            apple = @{ exec = { }; description = "a" }
+            mango = @{ exec = { }; description = "m" }
+        }
+
+        $names = [System.Collections.Generic.List[string]]::new()
+        Mock Write-Host -ModuleName ConfigMap {
+            $text = "$Object".Trim()
+            if ($text -match '^(zebra|apple|mango)\b') {
+                $names.Add($Matches[1])
+            }
+        }
+
+        qbuild -map $unorderedMap list
+
+        $names | Should -Be @('apple', 'mango', 'zebra')
+    }
 }
 
 Describe "exec as list - streaming output" {
@@ -936,6 +987,23 @@ Describe "custom commands" {
         $entries[0].Value | Should -BeOfType [ScriptBlock]
     }
 
+    It "should resolve entries without invoking the completion formatter" {
+        InModuleScope ConfigMap {
+            Mock Get-CompletionList { throw "Entry resolution must not invoke the completion formatter" }
+            $map = @{
+                db = @{
+                    init = { Write-Host "db init" }
+                }
+            }
+
+            $entries = Get-MapEntries $map "db.init" -language build
+
+            $entries.Count | Should -Be 1
+            $entries[0].Key | Should -Be "db.init"
+            Should -Invoke Get-CompletionList -Times 0 -Exactly
+        }
+    }
+
     It "should execute custom command" {
         qbuild -map $mixedMap "db.init"
         Should -Invoke Write-Host -ParameterFilter { $Object -eq "db init" }
@@ -994,12 +1062,7 @@ Describe "#include directives" {
 
     It "should execute included prefixed entry" {
         $mapPath = Join-Path $importSampleDir ".build.map.ps1"
-        $map = Resolve-ConfigMap $mapPath | % {
-            if ($_.source -eq "file") {
-                $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-            }
-            $_
-        } | % { $_.map }
+        $map = Import-ConfigMap -Map $mapPath
 
         $entry = Get-MapEntry $map "child.inner-task-1" -language "build"
         $entry | Should -Not -BeNullOrEmpty
@@ -1025,6 +1088,17 @@ Describe "#include directives" {
         $completions.Keys | Should -Not -Contain "child.inner-task-1"
     }
 
+    It "should resolve unprefixed included entries directly" {
+        $mapPath = Join-Path $importSampleDir ".build.map.ps1"
+        $map = Import-ConfigMap -Map $mapPath
+        $map['#include'].child.prefix = $false
+
+        $entry = Get-MapEntry $map "inner-task-1" -language "build"
+
+        $entry | Should -Not -BeNullOrEmpty
+        $entry._baseDir | Should -Match "child"
+    }
+
     It "should skip #include key in completion list" {
         $mapPath = Join-Path $importSampleDir ".build.map.ps1"
         $map = . $mapPath
@@ -1035,12 +1109,7 @@ Describe "#include directives" {
 
     It "should inject _baseDir into included entries" {
         $mapPath = Join-Path $importSampleDir ".build.map.ps1"
-        $map = Resolve-ConfigMap $mapPath | % {
-            if ($_.source -eq "file") {
-                $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-            }
-            $_
-        } | % { $_.map }
+        $map = Import-ConfigMap -Map $mapPath
 
         $entry = Get-MapEntry $map "child.inner-task-1" -language "build"
         $entry | Should -Not -BeNullOrEmpty
@@ -1066,12 +1135,7 @@ Describe "#include directives" {
 
     It "should change directory when executing included entry" {
         $mapPath = Join-Path $importSampleDir ".build.map.ps1"
-        $map = Resolve-ConfigMap $mapPath | % {
-            if ($_.source -eq "file") {
-                $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-            }
-            $_
-        } | % { $_.map }
+        $map = Import-ConfigMap -Map $mapPath
         $initialDir = (Get-Location).Path
 
         $entry = Get-MapEntry $map "child.inner-task-1" -language "build"
@@ -1079,6 +1143,61 @@ Describe "#include directives" {
 
         $currentDir = (Get-Location).Path
         $currentDir | Should -Be $initialDir
+    }
+
+    It "should load an included map once per operation context" {
+        $root = Join-Path $TestDrive 'include-operation-context'
+        $child = Join-Path $root 'child'
+        New-Item -ItemType Directory -Path $child -Force | Out-Null
+        Set-Content -Path (Join-Path $child '.build.map.ps1') -Value @'
+$global:ConfigMapIncludeLoadCount++
+@{
+    run = { }
+}
+'@
+        $map = @{
+            '#include' = @{
+                child = @{ prefix = $true }
+            }
+            _baseDir = $root
+        }
+
+        $global:ConfigMapIncludeLoadCount = 0
+        try {
+            InModuleScope ConfigMap {
+                param($Map)
+
+                $context = New-ConfigMapOperationContext
+                $target = @(Get-MapEntries $Map 'child.run' -language build -OperationContext $context)[0]
+                Invoke-WithEntrySettings -Map $Map -EntryKey 'child.run' -Entry $target.Value -OperationContext $context -ScriptBlock { }
+                Get-MapEntry $Map 'child.run' -language build -OperationContext $context | Out-Null
+            } -ArgumentList $map
+
+            $global:ConfigMapIncludeLoadCount | Should -Be 1
+        }
+        finally {
+            Remove-Variable -Scope Global -Name ConfigMapIncludeLoadCount -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+Describe "direct map entry resolution" {
+    It "does not enumerate ordinary nested entries" {
+        InModuleScope ConfigMap {
+            $map = @{
+                parent = @{
+                    child = { "resolved directly" }
+                }
+            }
+
+            Mock Get-MapEntryList {
+                throw "Direct resolution must not enumerate the map."
+            }
+
+            $entry = Get-MapEntry $map "parent.child" -language build
+
+            $entry | Should -BeOfType [scriptblock]
+        }
     }
 }
 
@@ -1136,13 +1255,7 @@ Describe "#include with parent directory traversal" {
     It "should resolve #include relative to map file directory, not CWD" {
         pushd $nomapDir
         try {
-            $resolved = Resolve-ConfigMap -fallback "./.build.map.ps1"
-            $map = $resolved | % {
-                if ($_.source -eq "file") {
-                    $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-                }
-                $_
-            } | % { $_.map }
+            $map = Import-ConfigMap -Fallback "./.build.map.ps1"
 
             $completions = Get-CompletionList $map -language "build"
 
@@ -1157,13 +1270,7 @@ Describe "#include with parent directory traversal" {
     It "should execute included entry when invoked from subdirectory" {
         pushd $nomapDir
         try {
-            $resolved = Resolve-ConfigMap -fallback "./.build.map.ps1"
-            $map = $resolved | % {
-                if ($_.source -eq "file") {
-                    $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-                }
-                $_
-            } | % { $_.map }
+            $map = Import-ConfigMap -Fallback "./.build.map.ps1"
 
             $entry = Get-MapEntry $map "child.child-task" -language "build"
             $entry | Should -Not -BeNullOrEmpty
@@ -1174,6 +1281,37 @@ Describe "#include with parent directory traversal" {
         finally {
             popd
         }
+    }
+}
+
+Describe "ImportConfigMap" {
+    It "keeps functions dot-sourced by a map file visible to the entry" {
+        $dir = Join-Path $TestDrive "import-configmap-scope"
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        Set-Content -Path (Join-Path $dir "helpers.ps1") -Value 'function Get-ImportedFromMap { "imported" }'
+        Set-Content -Path (Join-Path $dir ".build.map.ps1") -Value @'
+. "$PSScriptRoot/helpers.ps1"
+@{
+    "run" = { Get-ImportedFromMap }
+}
+'@
+        Push-Location $dir
+        try {
+            qbuild -map "./.build.map.ps1" "run" | Should -Be "imported"
+        }
+        finally {
+            Pop-Location
+        }
+    }
+
+    It "returns an object map without loading a file" {
+        $map = @{
+            "run" = { "from-object" }
+        }
+
+        $loaded = Import-ConfigMap -Map $map -Fallback "./.build.map.ps1"
+        $loaded | Should -Be $map
+        $loaded._baseDir | Should -BeNullOrEmpty
     }
 }
 

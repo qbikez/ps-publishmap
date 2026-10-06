@@ -16,13 +16,15 @@
 
             Write-Verbose "[tmux] Dispatching $($Context.Targets.Count) target(s) via tmux windows."
             foreach ($target in $Context.Targets) {
-                Invoke-EntryWrapper `
-                    -MainCommand $Context.MainCommand `
-                    -TargetKey $target.Key `
-                    -TargetEntry $target.Value `
-                    -Command $Context.Command `
-                    -Bound $Context.Bound `
-                    -RemainingArguments $Context.RemainingArguments
+                Invoke-WithEntrySettings -Map $Context.Map -EntryKey $target.Key -Entry $target.Value -ScriptBlock {
+                    Invoke-EntryWrapper `
+                        -MainCommand $Context.MainCommand `
+                        -TargetKey $target.Key `
+                        -TargetEntry $target.Value `
+                        -Command $Context.Command `
+                        -Bound $Context.Bound `
+                        -RemainingArguments $Context.RemainingArguments
+                }
             }
 
             return @{ Handled = $true }

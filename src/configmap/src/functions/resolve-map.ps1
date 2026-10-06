@@ -1,6 +1,3 @@
-# in order to make imports from the map file work globally, we have to call dot-source from top-level scope.
-# hence this pattern:
-# $map = Resolve-ConfigMap $map | % { if ($_.source -eq "file") { $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile }; $_ } | % { $_.map }
 function Resolve-ConfigMap {
     [OutputType([PSCustomObject])]
     param(
@@ -23,7 +20,7 @@ function Resolve-ConfigMap {
         }
     }
 
-    $sourceFile = Resolve-ConfigMapFile $map $fallback
+    $sourceFile = Resolve-ConfigMapFile -MapFile $map -Fallback $fallback -LookUp:$lookUp
     if (!$sourceFile) {
         throw "No map provided and fallback '$fallback' not found"
     }
@@ -42,20 +39,20 @@ function Resolve-ConfigMapFile {
         [AllowNull()]
         [string]$mapFile,
         [Parameter(Mandatory = $false)]
-        [string]$fallback
+        [string]$fallback,
+        [switch][bool]$lookUp = $true
     )
 
     # Set default map file if null
-    if (!$map) {
+    if (!$mapFile) {
         if (!$fallback) {
             throw "map is null and defaultMapFile is not provided"
-            return $null
         }
-        $map = $fallback
+        $mapFile = $fallback
     }
 
     # Load map from file if it's a string path
-    $fullPath = [System.IO.Path]::IsPathRooted($map) ? $map : (Join-Path $PWD.Path $map)
+    $fullPath = [System.IO.Path]::IsPathRooted($mapFile) ? $mapFile : (Join-Path $PWD.Path $mapFile)
     $file = Split-Path $fullPath -Leaf
     $dir = Split-Path $fullPath -Parent
 
@@ -81,8 +78,7 @@ function Resolve-ConfigMapFile {
         $dir = $parentDir
     } while ($lookUp -and $dir)
 
-    throw "map file '$map' not found"
-    return $null
+    throw "map file '$mapFile' not found"
 }
 
 function Assert-ConfigMap {
@@ -131,7 +127,7 @@ function Add-BaseDir {
 
     $map._baseDir = $baseDir
 
-    $reservedKeys = @("exec", "set", "get", "options", "list", "description", "#include", "_settings")
+    $reservedKeys = (Get-MapLanguage build).reservedKeys
     
     foreach ($key in @($map.Keys)) {
         $value = $map[$key]
@@ -158,4 +154,87 @@ function Add-BaseDir {
     }
     
     return $map
+}
+
+function Import-IncludedConfigMap {
+    param(
+        [string]$DirectoryName,
+        [string]$BaseDir,
+        [hashtable]$Cache,
+        [hashtable]$Loading
+    )
+
+    if ([string]::IsNullOrEmpty($BaseDir)) {
+        $BaseDir = (Get-Location).Path
+    }
+
+    $includePath = Join-Path $BaseDir $DirectoryName
+    if (!(Test-Path $includePath -PathType Container)) {
+        return $null
+    }
+
+    $mapFile = Join-Path $includePath '.build.map.ps1'
+    if (!(Test-Path $mapFile -PathType Leaf)) {
+        return $null
+    }
+
+    $cacheKey = [System.IO.Path]::GetFullPath($mapFile)
+    if ($Cache.ContainsKey($cacheKey)) {
+        return $Cache[$cacheKey]
+    }
+    if ($Loading.ContainsKey($cacheKey)) {
+        return $null
+    }
+
+    $Loading[$cacheKey] = $true
+    try {
+        $includedMap = . $mapFile | Assert-ConfigMap
+        $includedMap = Add-BaseDir $includedMap $mapFile
+        $Cache[$cacheKey] = $includedMap
+        return $includedMap
+    }
+    finally {
+        $Loading.Remove($cacheKey)
+    }
+}
+
+# Dot-source this scriptblock. A function would drop map-file imports when it returned.
+# . $ImportConfigMap -Map $map -Fallback './.build.map.ps1'
+$script:ImportConfigMap = {
+    [CmdletBinding()]
+    param(
+        $Map,
+        $Fallback,
+        [switch][bool]$LookUp = $true
+    )
+
+    $importConfigMapResult = $null
+    try {
+        $importConfigMapResolved = Resolve-ConfigMap -map $Map -fallback $Fallback -lookUp:$LookUp
+        if ($importConfigMapResolved.source -eq 'file') {
+            $importConfigMapSourceFile = $importConfigMapResolved.sourceFile
+            $importConfigMapResult = . $importConfigMapSourceFile | Add-BaseDir -baseDir $importConfigMapSourceFile
+        }
+        else {
+            $importConfigMapResult = $importConfigMapResolved.map
+        }
+    }
+    finally {
+        Remove-Variable importConfigMapResolved, importConfigMapSourceFile, Fallback -ErrorAction SilentlyContinue
+    }
+
+    $importConfigMapResult
+    Remove-Variable importConfigMapResult -ErrorAction SilentlyContinue
+}
+
+function Import-ConfigMap {
+    [CmdletBinding()]
+    param(
+        [AllowNull()]
+        $Map,
+        $Fallback,
+        [switch][bool]$LookUp = $true
+    )
+
+    . $script:ImportConfigMap @PSBoundParameters
 }

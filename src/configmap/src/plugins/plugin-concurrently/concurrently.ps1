@@ -23,7 +23,7 @@ function Test-ConcurrentlyAvailable {
     }
 
     if (-not (Test-ConcurrentlyPackageAvailable)) {
-        Write-Verbose "[concurrently] concurrently package is not available to npx."
+        Write-Verbose "[concurrently] concurrently package is not available to npx. Run 'npm install -g concurrently' to install it."
         return $false
     }
 
@@ -121,7 +121,7 @@ function Invoke-Concurrently {
 
     
     Write-Verbose "[concurrently] Running: npx $(@($a | % { "'$_'" }) -join ' ')"
-    & npx @a | out-host
+    & npx @a | Out-Host
     if ($LASTEXITCODE -ne 0) {
         throw "concurrently exited with code $LASTEXITCODE"
     }

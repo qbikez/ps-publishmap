@@ -164,6 +164,25 @@ ConfigMap automatically discovers parameters from your script blocks:
 }
 ```
 
+## Performance benchmark
+
+Run the opt-in performance harness from the module directory:
+
+```powershell
+.\test\Measure-ConfigMapPerformance.ps1
+```
+
+It measures warm `Get-MapEntries`, tab completion, a no-op `qbuild` command,
+and included-map resolution with and without an operation cache. The generated
+maps contain 100 and 1,000 entries. The output includes median, p95, minimum
+and maximum latency, plus median and p95 allocated bytes.
+
+Use larger fixtures or emit structured output for comparison in CI:
+
+```powershell
+.\test\Measure-ConfigMapPerformance.ps1 -EntryCount 100, 1000, 5000 -Iterations 100 -AsJson
+```
+
 Tab completion will automatically provide:
 - `-Environment` with no suggestions (string parameter)
 - `-Force` as a switch parameter
@@ -246,7 +265,9 @@ qconf set -entry database -value <TAB>  # Shows: local, staging, prod
 ## Core Functions
 
 ### Import-ConfigMap
-Loads and validates map files:
+Loads and validates map files. This is the supported programmatic map-import
+command. The legacy `$ImportConfigMap` script block remains available for
+compatibility with map files that dot-source helper functions:
 ```powershell
 $buildMap = Import-ConfigMap ".build.map.ps1"
 $configMap = Import-ConfigMap ".configuration.map.ps1"

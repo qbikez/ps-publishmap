@@ -56,6 +56,135 @@ function Get-BuildAllChildren {
     return $result
 }
 
+function Resolve-MapEntrySegments {
+    param(
+        [System.Collections.IDictionary]$Node,
+        [string[]]$Segments,
+        [string]$Separator,
+        [hashtable]$IncludeCache,
+        [hashtable]$LoadingIncludes
+    )
+
+    $notFound = [pscustomobject]@{ Found = $false; RequiresEnumeration = $false; Value = $null }
+    if (!$Node -or !$Segments -or $Segments.Count -eq 0) {
+        return $notFound
+    }
+
+    $list = if ($Node.list) { $Node.list } else { $Node }
+    if ($list -is [scriptblock] -or $list -isnot [System.Collections.IDictionary]) {
+        return [pscustomobject]@{ Found = $false; RequiresEnumeration = $true; Value = $null }
+    }
+
+    $remainingKey = $Segments -join $Separator
+    if ($Segments.Count -gt 1 -and $list.Contains($remainingKey)) {
+        return [pscustomobject]@{ Found = $false; RequiresEnumeration = $true; Value = $null }
+    }
+
+    $segment = $Segments[0]
+    $rest = if ($Segments.Count -gt 1) { $Segments[1..($Segments.Count - 1)] } else { @() }
+    $found = $false
+    $value = $null
+
+    foreach ($kvp in $list.GetEnumerator()) {
+        if ($kvp.Key -eq '#include') {
+            if ($kvp.Value -isnot [System.Collections.IDictionary]) {
+                continue
+            }
+
+            foreach ($include in $kvp.Value.GetEnumerator()) {
+                $usePrefix = $include.Value -is [System.Collections.IDictionary] -and $include.Value.prefix -eq $true
+                if ($usePrefix -and $include.Key -ne $segment) {
+                    continue
+                }
+
+                $includedMap = Import-IncludedConfigMap -DirectoryName "$($include.Key)" -BaseDir $Node._baseDir -Cache $IncludeCache -Loading $LoadingIncludes
+                if (!$includedMap) {
+                    continue
+                }
+
+                $includedSegments = if ($usePrefix) { $rest } else { $Segments }
+                if ($includedSegments.Count -eq 0) {
+                    continue
+                }
+
+                $includedResult = Resolve-MapEntrySegments -Node $includedMap -Segments $includedSegments -Separator $Separator -IncludeCache $IncludeCache -LoadingIncludes $LoadingIncludes
+                if ($includedResult.RequiresEnumeration) {
+                    return $includedResult
+                }
+                if ($includedResult.Found) {
+                    $found = $true
+                    $value = $includedResult.Value
+                }
+            }
+
+            continue
+        }
+
+        if ($kvp.Key -ne $segment) {
+            continue
+        }
+
+        if ($rest.Count -eq 0) {
+            $found = $true
+            $value = $kvp.Value
+            continue
+        }
+
+        if ($kvp.Value -is [System.Collections.IDictionary]) {
+            $childResult = Resolve-MapEntrySegments -Node $kvp.Value -Segments $rest -Separator $Separator -IncludeCache $IncludeCache -LoadingIncludes $LoadingIncludes
+            if ($childResult.RequiresEnumeration) {
+                return $childResult
+            }
+            if ($childResult.Found) {
+                $found = $true
+                $value = $childResult.Value
+            }
+        }
+    }
+
+    return [pscustomobject]@{ Found = $found; RequiresEnumeration = $false; Value = $value }
+}
+
+function Get-MapEntriesFromEntryList {
+    param(
+        $map,
+        $keys,
+        [switch][bool]$flatten = $false,
+        [switch][bool]$leafsOnly = $false,
+        $separator = ".",
+        $language = $null
+    )
+
+    $results = @()
+    $entries = Get-MapEntryList $map -flatten:$flatten -leafsOnly:$leafsOnly -separator:$separator -language $language
+
+    foreach ($key in @($keys)) {
+        $found = @($entries.GetEnumerator() | Where-Object { $_.Key -eq $key })
+        if ($found.Count -eq 0) { continue }
+
+        $target = $found[0]
+        if ((Test-BuildAllEntry $target.Value) -and $language -eq 'build') {
+            $parentKey = if ($key -match "^(.*)$([regex]::Escape($separator))all$") { $Matches[1] } else { '' }
+            $parentEntry = if ($parentKey) {
+                (Get-MapEntriesFromEntryList $map $parentKey -separator $separator -language $language).Value
+            }
+            else {
+                $map
+            }
+
+            $children = Get-BuildAllChildren $parentEntry -Language $language -ParentKey $parentKey -Separator $separator
+            foreach ($child in $children.GetEnumerator()) {
+                $results += [System.Collections.DictionaryEntry]::new($child.Key, $child.Value)
+            }
+            continue
+        }
+
+        $results += $target
+    }
+
+    return $results
+}
+
 function Get-MapEntry(
     [ValidateScript({
             $_ -is [System.Collections.IDictionary] -or $_ -is [array]
@@ -63,9 +192,10 @@ function Get-MapEntry(
     $map,
     $key,
     $separator = ".",
-    $language = $null
+    $language = $null,
+    [hashtable]$OperationContext
 ) {
-    return (Get-MapEntries $map $key -separator $separator -language $language).Value
+    return (Get-MapEntries $map $key -separator $separator -language $language -OperationContext $OperationContext).Value
 }
 
 function Get-MapEntries(
@@ -77,39 +207,52 @@ function Get-MapEntries(
     [switch][bool]$flatten = $false,
     [switch][bool]$leafsOnly = $false,
     $separator = ".",
-    $language = $null
+    $language = $null,
+    [hashtable]$OperationContext
 ) {
     $results = @()
-
-    $completions = Get-CompletionList $map -flatten:$flatten -leafsOnly:$leafsOnly -separator:$separator -language $language
+    $useEnumeration = $flatten -or $leafsOnly -or $map -isnot [System.Collections.IDictionary]
+    $includeCache = if ($OperationContext) { $OperationContext.IncludeCache } else { @{} }
+    $loadingIncludes = if ($OperationContext) { $OperationContext.LoadingIncludes } else { @{} }
 
     foreach ($key in @($keys)) {
-        $found = @($completions.GetEnumerator() | Where-Object { $_.Key -eq $key })
-        if ($found.Count -eq 0) { continue }
+        if ($useEnumeration) {
+            $results += Get-MapEntriesFromEntryList $map $key -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language
+            continue
+        }
 
-        $target = $found[0]
-        if ((Test-BuildAllEntry $target.Value) -and $language -eq 'build') {
-            $parentKey = if ($key -match '^(.*)\.all$') { $Matches[1] } else { '' }
+        $segments = $key -split [regex]::Escape($separator)
+        $resolved = Resolve-MapEntrySegments -Node $map -Segments $segments -Separator $separator -IncludeCache $includeCache -LoadingIncludes $loadingIncludes
+        if ($resolved.RequiresEnumeration) {
+            $results += Get-MapEntriesFromEntryList $map $key -separator $separator -language $language
+            continue
+        }
+
+        if ($resolved.Found) {
+            $results += [System.Collections.DictionaryEntry]::new($key, $resolved.Value)
+            continue
+        }
+
+        if ($language -eq 'build' -and $segments.Count -gt 1 -and $segments[-1] -eq 'all') {
+            $parentKey = if ($key -match "^(.*)$([regex]::Escape($separator))all$") { $Matches[1] } else { '' }
             $parentEntry = if ($parentKey) {
-                (Get-MapEntries $map $parentKey -separator $separator -language $language).Value
+                (Get-MapEntries $map $parentKey -separator $separator -language $language -OperationContext $OperationContext).Value
             }
             else {
                 $map
             }
 
-            $children = Get-BuildAllChildren $parentEntry -Language $language -ParentKey $parentKey -Separator $separator
-            foreach ($child in $children.GetEnumerator()) {
-                $results += [ordered]@{ Key = $child.Key; Value = $child.Value }
+            if ($parentEntry -is [System.Collections.IDictionary] -and -not $parentEntry.Contains('all')) {
+                $children = Get-BuildAllChildren $parentEntry -Language $language -ParentKey $parentKey -Separator $separator
+                foreach ($child in $children.GetEnumerator()) {
+                    $results += [System.Collections.DictionaryEntry]::new($child.Key, $child.Value)
+                }
             }
-            continue
         }
-
-        $results += $target
     }
 
     if (!$results) {
-        $completions = Get-CompletionList $map -flatten:$flatten -leafsOnly:$leafsOnly -separator:$separator -language $language
-        Write-Verbose "entry '$keys' not found in ($($completions.Keys))"
+        Write-Verbose "entry '$keys' not found"
     }
 
     return $results
@@ -163,8 +306,14 @@ function Test-IsParentEntry {
     #>
     param(
         $Entry,
-        $ReservedKeys = @("options", "exec", "list")
+        [ValidateSet('build', 'conf')]
+        $Language = 'build',
+        $ReservedKeys
     )
+
+    if (!$PSBoundParameters.ContainsKey('ReservedKeys')) {
+        $ReservedKeys = (Get-MapLanguage $Language).reservedKeys
+    }
 
     # If entry is not a hashtable, it's a leaf (scriptblock or other)
     if ($Entry -isnot [System.Collections.IDictionary]) {

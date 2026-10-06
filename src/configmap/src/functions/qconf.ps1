@@ -10,24 +10,7 @@ function Invoke-QConf {
                     $mapPath = if ($fakeBoundParameters.map) { $fakeBoundParameters.map } else { "./.configuration.map.ps1" }
                     $localMapExists = Test-Path $mapPath
 
-                    $inputMap = $fakeBoundParameters.map
-                    $resolved = if ($inputMap -is [System.Collections.IDictionary]) {
-                        [PSCustomObject]@{ source = "object"; map = $inputMap }
-                    }
-                    else {
-                        Resolve-ConfigMap $inputMap -fallback ".configuration.map.ps1" -ErrorAction Ignore
-                    }
-
-                    if (!$resolved -or ($resolved.source -eq "file" -and !(Test-Path $resolved.sourceFile))) {
-                        return @("!init", "help", "list") | ? { $_.startswith($wordToComplete) }
-                    }
-
-                    $map = $resolved | % {
-                        if ($_.source -eq "file") {
-                            $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-                        }
-                        $_
-                    } | % { $_.map } | Assert-ConfigMap
+                    $map = Import-ConfigMap -Map $fakeBoundParameters.map -Fallback ".configuration.map.ps1" -ErrorAction Ignore | Assert-ConfigMap
 
                     $completions = Get-EntryCompletion $map -language "conf" @PSBoundParameters
                     # Include !init if no local map file exists
@@ -49,13 +32,7 @@ function Invoke-QConf {
                         return @()
                     }
 
-                    $map = $fakeBoundParameters.map
-                    $map = Resolve-ConfigMap $map -fallback ".configuration.map.ps1" | % {
-                        if ($_.source -eq "file") {
-                            $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-                        }
-                        $_
-                    } | % { $_.map } | Assert-ConfigMap
+                    $map = Import-ConfigMap -Map $fakeBoundParameters.map -Fallback ".configuration.map.ps1" | Assert-ConfigMap
                     $entry = $fakeBoundParameters.entry
                     $entry = Get-MapEntry $map $entry
                     if (!$entry) {
@@ -80,12 +57,7 @@ function Invoke-QConf {
             if ( !$entry) {
                 return @()
             }
-            $map = Resolve-ConfigMap $map -fallback ".configuration.map.ps1" | % {
-                if ($_.source -eq "file") {
-                    $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-                }
-                $_
-            } | % { $_.map } | Assert-ConfigMap
+            $map = Import-ConfigMap -Map $map -Fallback ".configuration.map.ps1" | Assert-ConfigMap
             $skip = switch ($command) {
                 "set" { 3 }
                 default { 0 }
@@ -116,12 +88,7 @@ function Invoke-QConf {
             return
         }
 
-        $map = $map -is [System.Collections.IDictionary] ? $map : (Resolve-ConfigMap $map | % {
-                if ($_.source -eq "file") {
-                    $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-                }
-                $_
-            } | % { $_.map } | Assert-ConfigMap)
+        $map = Import-ConfigMap -Map $map | Assert-ConfigMap
 
         if (-not $entry -and -not $command) {
             Write-MapHelp -map $map -invocation $MyInvocation -language "conf"
@@ -133,61 +100,66 @@ function Invoke-QConf {
         }
 
         Write-Verbose "entry=$entry command=$command"
+        $operationContext = New-ConfigMapOperationContext
 
-        $settingsScope = Enter-ConfigMapSettingsScope -Settings $map._settings
-        try {
-            switch ($command) {
-                "set" {
-                    $subEntry = $map.$entry
-                    if (!$subEntry) {
-                        throw "Entry '$entry' not found. Run 'qconf list' to see all available entries."
-                    }
+        switch ($command) {
+            "set" {
+                $subEntry = Get-MapEntry $map $entry -language "conf" -OperationContext $operationContext
+                if (!$subEntry) {
+                    throw "Entry '$entry' not found. Run 'qconf list' to see all available entries."
+                }
 
-                    $optionKey = $value
-                    $options = Get-CompletionList $subEntry -listKey "options" -language "conf" -maxDepth 1
-                    $optionValue = $options.$optionKey
+                $optionKey = $value
+                $options = Get-CompletionList $subEntry -listKey "options" -language "conf" -maxDepth 1
+                $optionValue = $options.$optionKey
 
-                    $bound = $PSBoundParameters
-                    $bound.key = $optionKey
-                    $bound.value = $optionValue
+                $bound = $PSBoundParameters
+                $bound.key = $optionKey
+                $bound.value = $optionValue
+                Invoke-WithEntrySettings -Map $map -EntryKey "$entry" -Entry $subEntry -OperationContext $operationContext -ScriptBlock {
                     Invoke-Set $subEntry -ordered @("", $optionValue, $optionKey) -bound $bound
                 }
-                "get" {
-                    $entries = $entry
-                    if (!$entries) {
-                        # not passing -listKey "options" here, as we don't want to expand options - we just need top-level keys
-                        $entries = (Get-CompletionList $map -language "conf").Keys
+            }
+            "get" {
+                $entries = $entry
+                if (!$entries) {
+                    # not passing -listKey "options" here, as we don't want to expand options - we just need top-level keys
+                    $entries = (Get-CompletionList $map -language "conf").Keys
+                }
+
+                foreach ($entryName in @($entries)) {
+                    $subEntry = Get-MapEntry $map $entryName -language "conf" -OperationContext $operationContext
+                    $bound = @{}
+                    foreach ($boundKey in $PSBoundParameters.Keys) {
+                        $bound[$boundKey] = $PSBoundParameters[$boundKey]
                     }
 
-                    foreach ($entry in @($entries)) {
+                    Invoke-WithEntrySettings -Map $map -EntryKey "$entryName" -Entry $subEntry -OperationContext $operationContext -ScriptBlock {
                         try {
-                            $subEntry = $map.$entry
+                            if (!$subEntry) {
+                                throw "Entry '$entryName' not found. Run 'qconf list' to see all available entries."
+                            }
 
                             $options = Get-CompletionList $subEntry -listKey "options" -language "conf" -maxDepth 1
-
-                            $bound = $PSBoundParameters
                             $bound.options = $options
 
                             $value = Invoke-Get $subEntry -bound $bound
 
-                            $result = ConvertTo-MapResult $value $entry $subEntry $options
+                            $result = ConvertTo-MapResult $value $entryName $subEntry $options
                             $result | Write-Output
                         }
                         catch {
                             if ((Get-ConfigMapSetting -Name Debug) -eq '1') {
                                 throw $_
                             }
-                            Write-Error "Error getting value for entry '$entry': $($_.Exception.Message)"
+                            Write-Error "Error getting value for entry '$entryName': $($_.Exception.Message)"
                         }
                     }
                 }
-                default {
-                    throw "command '$command' not supported"
-                }
             }
-        }
-        finally {
-            Exit-ConfigMapSettingsScope -PreviousSettings $settingsScope
+            default {
+                throw "command '$command' not supported"
+            }
         }
 
     }
