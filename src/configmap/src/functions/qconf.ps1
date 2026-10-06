@@ -10,7 +10,7 @@ function Invoke-QConf {
                     $mapPath = if ($fakeBoundParameters.map) { $fakeBoundParameters.map } else { "./.configuration.map.ps1" }
                     $localMapExists = Test-Path $mapPath
 
-                    $map = . $ImportConfigMap -Map $fakeBoundParameters.map -Fallback ".configuration.map.ps1" -ErrorAction Ignore | Assert-ConfigMap
+                    $map = Import-ConfigMap -Map $fakeBoundParameters.map -Fallback ".configuration.map.ps1" -ErrorAction Ignore | Assert-ConfigMap
 
                     $completions = Get-EntryCompletion $map -language "conf" @PSBoundParameters
                     # Include !init if no local map file exists
@@ -32,7 +32,7 @@ function Invoke-QConf {
                         return @()
                     }
 
-                    $map = . $ImportConfigMap -Map $fakeBoundParameters.map -Fallback ".configuration.map.ps1" | Assert-ConfigMap
+                    $map = Import-ConfigMap -Map $fakeBoundParameters.map -Fallback ".configuration.map.ps1" | Assert-ConfigMap
                     $entry = $fakeBoundParameters.entry
                     $entry = Get-MapEntry $map $entry
                     if (!$entry) {
@@ -57,7 +57,7 @@ function Invoke-QConf {
             if ( !$entry) {
                 return @()
             }
-            $map = . $ImportConfigMap -Map $map -Fallback ".configuration.map.ps1" | Assert-ConfigMap
+            $map = Import-ConfigMap -Map $map -Fallback ".configuration.map.ps1" | Assert-ConfigMap
             $skip = switch ($command) {
                 "set" { 3 }
                 default { 0 }
@@ -88,7 +88,7 @@ function Invoke-QConf {
             return
         }
 
-        $map = . $ImportConfigMap -Map $map | Assert-ConfigMap
+        $map = Import-ConfigMap -Map $map | Assert-ConfigMap
 
         if (-not $entry -and -not $command) {
             Write-MapHelp -map $map -invocation $MyInvocation -language "conf"

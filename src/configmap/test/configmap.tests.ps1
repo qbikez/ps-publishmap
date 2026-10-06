@@ -1062,7 +1062,7 @@ Describe "#include directives" {
 
     It "should execute included prefixed entry" {
         $mapPath = Join-Path $importSampleDir ".build.map.ps1"
-        $map = . $ImportConfigMap -Map $mapPath
+        $map = Import-ConfigMap -Map $mapPath
 
         $entry = Get-MapEntry $map "child.inner-task-1" -language "build"
         $entry | Should -Not -BeNullOrEmpty
@@ -1090,7 +1090,7 @@ Describe "#include directives" {
 
     It "should resolve unprefixed included entries directly" {
         $mapPath = Join-Path $importSampleDir ".build.map.ps1"
-        $map = . $ImportConfigMap -Map $mapPath
+        $map = Import-ConfigMap -Map $mapPath
         $map['#include'].child.prefix = $false
 
         $entry = Get-MapEntry $map "inner-task-1" -language "build"
@@ -1109,7 +1109,7 @@ Describe "#include directives" {
 
     It "should inject _baseDir into included entries" {
         $mapPath = Join-Path $importSampleDir ".build.map.ps1"
-        $map = . $ImportConfigMap -Map $mapPath
+        $map = Import-ConfigMap -Map $mapPath
 
         $entry = Get-MapEntry $map "child.inner-task-1" -language "build"
         $entry | Should -Not -BeNullOrEmpty
@@ -1135,7 +1135,7 @@ Describe "#include directives" {
 
     It "should change directory when executing included entry" {
         $mapPath = Join-Path $importSampleDir ".build.map.ps1"
-        $map = . $ImportConfigMap -Map $mapPath
+        $map = Import-ConfigMap -Map $mapPath
         $initialDir = (Get-Location).Path
 
         $entry = Get-MapEntry $map "child.inner-task-1" -language "build"
@@ -1255,7 +1255,7 @@ Describe "#include with parent directory traversal" {
     It "should resolve #include relative to map file directory, not CWD" {
         pushd $nomapDir
         try {
-            $map = . $ImportConfigMap -Fallback "./.build.map.ps1"
+            $map = Import-ConfigMap -Fallback "./.build.map.ps1"
 
             $completions = Get-CompletionList $map -language "build"
 
@@ -1270,7 +1270,7 @@ Describe "#include with parent directory traversal" {
     It "should execute included entry when invoked from subdirectory" {
         pushd $nomapDir
         try {
-            $map = . $ImportConfigMap -Fallback "./.build.map.ps1"
+            $map = Import-ConfigMap -Fallback "./.build.map.ps1"
 
             $entry = Get-MapEntry $map "child.child-task" -language "build"
             $entry | Should -Not -BeNullOrEmpty
@@ -1309,7 +1309,7 @@ Describe "ImportConfigMap" {
             "run" = { "from-object" }
         }
 
-        $loaded = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1"
+        $loaded = Import-ConfigMap -Map $map -Fallback "./.build.map.ps1"
         $loaded | Should -Be $map
         $loaded._baseDir | Should -BeNullOrEmpty
     }

@@ -204,15 +204,20 @@ $script:ImportConfigMap = {
     [CmdletBinding()]
     param(
         $Map,
-        $Fallback
+        $Fallback,
+        [switch][bool]$LookUp = $true
     )
 
     $importConfigMapResult = $null
     try {
-        $importConfigMapResolved = Resolve-ConfigMap -map $Map -fallback $Fallback
+        $importConfigMapResolved = Resolve-ConfigMap -map $Map -fallback $Fallback -lookUp:$LookUp
         if ($importConfigMapResolved.source -eq 'file') {
             $importConfigMapSourceFile = $importConfigMapResolved.sourceFile
-            $importConfigMapResult = . $importConfigMapSourceFile | Add-BaseDir -baseDir $importConfigMapSourceFile
+            $importConfigMapResult = & $ExecutionContext.SessionState.Module {
+                param($SourceFile)
+
+                . $SourceFile
+            } $importConfigMapSourceFile | Add-BaseDir -baseDir $importConfigMapSourceFile
         }
         else {
             $importConfigMapResult = $importConfigMapResolved.map
@@ -224,4 +229,16 @@ $script:ImportConfigMap = {
 
     $importConfigMapResult
     Remove-Variable importConfigMapResult -ErrorAction SilentlyContinue
+}
+
+function Import-ConfigMap {
+    [CmdletBinding()]
+    param(
+        [AllowNull()]
+        $Map,
+        $Fallback,
+        [switch][bool]$LookUp = $true
+    )
+
+    . $script:ImportConfigMap @PSBoundParameters
 }

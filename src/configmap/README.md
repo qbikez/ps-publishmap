@@ -265,7 +265,9 @@ qconf set -entry database -value <TAB>  # Shows: local, staging, prod
 ## Core Functions
 
 ### Import-ConfigMap
-Loads and validates map files:
+Loads and validates map files. This is the supported programmatic map-import
+command. The legacy `$ImportConfigMap` script block remains available for
+compatibility with map files that dot-source helper functions:
 ```powershell
 $buildMap = Import-ConfigMap ".build.map.ps1"
 $configMap = Import-ConfigMap ".configuration.map.ps1"
