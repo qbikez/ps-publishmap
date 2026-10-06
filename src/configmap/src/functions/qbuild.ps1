@@ -9,7 +9,7 @@ function Invoke-QBuild {
 
                     $mapNotFound = $false
                     $map = try {
-                        . $ImportConfigMap -Map $fakeBoundParameters.map -Fallback "./.build.map.ps1" -ErrorAction Stop
+                        Import-ConfigMap -Map $fakeBoundParameters.map -Fallback "./.build.map.ps1" -ErrorAction Stop
                     }
                     catch {
                         if ($_.Exception.Message -match '^map file .* not found$|^No map provided and fallback .* not found$|^map is null and defaultMapFile is not provided$') {

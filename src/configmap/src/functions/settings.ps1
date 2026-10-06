@@ -64,52 +64,6 @@ function Exit-ConfigMapSettingsScope {
     $script:ConfigMapSettings = $PreviousSettings
 }
 
-function Import-IncludedConfigMap {
-    param(
-        [string]$DirectoryName,
-        [string]$BaseDir,
-        [hashtable]$Cache,
-        [hashtable]$Loading
-    )
-
-    if ([string]::IsNullOrEmpty($BaseDir)) {
-        $BaseDir = (Get-Location).Path
-    }
-
-    $includePath = Join-Path $BaseDir $DirectoryName
-    if (!(Test-Path $includePath -PathType Container)) {
-        return $null
-    }
-
-    $mapFile = Join-Path $includePath ".build.map.ps1"
-    if (!(Test-Path $mapFile)) {
-        return $null
-    }
-
-    $cacheKey = [System.IO.Path]::GetFullPath($mapFile)
-    if ($Cache.ContainsKey($cacheKey)) {
-        return $Cache[$cacheKey]
-    }
-    if ($Loading.ContainsKey($cacheKey)) {
-        return $null
-    }
-
-    $Loading[$cacheKey] = $true
-    try {
-        $includedMap = . $mapFile
-        if ($includedMap -isnot [System.Collections.IDictionary]) {
-            return $null
-        }
-
-        $includedMap = Add-BaseDir $includedMap $includePath
-        $Cache[$cacheKey] = $includedMap
-        return $includedMap
-    }
-    finally {
-        $Loading.Remove($cacheKey)
-    }
-}
-
 function New-ConfigMapOperationContext {
     return @{
         IncludeCache    = @{}
