@@ -143,7 +143,9 @@ Describe 'ConfigMap settings' {
                 _settings = @{ Debug = $true }
                 my        = @{
                     _settings = @{ Concurrently = $true }
-                    something = { Write-Host 'doing something' }
+                    something = {
+                        "$(Get-ConfigMapSetting -Name Debug)|$(Get-ConfigMapSetting -Name Concurrently)"
+                    }
                 }
             }
 
@@ -154,6 +156,17 @@ Describe 'ConfigMap settings' {
             $rootSettings.Concurrently | Should -Be $false
             $pathSettings.Debug | Should -Be $true
             $pathSettings.Concurrently | Should -Be $true
+            qbuild -map $map 'my.something' | Should -Be 'True|True'
+        }
+    }
+
+    It 'throws when qbuild !settings path does not exist' {
+        InModuleScope ConfigMap {
+            $map = @{
+                exists = { 'ok' }
+            }
+
+            { qbuild -map $map '!settings' 'missing.entry' } | Should -Throw "Entry 'missing.entry' not found."
         }
     }
 
@@ -451,6 +464,36 @@ Describe 'included map settings' {
 
             qbuild -map $map 'group.task' | Should -Be 'included|True|True'
             Get-ConfigMapSetting -Name Debug | Should -Be $false
+        }
+    }
+
+    It 'returns the same effective settings via qbuild !settings for included paths' {
+        InModuleScope ConfigMap -ArgumentList $script:includeRoot {
+            param($Root)
+            $prefixed = @{
+                _baseDir   = $Root
+                _settings  = @{ Debug = 'root'; Concurrently = $true }
+                '#include' = @{
+                    child = @{ prefix = $true }
+                }
+            }
+            $unprefixed = @{
+                _baseDir   = $Root
+                _settings  = @{ Debug = 'root'; Concurrently = $true }
+                '#include' = @{
+                    child = @{ prefix = $false }
+                }
+            }
+
+            $prefixedSettings = qbuild -map $prefixed '!settings' 'child.group.task'
+            $unprefixedSettings = qbuild -map $unprefixed '!settings' 'group.task'
+
+            $prefixedSettings.Debug | Should -Be 'included'
+            $prefixedSettings.TmuxAutoWindow | Should -Be $true
+            $prefixedSettings.Concurrently | Should -Be $true
+            $unprefixedSettings.Debug | Should -Be 'included'
+            $unprefixedSettings.TmuxAutoWindow | Should -Be $true
+            $unprefixedSettings.Concurrently | Should -Be $true
         }
     }
 }

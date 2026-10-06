@@ -285,33 +285,28 @@ function Get-ConfigMapSettingsForPath {
     param(
         [Parameter(Mandatory)]
         [System.Collections.IDictionary]$Map,
-        [string]$Path
+        [string]$Path,
+        [hashtable]$OperationContext
     )
 
-    $settings = Get-ConfigMapSettings
-    $current = $Map
+    $operationContext = if ($OperationContext) { $OperationContext } else { New-ConfigMapOperationContext }
 
-    if ($current._settings) {
-        $settings = New-ConfigMapSettings -BaseSettings $settings -Overrides $current._settings
-    }
-
-    $segments = @($Path -split '\.' | Where-Object { $_ })
-    for ($index = 0; $index -lt $segments.Count; $index++) {
-        $current = $current[$segments[$index]]
-        if ($null -eq $current) {
-            throw "Entry '$Path' not found."
-        }
-
-        if ($current -is [System.Collections.IDictionary] -and $current._settings) {
-            $settings = New-ConfigMapSettings -BaseSettings $settings -Overrides $current._settings
-        }
-
-        if ($index -lt $segments.Count - 1 -and $current -isnot [System.Collections.IDictionary]) {
-            throw "Entry '$Path' not found."
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return Invoke-WithEntrySettings -Map $Map -EntryKey '' -Entry $null -OperationContext $operationContext -ScriptBlock {
+            Get-ConfigMapSettings
         }
     }
 
-    return $settings
+    # Match qbuild: foo.all inspects the parent entry's effective settings.
+    $entryKey = if ($Path -match '^(.*)\.all$') { $Matches[1] } else { $Path }
+    $targets = @(Get-MapEntries $Map $entryKey -language 'build' -OperationContext $operationContext)
+    if ($targets.Count -eq 0) {
+        throw "Entry '$Path' not found."
+    }
+
+    return Invoke-WithEntrySettings -Map $Map -EntryKey $entryKey -Entry $targets[0].Value -OperationContext $operationContext -ScriptBlock {
+        Get-ConfigMapSettings
+    }
 }
 
 function Get-ConfigMapSetting {

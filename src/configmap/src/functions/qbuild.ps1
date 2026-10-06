@@ -90,22 +90,10 @@ function Invoke-QBuild {
                 throw "!settings accepts at most one command path."
             }
 
-            $resolved = try {
-                Resolve-ConfigMap $map -fallback "./.build.map.ps1" -ErrorAction Stop
-            }
-            catch {
-                $null
-            }
-            if (!$resolved) {
+            $settingsMap = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" -ErrorAction Ignore
+            if (!$settingsMap) {
                 return Get-ConfigMapSettings
             }
-
-            $settingsMap = $resolved | ForEach-Object {
-                if ($_.source -eq 'file') {
-                    $_.map = . $_.sourceFile | Add-BaseDir -baseDir $_.sourceFile
-                }
-                $_.map
-            } | Assert-ConfigMap
 
             return Get-ConfigMapSettingsForPath -Map $settingsMap -Path $settingsPath[0]
         }
