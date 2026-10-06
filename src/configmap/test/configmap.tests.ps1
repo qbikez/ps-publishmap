@@ -1088,6 +1088,17 @@ Describe "#include directives" {
         $completions.Keys | Should -Not -Contain "child.inner-task-1"
     }
 
+    It "should resolve unprefixed included entries directly" {
+        $mapPath = Join-Path $importSampleDir ".build.map.ps1"
+        $map = . $ImportConfigMap -Map $mapPath
+        $map['#include'].child.prefix = $false
+
+        $entry = Get-MapEntry $map "inner-task-1" -language "build"
+
+        $entry | Should -Not -BeNullOrEmpty
+        $entry._baseDir | Should -Match "child"
+    }
+
     It "should skip #include key in completion list" {
         $mapPath = Join-Path $importSampleDir ".build.map.ps1"
         $map = . $mapPath
@@ -1132,6 +1143,26 @@ Describe "#include directives" {
 
         $currentDir = (Get-Location).Path
         $currentDir | Should -Be $initialDir
+    }
+}
+
+Describe "direct map entry resolution" {
+    It "does not enumerate ordinary nested entries" {
+        InModuleScope ConfigMap {
+            $map = @{
+                parent = @{
+                    child = { "resolved directly" }
+                }
+            }
+
+            Mock Get-MapEntryList {
+                throw "Direct resolution must not enumerate the map."
+            }
+
+            $entry = Get-MapEntry $map "parent.child" -language build
+
+            $entry | Should -BeOfType [scriptblock]
+        }
     }
 }
 
