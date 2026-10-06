@@ -104,7 +104,8 @@ function Invoke-QBuild {
             return
         }
 
-        $targets = Get-MapEntries $map $entry -language "build"
+        $operationContext = New-ConfigMapOperationContext
+        $targets = Get-MapEntries $map $entry -language "build" -OperationContext $operationContext
         
         # Validate that the entry exists
         if (!$targets -or $targets.Count -eq 0) {
@@ -138,44 +139,38 @@ function Invoke-QBuild {
             RemainingArguments = $passthrough
         }
 
-        $settingsScope = Enter-ConfigMapSettingsScope -Settings $map._settings
-        try {
-            $hookEntry = if ($entry -match '^(.*)\.all$') { $Matches[1] } else { $entry }
-            $hookSettingsScopes = @(Enter-ConfigMapAncestorSettingsScopes -Map $map -EntryKey $hookEntry -IncludeTarget)
-            try {
-                $hookResult = Invoke-ConfigMapPluginHooks -HookName 'InvokeQBuildTargets' -Context $hookContext
-                if ($hookResult.Handled) {
-                    return $hookResult.Result
-                }
-            }
-            finally {
-                Exit-ConfigMapSettingsScopes -Scopes $hookSettingsScopes
-            }
-
-            foreach ($_ in $targets) {
-                $targetKey = $_.key
-                $targetEntry = $_.value
-                Write-Verbose "running entry '$targetKey'"
-
-                if ($command -eq "exec" `
-                        -and $targetEntry -is [System.Collections.IDictionary] `
-                        -and -not (Get-EntryHasExec $targetEntry) `
-                        -and (Test-IsParentEntry $targetEntry)) {
-                    Write-ChooseSubcommand -parentKey $targetKey -parentEntry $targetEntry -invocation $MyInvocation -language "build"
-                    return
-                }
-
-                $ancestorSettingsScopes = @(Enter-ConfigMapAncestorSettingsScopes -Map $map -EntryKey $targetKey)
-                try {
-                    Invoke-EntryWrapper -MainCommand 'qbuild' -TargetKey $targetKey -TargetEntry $targetEntry -Command $command -Bound $bound -RemainingArguments $passthrough
-                }
-                finally {
-                    Exit-ConfigMapSettingsScopes -Scopes $ancestorSettingsScopes
-                }
+        $hookEntryKey = if ($entry -match '^(.*)\.all$') { $Matches[1] } else { [string]$entry }
+        $hookEntry = $map
+        if ($hookEntryKey) {
+            $resolvedHookEntry = Get-MapEntry $map $hookEntryKey -language "build" -OperationContext $operationContext
+            if ($null -ne $resolvedHookEntry) {
+                $hookEntry = $resolvedHookEntry
             }
         }
-        finally {
-            Exit-ConfigMapSettingsScope -PreviousSettings $settingsScope
+
+        $hookResult = Invoke-WithEntrySettings -Map $map -EntryKey $hookEntryKey -Entry $hookEntry -OperationContext $operationContext -ScriptBlock {
+            Invoke-ConfigMapPluginHooks -HookName 'InvokeQBuildTargets' -Context $hookContext
+        }
+        if ($hookResult.Handled) {
+            return $hookResult.Result
+        }
+
+        foreach ($_ in $targets) {
+            $targetKey = $_.key
+            $targetEntry = $_.value
+            Write-Verbose "running entry '$targetKey'"
+
+            if ($command -eq "exec" `
+                    -and $targetEntry -is [System.Collections.IDictionary] `
+                    -and -not (Get-EntryHasExec $targetEntry) `
+                    -and (Test-IsParentEntry $targetEntry)) {
+                Write-ChooseSubcommand -parentKey $targetKey -parentEntry $targetEntry -invocation $MyInvocation -language "build"
+                return
+            }
+
+            Invoke-WithEntrySettings -Map $map -EntryKey $targetKey -Entry $targetEntry -OperationContext $operationContext -ScriptBlock {
+                Invoke-EntryWrapper -MainCommand 'qbuild' -TargetKey $targetKey -TargetEntry $targetEntry -Command $command -Bound $bound -RemainingArguments $passthrough
+            }
         }
 
     }

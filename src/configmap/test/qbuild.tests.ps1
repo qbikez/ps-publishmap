@@ -454,6 +454,28 @@ Describe "hierarchical completion" {
         $completions | Should -Contain "parent.write:simple"
         $completions | Should -Contain "another.nested:cmd"
     }
+
+    It "should generate completion candidates without building two completion lists" {
+        InModuleScope ConfigMap {
+            Mock Get-CompletionList {
+                throw "Get-EntryCompletion must walk the map directly."
+            }
+            $map = @{
+                parent = @{
+                    child = { }
+                }
+            }
+
+            $completions = @(Get-EntryCompletion -map $map -language build -wordToComplete '')
+
+            $completions | Should -Contain 'parent'
+            $completions | Should -Contain 'parent*'
+            $completions | Should -Contain 'parent.child'
+            $completions | Should -Contain 'child'
+            $completions | Should -Contain 'parent.all'
+            Should -Invoke Get-CompletionList -Times 0 -Exactly
+        }
+    }
 }
 
 Describe "qbuild !init" {
