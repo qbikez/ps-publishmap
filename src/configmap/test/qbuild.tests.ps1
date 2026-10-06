@@ -455,10 +455,24 @@ Describe "hierarchical completion" {
         $completions | Should -Contain "another.nested:cmd"
     }
 
-    It "should generate completion candidates without building two completion lists" {
+    It "should generate completion candidates from the canonical entry list" {
         InModuleScope ConfigMap {
-            Mock Get-CompletionList {
-                throw "Get-EntryCompletion must walk the map directly."
+            Mock Get-MapEntryList {
+                param($map, $flatten)
+
+                if ($flatten) {
+                    return [ordered]@{
+                        'parent*' = $map.parent
+                        'child'   = $map.parent.child
+                        'parent.all' = New-BuildAllEntry
+                    }
+                }
+
+                return [ordered]@{
+                    'parent'       = $map.parent
+                    'parent.child' = $map.parent.child
+                    'parent.all'   = New-BuildAllEntry
+                }
             }
             $map = @{
                 parent = @{
@@ -473,7 +487,7 @@ Describe "hierarchical completion" {
             $completions | Should -Contain 'parent.child'
             $completions | Should -Contain 'child'
             $completions | Should -Contain 'parent.all'
-            Should -Invoke Get-CompletionList -Times 0 -Exactly
+            Should -Invoke Get-MapEntryList -Times 2 -Exactly
         }
     }
 }

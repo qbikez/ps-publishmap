@@ -199,96 +199,6 @@ function Merge-IncludeDirectives {
     return $result
 }
 
-function Get-CompletionIncludedMap {
-    param(
-        [string]$DirectoryName,
-        [string]$BaseDir,
-        [hashtable]$Cache,
-        [hashtable]$Loading
-    )
-
-    return Import-IncludedConfigMap -DirectoryName $DirectoryName -BaseDir $BaseDir -Cache $Cache -Loading $Loading
-}
-
-function Add-EntryCompletionCandidates {
-    param(
-        [System.Collections.IDictionary]$Map,
-        [string]$TreePrefix,
-        [string]$FlatPrefix,
-        [string]$Separator,
-        [string]$Language,
-        [System.Collections.Generic.HashSet[string]]$Candidates,
-        [hashtable]$IncludeCache,
-        [hashtable]$LoadingIncludes
-    )
-
-    $reservedKeys = $Language ? (Get-MapLanguage $Language).reservedKeys : @()
-    $list = $Map.list ? $Map.list : $Map
-    $list = $list -is [scriptblock] ? (Invoke-Command -ScriptBlock $list) : $list
-
-    if ($list -is [array]) {
-        foreach ($item in $list) {
-            $Candidates.Add("$TreePrefix$item") | Out-Null
-            $Candidates.Add("$FlatPrefix$item") | Out-Null
-        }
-        return
-    }
-
-    if ($list -isnot [System.Collections.IDictionary]) {
-        throw "$($list.GetType().FullName) type not supported"
-    }
-
-    foreach ($kvp in $list.GetEnumerator()) {
-        if ($kvp.Key -eq '#include') {
-            if ($kvp.Value -isnot [System.Collections.IDictionary]) {
-                continue
-            }
-
-            foreach ($include in $kvp.Value.GetEnumerator()) {
-                $includedMap = Get-CompletionIncludedMap -DirectoryName "$($include.Key)" -BaseDir $Map._baseDir -Cache $IncludeCache -Loading $LoadingIncludes
-                if (!$includedMap) {
-                    continue
-                }
-
-                $usePrefix = $include.Value -is [System.Collections.IDictionary] -and $include.Value.prefix -eq $true
-                $includedTreePrefix = if ($usePrefix) { "$TreePrefix$($include.Key)$Separator" } else { $TreePrefix }
-                $includedFlatPrefix = if ($usePrefix) { "$FlatPrefix$($include.Key)$Separator" } else { $FlatPrefix }
-
-                Add-EntryCompletionCandidates -Map $includedMap -TreePrefix $includedTreePrefix -FlatPrefix $includedFlatPrefix -Separator $Separator -Language $Language -Candidates $Candidates -IncludeCache $IncludeCache -LoadingIncludes $LoadingIncludes
-            }
-
-            continue
-        }
-
-        if ($kvp.Key -in $reservedKeys -or $kvp.Key -eq 'list') {
-            continue
-        }
-
-        $entry = $kvp.Value
-        $treeKey = "$TreePrefix$($kvp.Key)"
-        $flatKey = "$FlatPrefix$($kvp.Key)"
-
-        if (!(Test-IsParentEntry $entry -ReservedKeys $reservedKeys)) {
-            $Candidates.Add($treeKey) | Out-Null
-            $Candidates.Add($flatKey) | Out-Null
-            continue
-        }
-
-        $Candidates.Add($treeKey) | Out-Null
-        $Candidates.Add("$flatKey*") | Out-Null
-
-        Add-EntryCompletionCandidates -Map $entry -TreePrefix "$treeKey$Separator" -FlatPrefix $FlatPrefix -Separator $Separator -Language $Language -Candidates $Candidates -IncludeCache $IncludeCache -LoadingIncludes $LoadingIncludes
-
-        if ($Language -eq 'build' -and $entry -is [System.Collections.IDictionary] -and -not $entry.Contains('all')) {
-            $invokableChildren = Get-BuildAllChildren $entry -Language $Language -ParentKey $kvp.Key -Separator $Separator
-            if ($invokableChildren.Count -gt 0) {
-                $Candidates.Add("$treeKey$Separator" + 'all') | Out-Null
-                $Candidates.Add("$flatKey.all") | Out-Null
-            }
-        }
-    }
-}
-
 function Get-EntryCompletion(
     [ValidateScript({
             $_ -is [System.Collections.IDictionary]
@@ -303,7 +213,14 @@ function Get-EntryCompletion(
     $fakeBoundParameters
 ) {
     $allKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    Add-EntryCompletionCandidates -Map $map -TreePrefix '' -FlatPrefix '' -Separator '.' -Language $language -Candidates $allKeys -IncludeCache @{} -LoadingIncludes @{}
+    foreach ($entryList in @(
+            (Get-MapEntryList -map $map -language $language),
+            (Get-MapEntryList -map $map -flatten -language $language)
+        )) {
+        foreach ($key in $entryList.Keys) {
+            $allKeys.Add($key) | Out-Null
+        }
+    }
 
     return $allKeys | Sort-Object | ? { $_.startswith($wordToComplete) }
 }
