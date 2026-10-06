@@ -21,7 +21,7 @@ function Invoke-QBuild {
                         }
                     }
                     if ($mapNotFound) {
-                        return @("!init", "!settings", "help", "list") | ? { $_.startswith($wordToComplete) }
+                        return @("!init", "!settings", "!describe", "help", "list") | ? { $_.startswith($wordToComplete) }
                     }
                     $map = $map | Assert-ConfigMap
 
@@ -30,7 +30,7 @@ function Invoke-QBuild {
                     if (!$localMapExists) {
                         $completions = @("!init" | ? { $_.startswith($wordToComplete) }) + $completions
                     }
-                    return @("!settings" | ? { $_.startswith($wordToComplete) }) + $completions
+                    return @(@("!settings", "!describe", "help", "list") | ? { $_.startswith($wordToComplete) }) + $completions
                 }
                 catch {
                     return "ERROR [-entry]: $($_.Exception.Message) $($_.ScriptStackTrace)"
@@ -96,6 +96,29 @@ function Invoke-QBuild {
             }
 
             return Get-ConfigMapSettingsForPath -Map $settingsMap -Path $settingsPath[0]
+        }
+        if ($entry -eq "!describe") {
+            $describePath = @($RemainingArguments | Where-Object { $_ })
+            if ($describePath.Count -gt 1) {
+                throw "!describe accepts at most one command path."
+            }
+
+            $describeMap = $null
+            try {
+                $describeMap = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1"
+            }
+            catch {
+                if ($_.Exception.Message -match '^map file .* not found$|^No map provided and fallback .* not found$|^map is null and defaultMapFile is not provided$') {
+                    throw "No build map file found. Run 'qbuild !init' to create one, or provide -map."
+                }
+                throw
+            }
+
+            if ($describePath.Count -eq 1) {
+                return Get-ConfigMapCommandCatalog -Map $describeMap -Path $describePath[0] -Language build
+            }
+
+            return Get-ConfigMapCommandCatalog -Map $describeMap -Language build
         }
 
         $mapPath = $map
