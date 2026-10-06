@@ -170,24 +170,10 @@ function Merge-IncludeDirectives {
         $dirName = $kvp.Key
         $includeConfig = $kvp.Value
 
-        # Resolve the include directory path
-        $includePath = Join-Path $baseDir $dirName
-        if (!(Test-Path $includePath -PathType Container)) {
-            Write-Warning "Include directory not found: $includePath"
+        $includedMap = Import-IncludedConfigMap -DirectoryName $dirName -BaseDir $baseDir -Cache @{} -Loading @{}
+        if (!$includedMap) {
             continue
         }
-
-        # Look for map file in the included directory
-        $mapFile = Join-Path $includePath ".build.map.ps1"
-        if (!(Test-Path $mapFile)) {
-            Write-Warning "Map file not found in include directory: $mapFile"
-            continue
-        }
-
-        # Load the map from the included directory
-        $includedMap = . $mapFile
-        
-        $includedMap = Add-BaseDir $includedMap $includePath
 
         # Process the included map
         $includedEntries = Get-MapEntryList $includedMap -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language
@@ -220,20 +206,6 @@ function Get-CompletionIncludedMap {
         [hashtable]$Cache,
         [hashtable]$Loading
     )
-
-    if (!$BaseDir) { $BaseDir = $PWD.Path }
-
-    $includePath = Join-Path $BaseDir $DirectoryName
-    if (!(Test-Path $includePath -PathType Container)) {
-        Write-Warning "Include directory not found: $includePath"
-        return $null
-    }
-
-    $mapFile = Join-Path $includePath ".build.map.ps1"
-    if (!(Test-Path $mapFile)) {
-        Write-Warning "Map file not found in include directory: $mapFile"
-        return $null
-    }
 
     return Import-IncludedConfigMap -DirectoryName $DirectoryName -BaseDir $BaseDir -Cache $Cache -Loading $Loading
 }

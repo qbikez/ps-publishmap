@@ -20,7 +20,7 @@ function Resolve-ConfigMap {
         }
     }
 
-    $sourceFile = Resolve-ConfigMapFile $map $fallback
+    $sourceFile = Resolve-ConfigMapFile -MapFile $map -Fallback $fallback -LookUp:$lookUp
     if (!$sourceFile) {
         throw "No map provided and fallback '$fallback' not found"
     }
@@ -39,20 +39,20 @@ function Resolve-ConfigMapFile {
         [AllowNull()]
         [string]$mapFile,
         [Parameter(Mandatory = $false)]
-        [string]$fallback
+        [string]$fallback,
+        [switch][bool]$lookUp = $true
     )
 
     # Set default map file if null
-    if (!$map) {
+    if (!$mapFile) {
         if (!$fallback) {
             throw "map is null and defaultMapFile is not provided"
-            return $null
         }
-        $map = $fallback
+        $mapFile = $fallback
     }
 
     # Load map from file if it's a string path
-    $fullPath = [System.IO.Path]::IsPathRooted($map) ? $map : (Join-Path $PWD.Path $map)
+    $fullPath = [System.IO.Path]::IsPathRooted($mapFile) ? $mapFile : (Join-Path $PWD.Path $mapFile)
     $file = Split-Path $fullPath -Leaf
     $dir = Split-Path $fullPath -Parent
 
@@ -78,8 +78,7 @@ function Resolve-ConfigMapFile {
         $dir = $parentDir
     } while ($lookUp -and $dir)
 
-    throw "map file '$map' not found"
-    return $null
+    throw "map file '$mapFile' not found"
 }
 
 function Assert-ConfigMap {
@@ -155,6 +154,48 @@ function Add-BaseDir {
     }
     
     return $map
+}
+
+function Import-IncludedConfigMap {
+    param(
+        [string]$DirectoryName,
+        [string]$BaseDir,
+        [hashtable]$Cache,
+        [hashtable]$Loading
+    )
+
+    if ([string]::IsNullOrEmpty($BaseDir)) {
+        $BaseDir = (Get-Location).Path
+    }
+
+    $includePath = Join-Path $BaseDir $DirectoryName
+    if (!(Test-Path $includePath -PathType Container)) {
+        return $null
+    }
+
+    $mapFile = Join-Path $includePath '.build.map.ps1'
+    if (!(Test-Path $mapFile -PathType Leaf)) {
+        return $null
+    }
+
+    $cacheKey = [System.IO.Path]::GetFullPath($mapFile)
+    if ($Cache.ContainsKey($cacheKey)) {
+        return $Cache[$cacheKey]
+    }
+    if ($Loading.ContainsKey($cacheKey)) {
+        return $null
+    }
+
+    $Loading[$cacheKey] = $true
+    try {
+        $includedMap = . $mapFile | Assert-ConfigMap
+        $includedMap = Add-BaseDir $includedMap $mapFile
+        $Cache[$cacheKey] = $includedMap
+        return $includedMap
+    }
+    finally {
+        $Loading.Remove($cacheKey)
+    }
 }
 
 # Dot-source this scriptblock. A function would drop map-file imports when it returned.
