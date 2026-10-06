@@ -100,10 +100,11 @@ function Invoke-QConf {
         }
 
         Write-Verbose "entry=$entry command=$command"
+        $operationContext = New-ConfigMapOperationContext
 
         switch ($command) {
             "set" {
-                $subEntry = Get-MapEntry $map $entry -language "conf"
+                $subEntry = Get-MapEntry $map $entry -language "conf" -OperationContext $operationContext
                 if (!$subEntry) {
                     throw "Entry '$entry' not found. Run 'qconf list' to see all available entries."
                 }
@@ -115,7 +116,7 @@ function Invoke-QConf {
                 $bound = $PSBoundParameters
                 $bound.key = $optionKey
                 $bound.value = $optionValue
-                Invoke-WithEntrySettings -Map $map -EntryKey "$entry" -Entry $subEntry -ScriptBlock {
+                Invoke-WithEntrySettings -Map $map -EntryKey "$entry" -Entry $subEntry -OperationContext $operationContext -ScriptBlock {
                     Invoke-Set $subEntry -ordered @("", $optionValue, $optionKey) -bound $bound
                 }
             }
@@ -127,13 +128,13 @@ function Invoke-QConf {
                 }
 
                 foreach ($entryName in @($entries)) {
-                    $subEntry = Get-MapEntry $map $entryName -language "conf"
+                    $subEntry = Get-MapEntry $map $entryName -language "conf" -OperationContext $operationContext
                     $bound = @{}
                     foreach ($boundKey in $PSBoundParameters.Keys) {
                         $bound[$boundKey] = $PSBoundParameters[$boundKey]
                     }
 
-                    Invoke-WithEntrySettings -Map $map -EntryKey "$entryName" -Entry $subEntry -ScriptBlock {
+                    Invoke-WithEntrySettings -Map $map -EntryKey "$entryName" -Entry $subEntry -OperationContext $operationContext -ScriptBlock {
                         try {
                             if (!$subEntry) {
                                 throw "Entry '$entryName' not found. Run 'qconf list' to see all available entries."

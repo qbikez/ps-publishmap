@@ -106,6 +106,61 @@ $results = foreach ($count in $EntryCount) {
     $qbuildResult
 }
 
+$includeRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("configmap-include-benchmark-" + [guid]::NewGuid().ToString())
+try {
+    $includeDirectory = Join-Path $includeRoot 'child'
+    New-Item -ItemType Directory -Path $includeDirectory -Force | Out-Null
+    Set-Content -Path (Join-Path $includeDirectory '.build.map.ps1') -Value @'
+@{
+    run = { }
+}
+'@
+    $includeMap = @{
+        '#include' = @{
+            child = @{ prefix = $true }
+        }
+        _baseDir = $includeRoot
+    }
+    $module = Get-Module ConfigMap
+
+    $withoutOperationCache = {
+        & $module {
+            param($Map)
+
+            $target = @(Get-MapEntries $Map 'child.run' -language build)[0]
+            if (!$target) {
+                throw 'Unable to resolve the included benchmark entry.'
+            }
+
+            Get-MapEntry $Map 'child.run' -language build | Out-Null
+            Invoke-WithEntrySettings -Map $Map -EntryKey 'child.run' -Entry $target.Value -ScriptBlock { }
+        } $includeMap
+    }
+
+    $withOperationCache = {
+        & $module {
+            param($Map)
+
+            $context = New-ConfigMapOperationContext
+            $target = @(Get-MapEntries $Map 'child.run' -language build -OperationContext $context)[0]
+            if (!$target) {
+                throw 'Unable to resolve the included benchmark entry.'
+            }
+
+            Get-MapEntry $Map 'child.run' -language build -OperationContext $context | Out-Null
+            Invoke-WithEntrySettings -Map $Map -EntryKey 'child.run' -Entry $target.Value -OperationContext $context -ScriptBlock { }
+        } $includeMap
+    }
+
+    $results += Measure-BenchmarkAction -Scenario 'included map without operation cache' -Entries 1 -Iterations $Iterations -Action $withoutOperationCache
+    $results += Measure-BenchmarkAction -Scenario 'included map with operation cache' -Entries 1 -Iterations $Iterations -Action $withOperationCache
+}
+finally {
+    if (Test-Path $includeRoot) {
+        Remove-Item -Path $includeRoot -Recurse -Force
+    }
+}
+
 if ($AsJson) {
     $results | ConvertTo-Json
 }

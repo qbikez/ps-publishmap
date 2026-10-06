@@ -104,7 +104,8 @@ function Invoke-QBuild {
             return
         }
 
-        $targets = Get-MapEntries $map $entry -language "build"
+        $operationContext = New-ConfigMapOperationContext
+        $targets = Get-MapEntries $map $entry -language "build" -OperationContext $operationContext
         
         # Validate that the entry exists
         if (!$targets -or $targets.Count -eq 0) {
@@ -141,13 +142,13 @@ function Invoke-QBuild {
         $hookEntryKey = if ($entry -match '^(.*)\.all$') { $Matches[1] } else { [string]$entry }
         $hookEntry = $map
         if ($hookEntryKey) {
-            $resolvedHookEntry = Get-MapEntry $map $hookEntryKey -language "build"
+            $resolvedHookEntry = Get-MapEntry $map $hookEntryKey -language "build" -OperationContext $operationContext
             if ($null -ne $resolvedHookEntry) {
                 $hookEntry = $resolvedHookEntry
             }
         }
 
-        $hookResult = Invoke-WithEntrySettings -Map $map -EntryKey $hookEntryKey -Entry $hookEntry -ScriptBlock {
+        $hookResult = Invoke-WithEntrySettings -Map $map -EntryKey $hookEntryKey -Entry $hookEntry -OperationContext $operationContext -ScriptBlock {
             Invoke-ConfigMapPluginHooks -HookName 'InvokeQBuildTargets' -Context $hookContext
         }
         if ($hookResult.Handled) {
@@ -167,7 +168,7 @@ function Invoke-QBuild {
                 return
             }
 
-            Invoke-WithEntrySettings -Map $map -EntryKey $targetKey -Entry $targetEntry -ScriptBlock {
+            Invoke-WithEntrySettings -Map $map -EntryKey $targetKey -Entry $targetEntry -OperationContext $operationContext -ScriptBlock {
                 Invoke-EntryWrapper -MainCommand 'qbuild' -TargetKey $targetKey -TargetEntry $targetEntry -Command $command -Bound $bound -RemainingArguments $passthrough
             }
         }

@@ -110,6 +110,13 @@ function Import-IncludedConfigMap {
     }
 }
 
+function New-ConfigMapOperationContext {
+    return @{
+        IncludeCache    = @{}
+        LoadingIncludes = @{}
+    }
+}
+
 function Find-ConfigMapAncestorSettings {
     param(
         [System.Collections.IDictionary]$Node,
@@ -235,14 +242,17 @@ function Enter-ConfigMapAncestorSettingsScopes {
     param(
         [System.Collections.IDictionary]$Map,
         [string]$EntryKey,
-        [switch]$IncludeTarget
+        [switch]$IncludeTarget,
+        [hashtable]$OperationContext
     )
 
     $entered = [System.Collections.Generic.List[object]]::new()
     try {
         $segments = @($EntryKey -split '\.')
         $visited = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
-        $found = Find-ConfigMapAncestorSettings -Node $Map -Segments $segments -IncludeTarget:$IncludeTarget -Visited $visited -Cache @{} -Loading @{}
+        $includeCache = if ($OperationContext) { $OperationContext.IncludeCache } else { @{} }
+        $loadingIncludes = if ($OperationContext) { $OperationContext.LoadingIncludes } else { @{} }
+        $found = Find-ConfigMapAncestorSettings -Node $Map -Segments $segments -IncludeTarget:$IncludeTarget -Visited $visited -Cache $includeCache -Loading $loadingIncludes
         if ($found.Found) {
             foreach ($settings in $found.Settings) {
                 $entered.Add((Enter-ConfigMapSettingsScope -Settings $settings))
@@ -264,6 +274,7 @@ function Invoke-WithEntrySettings {
         [System.Collections.IDictionary]$Map,
         [string]$EntryKey,
         $Entry,
+        [hashtable]$OperationContext,
         [Parameter(Mandatory)]
         [scriptblock]$ScriptBlock
     )
@@ -273,7 +284,8 @@ function Invoke-WithEntrySettings {
     $settingsEntryKey = $EntryKey
     $settingsEntry = $Entry
     $settingsScript = $ScriptBlock
-    Remove-Variable Map, EntryKey, Entry, ScriptBlock -ErrorAction SilentlyContinue
+    $settingsOperationContext = $OperationContext
+    Remove-Variable Map, EntryKey, Entry, OperationContext, ScriptBlock -ErrorAction SilentlyContinue
 
     $scopes = [System.Collections.Generic.List[object]]::new()
     try {
@@ -284,7 +296,7 @@ function Invoke-WithEntrySettings {
         $scopes.Add((Enter-ConfigMapSettingsScope -Settings $mapSettings))
 
         if (-not [string]::IsNullOrEmpty($settingsEntryKey)) {
-            $ancestorScopes = @(Enter-ConfigMapAncestorSettingsScopes -Map $settingsMap -EntryKey $settingsEntryKey)
+            $ancestorScopes = @(Enter-ConfigMapAncestorSettingsScopes -Map $settingsMap -EntryKey $settingsEntryKey -OperationContext $settingsOperationContext)
             foreach ($ancestorScope in $ancestorScopes) {
                 $scopes.Add($ancestorScope)
             }

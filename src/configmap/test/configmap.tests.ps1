@@ -1144,6 +1144,41 @@ Describe "#include directives" {
         $currentDir = (Get-Location).Path
         $currentDir | Should -Be $initialDir
     }
+
+    It "should load an included map once per operation context" {
+        $root = Join-Path $TestDrive 'include-operation-context'
+        $child = Join-Path $root 'child'
+        New-Item -ItemType Directory -Path $child -Force | Out-Null
+        Set-Content -Path (Join-Path $child '.build.map.ps1') -Value @'
+$global:ConfigMapIncludeLoadCount++
+@{
+    run = { }
+}
+'@
+        $map = @{
+            '#include' = @{
+                child = @{ prefix = $true }
+            }
+            _baseDir = $root
+        }
+
+        $global:ConfigMapIncludeLoadCount = 0
+        try {
+            InModuleScope ConfigMap {
+                param($Map)
+
+                $context = New-ConfigMapOperationContext
+                $target = @(Get-MapEntries $Map 'child.run' -language build -OperationContext $context)[0]
+                Invoke-WithEntrySettings -Map $Map -EntryKey 'child.run' -Entry $target.Value -OperationContext $context -ScriptBlock { }
+                Get-MapEntry $Map 'child.run' -language build -OperationContext $context | Out-Null
+            } -ArgumentList $map
+
+            $global:ConfigMapIncludeLoadCount | Should -Be 1
+        }
+        finally {
+            Remove-Variable -Scope Global -Name ConfigMapIncludeLoadCount -ErrorAction SilentlyContinue
+        }
+    }
 }
 
 Describe "direct map entry resolution" {

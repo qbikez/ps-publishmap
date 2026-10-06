@@ -192,9 +192,10 @@ function Get-MapEntry(
     $map,
     $key,
     $separator = ".",
-    $language = $null
+    $language = $null,
+    [hashtable]$OperationContext
 ) {
-    return (Get-MapEntries $map $key -separator $separator -language $language).Value
+    return (Get-MapEntries $map $key -separator $separator -language $language -OperationContext $OperationContext).Value
 }
 
 function Get-MapEntries(
@@ -206,12 +207,13 @@ function Get-MapEntries(
     [switch][bool]$flatten = $false,
     [switch][bool]$leafsOnly = $false,
     $separator = ".",
-    $language = $null
+    $language = $null,
+    [hashtable]$OperationContext
 ) {
     $results = @()
     $useEnumeration = $flatten -or $leafsOnly -or $map -isnot [System.Collections.IDictionary]
-    $includeCache = @{}
-    $loadingIncludes = @{}
+    $includeCache = if ($OperationContext) { $OperationContext.IncludeCache } else { @{} }
+    $loadingIncludes = if ($OperationContext) { $OperationContext.LoadingIncludes } else { @{} }
 
     foreach ($key in @($keys)) {
         if ($useEnumeration) {
@@ -234,7 +236,7 @@ function Get-MapEntries(
         if ($language -eq 'build' -and $segments.Count -gt 1 -and $segments[-1] -eq 'all') {
             $parentKey = if ($key -match "^(.*)$([regex]::Escape($separator))all$") { $Matches[1] } else { '' }
             $parentEntry = if ($parentKey) {
-                (Get-MapEntries $map $parentKey -separator $separator -language $language).Value
+                (Get-MapEntries $map $parentKey -separator $separator -language $language -OperationContext $OperationContext).Value
             }
             else {
                 $map
