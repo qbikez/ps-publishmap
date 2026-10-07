@@ -7,10 +7,12 @@ Describe 'ConfigMap public API' {
     It 'exports only the documented commands and advanced functions' {
         $expectedFunctions = @(
             'Add-BaseDir', 'Assert-ConfigMap', 'ConvertTo-MapResult',
-            'Get-CompletionList', 'Get-EntryCommand', 'Get-EntryCompletion',
+            'Get-CompletionList', 'Get-ConfigMapCommandCatalog',
+            'Get-EntryCommand', 'Get-EntryCompletion',
             'Get-EntryDynamicParam', 'Get-MapEntries', 'Get-MapEntry',
             'Get-MapLanguage', 'Get-ScriptArgs',
             'Import-ConfigMap', 'Initialize-BuildMap', 'Initialize-ConfigMap',
+            'Initialize-QBuildAgent',
             'Invoke-EntryCommand', 'Invoke-Get', 'Invoke-QBuild',
             'Invoke-QConf', 'Invoke-Set', 'Merge-IncludeDirectives',
             'Resolve-ConfigMap', 'Test-IsParentEntry'
