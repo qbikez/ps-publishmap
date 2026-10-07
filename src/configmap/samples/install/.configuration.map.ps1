@@ -36,4 +36,5 @@ foreach ($kvp in $dependencies.GetEnumerator()) {
 
 }
 
+$parsed._dependsOn = @('install.yaml', 'helpers.ps1')
 return $parsed

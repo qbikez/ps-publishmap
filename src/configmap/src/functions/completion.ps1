@@ -48,6 +48,10 @@ function Get-MapEntryList {
         $OperationContext = New-ConfigMapOperationContext
     }
 
+    if ($map -is [System.Collections.IDictionary]) {
+        Add-ConfigMapDependsOnDependencies -Node $map -Map $map -OperationContext $OperationContext
+    }
+
     $list = $map.$listKey ? $map.$listKey : $map
     $list = $list -is [scriptblock] ? (Invoke-Command -ScriptBlock $list) : $list
 
@@ -79,6 +83,9 @@ function Get-MapEntryList {
                 $entry = $kvp.value
 
                 if (!(Test-IsParentEntry $entry -reservedKeys $reservedKeys)) {
+                    if ($entry -is [System.Collections.IDictionary]) {
+                        Add-ConfigMapDependsOnDependencies -Node $entry -Map $map -OperationContext $OperationContext
+                    }
                     $result["$($kvp.key)"] = $entry
                     continue
                 }

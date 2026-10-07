@@ -274,4 +274,148 @@ Describe 'Discovery cache' {
         $cachePath = Join-Path $dir '.configmap\discovery.build.cache.json'
         Test-Path $cachePath | Should -BeTrue
     }
+
+    It 'rebuilds when a root _dependsOn file mtime changes' {
+        $dir = Join-Path $TestDrive 'depends-on-mtime'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $dataFile = Join-Path $dir 'data.txt'
+        Set-Content -Path $dataFile -Value 'alpha'
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value @'
+$data = (Get-Content (Join-Path $PSScriptRoot 'data.txt') -Raw).Trim()
+@{
+    _dependsOn = @('data.txt')
+    "$data"    = { "ok" }
+}
+'@
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $first = & (Get-Module ConfigMap) {
+            param($Map)
+            Get-ConfigMapDiscoveryCache -Map $Map -Language build
+        } $map
+
+        @($first.entries.hierarchical).key | Should -Contain 'alpha'
+
+        $cachePath = Join-Path $dir '.configmap\discovery.build.cache.json'
+        $before = (Get-Item $cachePath).LastWriteTimeUtc
+
+        Start-Sleep -Milliseconds 1100
+        Set-Content -Path $dataFile -Value 'beta'
+        & (Get-Module ConfigMap) { Clear-ConfigMapDiscoveryCacheMemory }
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $second = & (Get-Module ConfigMap) {
+            param($Map)
+            Get-ConfigMapDiscoveryCache -Map $Map -Language build
+        } $map
+
+        $after = (Get-Item $cachePath).LastWriteTimeUtc
+        $after | Should -BeGreaterThan $before
+        @($second.entries.hierarchical).key | Should -Contain 'beta'
+        @($second.entries.hierarchical).key | Should -Not -Contain 'alpha'
+    }
+
+    It 'rebuilds when a previously missing _dependsOn file appears' {
+        $dir = Join-Path $TestDrive 'depends-on-missing'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value @'
+@{
+    _dependsOn = @('sidecar.txt')
+    root       = { "root" }
+}
+'@
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $first = & (Get-Module ConfigMap) {
+            param($Map)
+            Get-ConfigMapDiscoveryCache -Map $Map -Language build
+        } $map
+
+        $sidecar = [System.IO.Path]::GetFullPath((Join-Path $dir 'sidecar.txt'))
+        $missing = @($first.dependencies) | Where-Object { $_.path -eq $sidecar } | Select-Object -First 1
+        $missing | Should -Not -BeNullOrEmpty
+        $missing.ticks | Should -BeNullOrEmpty
+
+        Set-Content -Path $sidecar -Value 'created'
+        & (Get-Module ConfigMap) { Clear-ConfigMapDiscoveryCacheMemory }
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $second = & (Get-Module ConfigMap) {
+            param($Map)
+            Get-ConfigMapDiscoveryCache -Map $Map -Language build
+        } $map
+
+        $found = @($second.dependencies) | Where-Object { $_.path -eq $sidecar } | Select-Object -First 1
+        $found.ticks | Should -Not -BeNullOrEmpty
+    }
+
+    It 'records _dependsOn on a leaf target in cache dependencies' {
+        $dir = Join-Path $TestDrive 'depends-on-leaf'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $leafDep = Join-Path $dir 'leaf-dep.txt'
+        Set-Content -Path $leafDep -Value 'dep'
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value @'
+@{
+    build = @{
+        exec       = { "ok" }
+        _dependsOn = @('leaf-dep.txt')
+    }
+}
+'@
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $cache = & (Get-Module ConfigMap) {
+            param($Map)
+            Get-ConfigMapDiscoveryCache -Map $Map -Language build
+        } $map
+
+        $expected = [System.IO.Path]::GetFullPath($leafDep)
+        @($cache.dependencies).path | Should -Contain $expected
+    }
+
+    It 'resolves a relative _dependsOn path against the map directory' {
+        $dir = Join-Path $TestDrive 'depends-on-relative'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $extra = Join-Path $dir 'extra.txt'
+        Set-Content -Path $extra -Value 'extra'
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value @'
+@{
+    _dependsOn = 'extra.txt'
+    build      = { "ok" }
+}
+'@
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $cache = & (Get-Module ConfigMap) {
+            param($Map)
+            Get-ConfigMapDiscoveryCache -Map $Map -Language build
+        } $map
+
+        $expected = [System.IO.Path]::GetFullPath($extra)
+        @($cache.dependencies).path | Should -Contain $expected
+    }
+
+    It 'does not expose _dependsOn as a completion key' {
+        $dir = Join-Path $TestDrive 'depends-on-completion'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value @'
+@{
+    _dependsOn = @('extra.txt')
+    alpha      = { "a" }
+}
+'@
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $completions = @(Get-EntryCompletion $map -language build -wordToComplete '')
+        $completions | Should -Contain 'alpha'
+        $completions | Should -Not -Contain '_dependsOn'
+
+        $underscore = @(Get-EntryCompletion $map -language build -wordToComplete '_')
+        $underscore | Should -Not -Contain '_dependsOn'
+    }
 }

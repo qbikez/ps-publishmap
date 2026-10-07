@@ -32,6 +32,70 @@ function Get-ConfigMapDiscoveryMemoryKey {
     return "$([System.IO.Path]::GetFullPath($SourceFile))|$Language"
 }
 
+function Add-ConfigMapDependsOnDependencies {
+    param(
+        [System.Collections.IDictionary]$Node,
+        [hashtable]$OperationContext,
+        [System.Collections.IDictionary]$Map = $null
+    )
+
+    if (!$Node -or !$OperationContext) {
+        return
+    }
+    if (-not $Node.Contains('_dependsOn')) {
+        return
+    }
+
+    $raw = $Node['_dependsOn']
+    if ($null -eq $raw) {
+        return
+    }
+
+    $paths = if ($raw -is [System.Collections.IEnumerable] -and $raw -isnot [string]) {
+        @($raw)
+    }
+    else {
+        @($raw)
+    }
+
+    $baseDir = $null
+    if ($Node._baseDir) {
+        $baseDir = [string]$Node._baseDir
+    }
+    elseif ($Map -and $Map._baseDir) {
+        $baseDir = [string]$Map._baseDir
+    }
+    elseif ($Map -and $Map._sourceFile) {
+        $baseDir = Split-Path -Parent $Map._sourceFile
+    }
+    elseif ($Node._sourceFile) {
+        $baseDir = Split-Path -Parent $Node._sourceFile
+    }
+
+    foreach ($item in $paths) {
+        if ($item -isnot [string] -or [string]::IsNullOrWhiteSpace($item)) {
+            continue
+        }
+
+        $path = $item
+
+        if ([System.IO.Path]::IsPathRooted($path)) {
+            $fullPath = [System.IO.Path]::GetFullPath($path)
+        }
+        else {
+            $resolved = if ($baseDir) { Join-Path $baseDir $path } else { $path }
+            $fullPath = [System.IO.Path]::GetFullPath($resolved)
+        }
+
+        if (Test-Path -LiteralPath $fullPath -PathType Leaf) {
+            $OperationContext.Dependencies[$fullPath] = (Get-Item -LiteralPath $fullPath).LastWriteTimeUtc.Ticks
+        }
+        else {
+            $OperationContext.Dependencies[$fullPath] = $null
+        }
+    }
+}
+
 function ConvertTo-ConfigMapDiscoveryDependencyList {
     param([hashtable]$Dependencies)
 

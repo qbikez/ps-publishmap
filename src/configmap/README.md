@@ -184,7 +184,16 @@ Autocompletion works automatically when the configmap module is imported:
 
 ### Discovery cache
 
-Entry discovery for tab completion and `list`/`help` is cached under a `.configmap/` directory next to the map file (for example `.configmap/discovery.build.cache.json`). The cache stores entry keys plus lightweight metadata (description, parameter names/types). It is invalidated when the root map or any transitively `#include`d map file changes. Safe to delete or gitignore; it is rebuilt on demand.
+Entry discovery for tab completion and `list`/`help` is cached under a `.configmap/` directory next to the map file (for example `.configmap/discovery.build.cache.json`). The cache stores entry keys plus lightweight metadata (description, parameter names/types). It is invalidated when the root map, any transitively `#include`d map file, or any path listed in `_dependsOn` changes. Safe to delete or gitignore; it is rebuilt on demand.
+
+Maps that generate entries from other files should declare those files with `_dependsOn` on the map root (or on an individual target). Relative paths resolve against that node's `_baseDir`:
+
+```powershell
+@{
+    _dependsOn = @('install.yaml', 'helpers.ps1')
+    # generated entries...
+}
+```
 
 Enabled by default. Opt out per map or for the whole process:
 
