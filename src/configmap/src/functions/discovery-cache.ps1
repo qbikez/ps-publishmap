@@ -21,7 +21,16 @@ function Get-ConfigMapDiscoveryCachePath {
         [System.IO.Path]::GetFileNameWithoutExtension($leaf)
     }
 
-    return Join-Path (Join-Path $dir '.configmap') "discovery.$name.cache.json"
+    $isCanonical = ($Language -eq 'build' -and $name -eq 'build') -or
+                   ($Language -eq 'conf' -and $name -eq 'configuration')
+    $fileName = if ($isCanonical) {
+        "discovery.$name.cache.json"
+    }
+    else {
+        "discovery.$name.$Language.cache.json"
+    }
+
+    return Join-Path (Join-Path $dir '.configmap') $fileName
 }
 
 function Get-ConfigMapDiscoveryMemoryKey {

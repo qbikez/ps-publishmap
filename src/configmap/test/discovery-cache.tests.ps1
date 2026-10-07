@@ -418,4 +418,54 @@ $data = (Get-Content (Join-Path $PSScriptRoot 'data.txt') -Raw).Trim()
         $underscore = @(Get-EntryCompletion $map -language build -wordToComplete '_')
         $underscore | Should -Not -Contain '_dependsOn'
     }
+
+    It 'writes discovery.configuration.cache.json for a canonical configuration map' {
+        $dir = Join-Path $TestDrive 'canonical-conf'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $mapFile = Join-Path $dir '.configuration.map.ps1'
+        Set-Content -Path $mapFile -Value '@{ database = @{ get = { "ok" } } }'
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $cache = & (Get-Module ConfigMap) {
+            param($Map)
+            Get-ConfigMapDiscoveryCache -Map $Map -Language conf
+        } $map
+
+        $cachePath = Join-Path $dir '.configmap\discovery.configuration.cache.json'
+        Test-Path $cachePath | Should -BeTrue
+        $cache.language | Should -Be 'conf'
+        @($cache.entries.hierarchical).key | Should -Contain 'database'
+    }
+
+    It 'writes separate cache files per language for a non-canonical map' {
+        $dir = Join-Path $TestDrive 'non-canonical'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $mapFile = Join-Path $dir 'foo.ps1'
+        Set-Content -Path $mapFile -Value '@{ alpha = { "a" } }'
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $buildCache = & (Get-Module ConfigMap) {
+            param($Map)
+            Get-ConfigMapDiscoveryCache -Map $Map -Language build
+        } $map
+
+        & (Get-Module ConfigMap) { Clear-ConfigMapDiscoveryCacheMemory }
+
+        $confCache = & (Get-Module ConfigMap) {
+            param($Map)
+            Get-ConfigMapDiscoveryCache -Map $Map -Language conf
+        } $map
+
+        $buildPath = Join-Path $dir '.configmap\discovery.foo.build.cache.json'
+        $confPath = Join-Path $dir '.configmap\discovery.foo.conf.cache.json'
+        Test-Path $buildPath | Should -BeTrue
+        Test-Path $confPath | Should -BeTrue
+
+        $buildCache.language | Should -Be 'build'
+        $confCache.language | Should -Be 'conf'
+        (Get-Content $buildPath -Raw | ConvertFrom-Json).language | Should -Be 'build'
+        (Get-Content $confPath -Raw | ConvertFrom-Json).language | Should -Be 'conf'
+        @($buildCache.entries.hierarchical).key | Should -Contain 'alpha'
+        @($confCache.entries.hierarchical).key | Should -Contain 'alpha'
+    }
 }
