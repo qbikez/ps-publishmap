@@ -10,6 +10,7 @@ function New-ConfigMapSettings {
         Debug          = $false
         Concurrently   = $false
         TmuxAutoWindow = $false
+        DiscoveryCache = $true
     }
 
     foreach ($propertyName in @($settings.Keys)) {
@@ -323,7 +324,7 @@ function Get-ConfigMapSetting {
 function Test-ConfigMapFeatureEnabled {
     param(
         [Parameter(Mandatory)]
-        [ValidateSet('TmuxAutoWindow', 'Concurrently')]
+        [ValidateSet('TmuxAutoWindow', 'Concurrently', 'DiscoveryCache')]
         [string]$Name
     )
 

@@ -3,7 +3,8 @@ BeforeAll {
     $script:settingsEnvironmentVariables = @(
         'QCONF_TmuxAutoWindow',
         'QCONF_Concurrently',
-        'QCONF_Debug'
+        'QCONF_Debug',
+        'QCONF_DiscoveryCache'
     )
 
     foreach ($name in $script:settingsEnvironmentVariables) {
@@ -92,6 +93,7 @@ Describe 'ConfigMap settings' {
             $settings.TmuxAutoWindow | Should -Be '0'
             $settings.Concurrently | Should -Be 'false'
             $settings.Debug | Should -Be '1'
+            $settings.DiscoveryCache | Should -Be $true
         }
     }
 
@@ -122,7 +124,32 @@ Describe 'ConfigMap settings' {
             $settings.TmuxAutoWindow | Should -Be '1'
             $settings.Concurrently | Should -Be 'off'
             $settings.Debug | Should -Be $false
+            $settings.DiscoveryCache | Should -Be $true
             Test-ConfigMapFeatureEnabled -Name Concurrently | Should -Be $false
+            Test-ConfigMapFeatureEnabled -Name DiscoveryCache | Should -Be $true
+        }
+    }
+
+    It 'opts out of DiscoveryCache through QCONF_DiscoveryCache' {
+        $env:QCONF_DiscoveryCache = '0'
+
+        InModuleScope ConfigMap {
+            Update-ConfigMapSettings | Out-Null
+            Get-ConfigMapSetting -Name DiscoveryCache | Should -Be '0'
+            Test-ConfigMapFeatureEnabled -Name DiscoveryCache | Should -Be $false
+        }
+    }
+
+    It 'opts out of DiscoveryCache through map _settings' {
+        InModuleScope ConfigMap {
+            $map = @{
+                _settings = @{ DiscoveryCache = $false }
+                build     = { }
+            }
+
+            $settings = qbuild -map $map '!settings'
+            $settings.DiscoveryCache | Should -Be $false
+            Test-ConfigMapFeatureEnabled -Name DiscoveryCache | Should -Be $true
         }
     }
 
@@ -134,6 +161,7 @@ Describe 'ConfigMap settings' {
             $settings.Debug | Should -Be $false
             $settings.Concurrently | Should -Be $false
             $settings.TmuxAutoWindow | Should -Be $false
+            $settings.DiscoveryCache | Should -Be $true
         }
     }
 
@@ -154,8 +182,10 @@ Describe 'ConfigMap settings' {
 
             $rootSettings.Debug | Should -Be $true
             $rootSettings.Concurrently | Should -Be $false
+            $rootSettings.DiscoveryCache | Should -Be $true
             $pathSettings.Debug | Should -Be $true
             $pathSettings.Concurrently | Should -Be $true
+            $pathSettings.DiscoveryCache | Should -Be $true
             qbuild -map $map 'my.something' | Should -Be 'True|True'
         }
     }

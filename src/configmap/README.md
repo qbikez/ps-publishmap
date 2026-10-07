@@ -177,6 +177,21 @@ Autocompletion works automatically when the configmap module is imported:
 
 Entry discovery for tab completion and `list`/`help` is cached under a `.configmap/` directory next to the map file (for example `.configmap/discovery.build.cache.json`). The cache stores entry keys plus lightweight metadata (description, parameter names/types). It is invalidated when the root map or any transitively `#include`d map file changes. Safe to delete or gitignore; it is rebuilt on demand.
 
+Enabled by default. Opt out per map or for the whole process:
+
+```powershell
+@{
+    _settings = @{ DiscoveryCache = $false }
+    build     = { dotnet build }
+}
+```
+
+```powershell
+$env:QCONF_DiscoveryCache = '0'
+```
+
+`qbuild !settings` shows the effective value.
+
 ### Dynamic Parameter Discovery
 
 ConfigMap automatically discovers parameters from your script blocks:

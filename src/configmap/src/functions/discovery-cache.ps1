@@ -267,6 +267,23 @@ function Build-ConfigMapDiscoveryCache {
     }
 }
 
+function Test-ConfigMapDiscoveryCacheEnabled {
+    param([System.Collections.IDictionary]$Map)
+
+    $overrides = $null
+    if ($Map._settings -is [System.Collections.IDictionary] -and $Map._settings.Contains('DiscoveryCache')) {
+        $overrides = @{ DiscoveryCache = $Map._settings['DiscoveryCache'] }
+    }
+
+    $previous = Enter-ConfigMapSettingsScope -Settings $overrides
+    try {
+        return Test-ConfigMapFeatureEnabled -Name DiscoveryCache
+    }
+    finally {
+        Exit-ConfigMapSettingsScope -PreviousSettings $previous
+    }
+}
+
 function Get-ConfigMapDiscoveryCache {
     <#
     .SYNOPSIS
@@ -274,6 +291,7 @@ function Get-ConfigMapDiscoveryCache {
     .DESCRIPTION
         Skips disk cache when the map has no _sourceFile (in-memory maps).
         Uses a process memory layer keyed by source file and language.
+        Disabled when DiscoveryCache is opted out via _settings or QCONF_DiscoveryCache.
     #>
     param(
         [Parameter(Mandatory = $true)]
@@ -283,6 +301,10 @@ function Get-ConfigMapDiscoveryCache {
     )
 
     if (!$Map._sourceFile) {
+        return $null
+    }
+
+    if (-not (Test-ConfigMapDiscoveryCacheEnabled -Map $Map)) {
         return $null
     }
 

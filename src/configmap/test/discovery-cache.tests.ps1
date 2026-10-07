@@ -1,6 +1,16 @@
 BeforeAll {
+    $script:discoveryCacheEnvBackup = (Get-Item -Path env:QCONF_DiscoveryCache -ErrorAction SilentlyContinue).Value
+    Remove-Item -Path env:QCONF_DiscoveryCache -ErrorAction SilentlyContinue
+
     Get-Module ConfigMap -ErrorAction SilentlyContinue | Remove-Module
     Import-Module $PSScriptRoot\..\configmap.psm1 -Force
+}
+
+AfterAll {
+    Remove-Item -Path env:QCONF_DiscoveryCache -ErrorAction SilentlyContinue
+    if ($null -ne $script:discoveryCacheEnvBackup) {
+        Set-Item -Path env:QCONF_DiscoveryCache -Value $script:discoveryCacheEnvBackup
+    }
 }
 
 Describe 'Discovery cache' {
@@ -188,6 +198,67 @@ Describe 'Discovery cache' {
 
         $result | Should -BeNullOrEmpty
         Test-Path (Join-Path $dir '.configmap') | Should -BeFalse
+    }
+
+    It 'skips cache when map _settings disable DiscoveryCache' {
+        $dir = Join-Path $TestDrive 'opt-out-map'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value @'
+@{
+    _settings = @{ DiscoveryCache = $false }
+    alpha = { "a" }
+    beta = { "b" }
+}
+'@
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $cache = & (Get-Module ConfigMap) {
+            param($Map)
+            Get-ConfigMapDiscoveryCache -Map $Map -Language build
+        } $map
+
+        $cache | Should -BeNullOrEmpty
+        Test-Path (Join-Path $dir '.configmap') | Should -BeFalse
+
+        $completions = Get-EntryCompletion $map -language build -wordToComplete 'a'
+        $completions | Should -Be @('alpha')
+        Test-Path (Join-Path $dir '.configmap') | Should -BeFalse
+    }
+
+    It 'skips cache when QCONF_DiscoveryCache is disabled' {
+        $dir = Join-Path $TestDrive 'opt-out-env'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value '@{ alpha = { "a" }; beta = { "b" } }'
+
+        $previous = $env:QCONF_DiscoveryCache
+        $env:QCONF_DiscoveryCache = '0'
+        try {
+            & (Get-Module ConfigMap) { Update-ConfigMapSettings | Out-Null }
+
+            $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+            $cache = & (Get-Module ConfigMap) {
+                param($Map)
+                Get-ConfigMapDiscoveryCache -Map $Map -Language build
+            } $map
+
+            $cache | Should -BeNullOrEmpty
+            Test-Path (Join-Path $dir '.configmap') | Should -BeFalse
+
+            $completions = Get-EntryCompletion $map -language build -wordToComplete 'b'
+            $completions | Should -Be @('beta')
+            Test-Path (Join-Path $dir '.configmap') | Should -BeFalse
+        }
+        finally {
+            if ($null -eq $previous) {
+                Remove-Item env:QCONF_DiscoveryCache -ErrorAction SilentlyContinue
+            }
+            else {
+                $env:QCONF_DiscoveryCache = $previous
+            }
+            & (Get-Module ConfigMap) { Update-ConfigMapSettings | Out-Null }
+        }
     }
 
     It 'feeds Get-EntryCompletion from the cache' {
