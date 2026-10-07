@@ -1,6 +1,40 @@
 function Write-MapHelp {
     param([System.Collections.IDictionary]$map, $invocation, [ValidateSet("build", "conf")]$language = "build")
     $commandName = $invocation.InvocationName
+
+    $cache = Get-ConfigMapDiscoveryCache -Map $map -Language $language
+    if ($cache) {
+        $scriptItems = @($cache.entries.hierarchical)
+        $maxNameLength = @($scriptItems | ForEach-Object { ([string]$_.key).Length } | Measure-Object -Maximum).Maximum
+        if ($null -eq $maxNameLength) { $maxNameLength = 0 }
+        $maxNameLength = [Math]::Max($maxNameLength, 12)
+
+        Write-Host ""
+        Write-Host "$($commandName.ToUpper())" -ForegroundColor Cyan
+        Write-Host "A command line tool to manage $language scripts" -ForegroundColor Gray
+        Write-Host ""
+        Write-Host "USAGE:" -ForegroundColor Yellow
+        Write-Host "    $commandName <COMMAND> [OPTIONS]" -ForegroundColor White
+        Write-Host ""
+        Write-Host "COMMANDS:" -ForegroundColor Yellow
+
+        foreach ($item in $scriptItems) {
+            $name = [string]$item.key
+            $description = [string]$item.description
+            $argList = @($item.parameters) | Where-Object { $_ } | ForEach-Object { "-$($_.name)" }
+            $paramInfo = ($argList -join " ")
+            $paddedName = $name.PadRight($maxNameLength)
+
+            Write-Host "    " -NoNewline
+            Write-Host "$paddedName" -ForegroundColor Green -NoNewline
+            if ($paramInfo) {
+                Write-Host " [$paramInfo]" -ForegroundColor DarkGray -NoNewline
+            }
+            Write-Host "  $description" -ForegroundColor White
+        }
+        return
+    }
+
     $scripts = Get-CompletionList $map -language $language
 
     # Calculate max command name length for alignment
@@ -98,6 +132,4 @@ function Write-ChooseSubcommand {
         Write-Host "    $commandName " -NoNewline
         Write-Host "$parentKey.$childName" -ForegroundColor Green
     }
-
-    Write-Host ""
 }

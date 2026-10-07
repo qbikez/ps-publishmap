@@ -31,7 +31,10 @@ function Get-MapEntryList {
         $groupMarker = $null,
         $listKey = "list",
         $language = $null,
-        $maxDepth = -1
+        $maxDepth = -1,
+        [hashtable]$IncludeCache = $null,
+        [hashtable]$LoadingIncludes = $null,
+        [hashtable]$Dependencies = $null
     )
 
     if ($maxDepth -eq 0) {
@@ -43,6 +46,8 @@ function Get-MapEntryList {
     }
 
     $reservedKeys = $language ? (Get-MapLanguage $language).reservedKeys : @()
+    if ($null -eq $IncludeCache) { $IncludeCache = @{} }
+    if ($null -eq $LoadingIncludes) { $LoadingIncludes = @{} }
 
     $list = $map.$listKey ? $map.$listKey : $map
     $list = $list -is [scriptblock] ? (Invoke-Command -ScriptBlock $list) : $list
@@ -55,7 +60,15 @@ function Get-MapEntryList {
             foreach ($kvp in $list.GetEnumerator()) {
                 # Handle #include directives first (before reserved keys check)
                 if ($kvp.key -eq "#include") {
-                    $includedEntries = Merge-IncludeDirectives $kvp.value -baseDir $map._baseDir -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language
+                    $includedEntries = Merge-IncludeDirectives $kvp.value `
+                        -baseDir $map._baseDir `
+                        -flatten:$flatten `
+                        -leafsOnly:$leafsOnly `
+                        -separator $separator `
+                        -language $language `
+                        -IncludeCache $IncludeCache `
+                        -LoadingIncludes $LoadingIncludes `
+                        -Dependencies $Dependencies
                     foreach ($inc in $includedEntries.GetEnumerator()) {
                         $result[$inc.Key] = $inc.Value
                     }
@@ -79,7 +92,16 @@ function Get-MapEntryList {
                 }
 
                 # Get nested entries and add them with appropriate prefixes
-                $subEntries = Get-MapEntryList $entry -listKey $listKey -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language -maxDepth ($maxDepth - 1)
+                $subEntries = Get-MapEntryList $entry `
+                    -listKey $listKey `
+                    -flatten:$flatten `
+                    -leafsOnly:$leafsOnly `
+                    -separator $separator `
+                    -language $language `
+                    -maxDepth ($maxDepth - 1) `
+                    -IncludeCache $IncludeCache `
+                    -LoadingIncludes $LoadingIncludes `
+                    -Dependencies $Dependencies
 
                 foreach ($sub in $subEntries.GetEnumerator()) {
                     $subKey = $flatten ? $sub.Key : "$($kvp.key)$separator$($sub.Key)"
@@ -138,7 +160,10 @@ function Get-CompletionList {
         $groupMarker = $null,
         $listKey = "list",
         $language = $null,
-        $maxDepth = -1
+        $maxDepth = -1,
+        [hashtable]$IncludeCache = $null,
+        [hashtable]$LoadingIncludes = $null,
+        [hashtable]$Dependencies = $null
     )
 
     return Get-MapEntryList @PSBoundParameters
@@ -159,24 +184,49 @@ function Merge-IncludeDirectives {
         [switch][bool]$flatten = $false,
         [switch][bool]$leafsOnly = $false,
         $separator = ".",
-        $language = $null
+        $language = $null,
+        [hashtable]$IncludeCache = $null,
+        [hashtable]$LoadingIncludes = $null,
+        [hashtable]$Dependencies = $null
     )
 
     $result = [ordered]@{}
 
     if (!$baseDir) { $baseDir = $PWD.Path }
+    if ($null -eq $IncludeCache) { $IncludeCache = @{} }
+    if ($null -eq $LoadingIncludes) { $LoadingIncludes = @{} }
 
     foreach ($kvp in $includes.GetEnumerator()) {
         $dirName = $kvp.Key
         $includeConfig = $kvp.Value
 
-        $includedMap = Import-IncludedConfigMap -DirectoryName $dirName -BaseDir $baseDir -Cache @{} -Loading @{}
+        $includePath = Join-Path $baseDir $dirName
+        $mapFile = Join-Path $includePath '.build.map.ps1'
+        $fullMapPath = [System.IO.Path]::GetFullPath($mapFile)
+
+        if ($null -ne $Dependencies) {
+            if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
+                $Dependencies[$fullMapPath] = (Get-Item -LiteralPath $mapFile).LastWriteTimeUtc.Ticks
+            }
+            else {
+                $Dependencies[$fullMapPath] = $null
+            }
+        }
+
+        $includedMap = Import-IncludedConfigMap -DirectoryName $dirName -BaseDir $baseDir -Cache $IncludeCache -Loading $LoadingIncludes
         if (!$includedMap) {
             continue
         }
 
         # Process the included map
-        $includedEntries = Get-MapEntryList $includedMap -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language
+        $includedEntries = Get-MapEntryList $includedMap `
+            -flatten:$flatten `
+            -leafsOnly:$leafsOnly `
+            -separator $separator `
+            -language $language `
+            -IncludeCache $IncludeCache `
+            -LoadingIncludes $LoadingIncludes `
+            -Dependencies $Dependencies
 
         # Apply prefix if configured
         $usePrefix = $false
@@ -191,7 +241,7 @@ function Merge-IncludeDirectives {
             else {
                 $key = $entry.Key
             }
-            
+
             $result[$key] = $entry.Value
         }
     }
@@ -213,12 +263,25 @@ function Get-EntryCompletion(
     $fakeBoundParameters
 ) {
     $allKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    foreach ($entryList in @(
-            (Get-MapEntryList -map $map -language $language),
-            (Get-MapEntryList -map $map -flatten -language $language)
-        )) {
-        foreach ($key in $entryList.Keys) {
-            $allKeys.Add($key) | Out-Null
+
+    $cache = Get-ConfigMapDiscoveryCache -Map $map -Language $language
+    if ($cache) {
+        foreach ($entryList in @($cache.entries.hierarchical, $cache.entries.flatten)) {
+            foreach ($entry in @($entryList)) {
+                if ($null -ne $entry -and $entry.key) {
+                    $allKeys.Add([string]$entry.key) | Out-Null
+                }
+            }
+        }
+    }
+    else {
+        foreach ($entryList in @(
+                (Get-MapEntryList -map $map -language $language),
+                (Get-MapEntryList -map $map -flatten -language $language)
+            )) {
+            foreach ($key in $entryList.Keys) {
+                $allKeys.Add($key) | Out-Null
+            }
         }
     }
 

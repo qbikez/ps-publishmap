@@ -173,6 +173,10 @@ Autocompletion works automatically when the configmap module is imported:
    qbuild <TAB>    # Should show available commands
    ```
 
+### Discovery cache
+
+Entry discovery for tab completion and `list`/`help` is cached under a `.configmap/` directory next to the map file (for example `.configmap/discovery.build.cache.json`). The cache stores entry keys plus lightweight metadata (description, parameter names/types). It is invalidated when the root map or any transitively `#include`d map file changes. Safe to delete or gitignore; it is rebuilt on demand.
+
 ### Dynamic Parameter Discovery
 
 ConfigMap automatically discovers parameters from your script blocks:
