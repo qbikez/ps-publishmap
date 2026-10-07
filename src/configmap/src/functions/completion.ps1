@@ -162,6 +162,30 @@ function Get-CompletionList {
     return Get-MapEntryList @PSBoundParameters
 }
 
+function Get-MapEntryListPair {
+    <#
+    .SYNOPSIS
+        Walks a map in both hierarchical and flatten forms.
+    .DESCRIPTION
+        Tab completion unions both result sets: hierarchical keys are dotted
+        paths (parent.child), flatten adds group markers (parent*).
+    #>
+    param(
+        $map,
+        $language,
+        [hashtable]$OperationContext = $null
+    )
+
+    if ($null -eq $OperationContext) {
+        $OperationContext = New-ConfigMapOperationContext
+    }
+
+    return [ordered]@{
+        hierarchical = Get-MapEntryList -map $map -language $language -OperationContext $OperationContext
+        flatten      = Get-MapEntryList -map $map -language $language -flatten -OperationContext $OperationContext
+    }
+}
+
 function Merge-IncludeDirectives {
     <#
     .SYNOPSIS
@@ -241,6 +265,36 @@ function Merge-IncludeDirectives {
     return $result
 }
 
+function Get-EntryCompletionKeys {
+    param(
+        [ValidateScript({ $_ -is [System.Collections.IDictionary] })]
+        $map,
+        [ValidateSet("build", "conf")]
+        $language
+    )
+
+    $allKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $cache = Get-ConfigMapDiscoveryCache -Map $map -Language $language
+    $pair = if ($cache) { $cache.entries } else { Get-MapEntryListPair -map $map -language $language }
+
+    foreach ($entryList in @($pair.hierarchical, $pair.flatten)) {
+        if ($entryList -is [System.Collections.IDictionary]) {
+            foreach ($key in $entryList.Keys) {
+                $allKeys.Add($key) | Out-Null
+            }
+            continue
+        }
+
+        foreach ($entry in @($entryList)) {
+            if ($null -ne $entry -and $entry.key) {
+                $allKeys.Add([string]$entry.key) | Out-Null
+            }
+        }
+    }
+
+    return $allKeys
+}
+
 function Get-EntryCompletion(
     [ValidateScript({
             $_ -is [System.Collections.IDictionary]
@@ -254,30 +308,7 @@ function Get-EntryCompletion(
     $commandAst,
     $fakeBoundParameters
 ) {
-    $allKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-
-    $cache = Get-ConfigMapDiscoveryCache -Map $map -Language $language
-    if ($cache) {
-        foreach ($entryList in @($cache.entries.hierarchical, $cache.entries.flatten)) {
-            foreach ($entry in @($entryList)) {
-                if ($null -ne $entry -and $entry.key) {
-                    $allKeys.Add([string]$entry.key) | Out-Null
-                }
-            }
-        }
-    }
-    else {
-        foreach ($entryList in @(
-                (Get-MapEntryList -map $map -language $language),
-                (Get-MapEntryList -map $map -flatten -language $language)
-            )) {
-            foreach ($key in $entryList.Keys) {
-                $allKeys.Add($key) | Out-Null
-            }
-        }
-    }
-
-    return $allKeys | Sort-Object | ? { $_.startswith($wordToComplete) }
+    return (Get-EntryCompletionKeys $map $language) | Sort-Object | ? { $_.startswith($wordToComplete) }
 }
 
 function Get-EntryDynamicParam(

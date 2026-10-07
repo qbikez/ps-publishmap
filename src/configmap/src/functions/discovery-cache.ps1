@@ -253,8 +253,7 @@ function Build-ConfigMapDiscoveryCache {
     $operationContext = New-ConfigMapOperationContext
     $operationContext.Dependencies[$sourceFile] = (Get-Item -LiteralPath $sourceFile).LastWriteTimeUtc.Ticks
 
-    $hierarchical = Get-MapEntryList -map $Map -language $Language -OperationContext $operationContext
-    $flatten = Get-MapEntryList -map $Map -language $Language -flatten -OperationContext $operationContext
+    $pair = Get-MapEntryListPair -map $Map -language $Language -OperationContext $operationContext
 
     return @{
         version      = $script:discoveryCacheVersion
@@ -262,8 +261,8 @@ function Build-ConfigMapDiscoveryCache {
         language     = $Language
         dependencies = @(ConvertTo-ConfigMapDiscoveryDependencyList $operationContext.Dependencies)
         entries      = @{
-            hierarchical = @(ConvertTo-ConfigMapDiscoveryEntryDescriptors $hierarchical $Language)
-            flatten      = @(ConvertTo-ConfigMapDiscoveryEntryDescriptors $flatten $Language)
+            hierarchical = @(ConvertTo-ConfigMapDiscoveryEntryDescriptors $pair.hierarchical $Language)
+            flatten      = @(ConvertTo-ConfigMapDiscoveryEntryDescriptors $pair.flatten $Language)
         }
     }
 }
