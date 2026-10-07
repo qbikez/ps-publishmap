@@ -76,6 +76,7 @@
         'Get-EntryCompletion',
         'Get-EntryDynamicParam',
         'Get-ConfigMapCommandCatalog',
+        'Initialize-QBuildAgent',
         'Invoke-QBuild',
         'Invoke-QConf',
         'ConvertTo-MapResult',
