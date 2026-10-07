@@ -3,7 +3,7 @@
     RootModule           = 'configmap.psm1'
 
     # Version number of this module.
-    ModuleVersion = '1.2.3.0'
+    ModuleVersion = '1.2.5.0'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Core')
@@ -76,6 +76,7 @@
         'Get-EntryCompletion',
         'Get-EntryDynamicParam',
         'Get-ConfigMapCommandCatalog',
+        'Initialize-QBuildAgent',
         'Invoke-QBuild',
         'Invoke-QConf',
         'ConvertTo-MapResult',
@@ -169,6 +170,8 @@ Initial release of ConfigMap module providing:
     # Default prefix for commands exported from this module. Override the default prefix using Import-Module -Prefix.
     # DefaultCommandPrefix = ''
 }
+
+
 
 
 

@@ -95,7 +95,9 @@ function Format-QBuildCommand {
 function Invoke-Concurrently {
     param(
         [Parameter(Mandatory)]
-        [System.Collections.IDictionary]$Commands
+        [System.Collections.IDictionary]$Commands,
+        $restartTries = 0,
+        $restartAfter = 0
     )
 
     Write-Verbose "[concurrently] Invoking concurrently for $($Commands.Count) command(s)."
@@ -106,8 +108,11 @@ function Invoke-Concurrently {
     }
 
     $names = @($Commands.Keys)
-    $a = @('--yes', 'concurrently')
+    $a = @('--no', 'concurrently', "--")
     $a += @("--shell", "pwsh", "--color")
+    $a += @("--restart-tries", $restartTries)
+    $a += @("--restart-after", $restartAfter)
+
     if ($names.Count -gt 0) {
         $a += '-n'
         $a += ($names -join ',')
@@ -119,9 +124,8 @@ function Invoke-Concurrently {
         $a += $command
     }
 
-    
-    Write-Verbose "[concurrently] Running: npx $(@($a | % { "'$_'" }) -join ' ')"
-    & npx @a | Out-Host
+    Write-Verbose "[concurrently] Running: npx $($a -join ' ')"
+    & npx @a | out-host
     if ($LASTEXITCODE -ne 0) {
         throw "concurrently exited with code $LASTEXITCODE"
     }

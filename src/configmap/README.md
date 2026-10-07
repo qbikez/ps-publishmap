@@ -54,13 +54,22 @@ Get-ConfigMapCommandCatalog -Map $map -Path build -Language build
 
 Each catalog object includes `Name`, `Description`, `IsParent`, and `Parameters` (`Name`, `Type`, `IsSwitch`, `ValidateSet`, `DefaultValue`).
 
-### Cursor skill
+### Agent skill
 
-Copy the shipped skill into a consumer project so agents follow the discovery playbook:
+Install the shipped discovery skill for your coding agent:
 
-```text
-skills/qbuild-discover/SKILL.md  →  .cursor/skills/qbuild-discover/SKILL.md
+```powershell
+qbuild !agent.init                         # Cursor, project scope (default)
+qbuild !agent.init -Agent claude           # Claude Code, project scope
+qbuild !agent.init -Agent copilot          # GitHub Copilot (.github/skills)
+qbuild !agent.init -Scope user -Agent cursor
 ```
+
+| Agent | Project path | User path |
+|-------|--------------|-----------|
+| `cursor` | `.cursor/skills/qbuild-discover` | `~/.cursor/skills/qbuild-discover` |
+| `claude` | `.claude/skills/qbuild-discover` | `~/.claude/skills/qbuild-discover` |
+| `copilot` | `.github/skills/qbuild-discover` | `~/.copilot/skills/qbuild-discover` |
 
 ## Sample Map File
 
