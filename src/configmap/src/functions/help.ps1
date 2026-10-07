@@ -5,6 +5,9 @@ function Write-MapHelp {
     $cache = Get-ConfigMapDiscoveryCache -Map $map -Language $language
     if ($cache) {
         $scriptItems = @($cache.entries.hierarchical)
+        if ($map -isnot [System.Collections.Specialized.OrderedDictionary]) {
+            $scriptItems = @($scriptItems | Sort-Object { [string]$_.key })
+        }
         $maxNameLength = @($scriptItems | ForEach-Object { ([string]$_.key).Length } | Measure-Object -Maximum).Maximum
         if ($null -eq $maxNameLength) { $maxNameLength = 0 }
         $maxNameLength = [Math]::Max($maxNameLength, 12)

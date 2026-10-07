@@ -701,6 +701,83 @@ Describe "qbuild list with exec list entries" {
 
         $names | Should -Be @('apple', 'mango', 'zebra')
     }
+
+    It "sorts commands alphabetically for unordered file-backed maps on cache miss and hit" {
+        $dir = Join-Path $TestDrive 'help-order-unordered'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value @'
+@{
+    zebra = @{ exec = { }; description = "z" }
+    alpha = @{ exec = { }; description = "a" }
+    mango = @{ exec = { }; description = "m" }
+}
+'@
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $map | Should -Not -BeOfType ([System.Collections.Specialized.OrderedDictionary])
+        $map._sourceFile | Should -Not -BeNullOrEmpty
+
+        & (Get-Module ConfigMap) { Clear-ConfigMapDiscoveryCacheMemory }
+
+        $names = [System.Collections.Generic.List[string]]::new()
+        Mock Write-Host -ModuleName ConfigMap {
+            $text = "$Object".Trim()
+            if ($text -match '^(zebra|alpha|mango)\b') {
+                $names.Add($Matches[1])
+            }
+        }
+
+        qbuild -map $map list
+        $names | Should -Be @('alpha', 'mango', 'zebra')
+
+        $cachePath = Join-Path $dir '.configmap\discovery.build.cache.json'
+        Test-Path $cachePath | Should -BeTrue
+
+        $names.Clear()
+        & (Get-Module ConfigMap) { Clear-ConfigMapDiscoveryCacheMemory }
+
+        qbuild -map $map list
+        $names | Should -Be @('alpha', 'mango', 'zebra')
+    }
+
+    It "keeps command order from ordered file-backed maps on cache miss and hit" {
+        $dir = Join-Path $TestDrive 'help-order-ordered'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value @'
+[ordered]@{
+    zebra = @{ exec = { }; description = "z" }
+    alpha = @{ exec = { }; description = "a" }
+}
+'@
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $map | Should -BeOfType ([System.Collections.Specialized.OrderedDictionary])
+        $map._sourceFile | Should -Not -BeNullOrEmpty
+
+        & (Get-Module ConfigMap) { Clear-ConfigMapDiscoveryCacheMemory }
+
+        $names = [System.Collections.Generic.List[string]]::new()
+        Mock Write-Host -ModuleName ConfigMap {
+            $text = "$Object".Trim()
+            if ($text -match '^(zebra|alpha)\b') {
+                $names.Add($Matches[1])
+            }
+        }
+
+        qbuild -map $map list
+        $names | Should -Be @('zebra', 'alpha')
+
+        $cachePath = Join-Path $dir '.configmap\discovery.build.cache.json'
+        Test-Path $cachePath | Should -BeTrue
+
+        $names.Clear()
+        & (Get-Module ConfigMap) { Clear-ConfigMapDiscoveryCacheMemory }
+
+        qbuild -map $map list
+        $names | Should -Be @('zebra', 'alpha')
+    }
 }
 
 Describe "exec as list - streaming output" {
