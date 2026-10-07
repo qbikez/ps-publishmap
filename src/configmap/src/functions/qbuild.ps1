@@ -21,7 +21,7 @@ function Invoke-QBuild {
                         }
                     }
                     if ($mapNotFound) {
-                        return @("!init", "!settings", "!describe", "help", "list") | ? { $_.startswith($wordToComplete) }
+                        return @("!init", "!settings", "!describe", "!agent.init", "help", "list") | ? { $_.startswith($wordToComplete) }
                     }
                     $map = $map | Assert-ConfigMap
 
@@ -30,7 +30,7 @@ function Invoke-QBuild {
                     if (!$localMapExists) {
                         $completions = @("!init" | ? { $_.startswith($wordToComplete) }) + $completions
                     }
-                    return @(@("!settings", "!describe", "help", "list") | ? { $_.startswith($wordToComplete) }) + $completions
+                    return @(@("!settings", "!describe", "!agent.init", "help", "list") | ? { $_.startswith($wordToComplete) }) + $completions
                 }
                 catch {
                     return "ERROR [-entry]: $($_.Exception.Message) $($_.ScriptStackTrace)"
@@ -46,6 +46,9 @@ function Invoke-QBuild {
         [string[]]$RemainingArguments
     )
     dynamicparam {
+        if ($entry -eq '!agent.init') {
+            return New-QBuildAgentInitDynamicParam
+        }
         try {
             $map = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" | Assert-ConfigMap
             $result = Get-EntryDynamicParam $map $entry $command -skip 0 -bound $PSBoundParameters
@@ -83,6 +86,21 @@ function Invoke-QBuild {
             }
             Initialize-BuildMap -file $map
             return
+        }
+        if ($entry -eq '!agent.init') {
+            $agentScope = if ($PSBoundParameters.ContainsKey('Scope') -and $PSBoundParameters['Scope']) {
+                $PSBoundParameters['Scope']
+            }
+            else {
+                'project'
+            }
+            $agentTarget = if ($PSBoundParameters.ContainsKey('Agent') -and $PSBoundParameters['Agent']) {
+                $PSBoundParameters['Agent']
+            }
+            else {
+                'cursor'
+            }
+            return Initialize-QBuildAgent -Scope $agentScope -Agent $agentTarget
         }
         if ($entry -eq "!settings") {
             $settingsPath = @($RemainingArguments | Where-Object { $_ })
