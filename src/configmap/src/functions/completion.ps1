@@ -31,7 +31,8 @@ function Get-MapEntryList {
         $groupMarker = $null,
         $listKey = "list",
         $language = $null,
-        $maxDepth = -1
+        $maxDepth = -1,
+        [hashtable]$OperationContext = $null
     )
 
     if ($maxDepth -eq 0) {
@@ -43,6 +44,13 @@ function Get-MapEntryList {
     }
 
     $reservedKeys = $language ? (Get-MapLanguage $language).reservedKeys : @()
+    if ($null -eq $OperationContext) {
+        $OperationContext = New-ConfigMapOperationContext
+    }
+
+    if ($map -is [System.Collections.IDictionary]) {
+        Add-ConfigMapDependsOnDependencies -Node $map -Map $map -OperationContext $OperationContext
+    }
 
     $list = $map.$listKey ? $map.$listKey : $map
     $list = $list -is [scriptblock] ? (Invoke-Command -ScriptBlock $list) : $list
@@ -55,7 +63,13 @@ function Get-MapEntryList {
             foreach ($kvp in $list.GetEnumerator()) {
                 # Handle #include directives first (before reserved keys check)
                 if ($kvp.key -eq "#include") {
-                    $includedEntries = Merge-IncludeDirectives $kvp.value -baseDir $map._baseDir -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language
+                    $includedEntries = Merge-IncludeDirectives $kvp.value `
+                        -baseDir $map._baseDir `
+                        -flatten:$flatten `
+                        -leafsOnly:$leafsOnly `
+                        -separator $separator `
+                        -language $language `
+                        -OperationContext $OperationContext
                     foreach ($inc in $includedEntries.GetEnumerator()) {
                         $result[$inc.Key] = $inc.Value
                     }
@@ -69,6 +83,9 @@ function Get-MapEntryList {
                 $entry = $kvp.value
 
                 if (!(Test-IsParentEntry $entry -reservedKeys $reservedKeys)) {
+                    if ($entry -is [System.Collections.IDictionary]) {
+                        Add-ConfigMapDependsOnDependencies -Node $entry -Map $map -OperationContext $OperationContext
+                    }
                     $result["$($kvp.key)"] = $entry
                     continue
                 }
@@ -79,7 +96,14 @@ function Get-MapEntryList {
                 }
 
                 # Get nested entries and add them with appropriate prefixes
-                $subEntries = Get-MapEntryList $entry -listKey $listKey -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language -maxDepth ($maxDepth - 1)
+                $subEntries = Get-MapEntryList $entry `
+                    -listKey $listKey `
+                    -flatten:$flatten `
+                    -leafsOnly:$leafsOnly `
+                    -separator $separator `
+                    -language $language `
+                    -maxDepth ($maxDepth - 1) `
+                    -OperationContext $OperationContext
 
                 foreach ($sub in $subEntries.GetEnumerator()) {
                     $subKey = $flatten ? $sub.Key : "$($kvp.key)$separator$($sub.Key)"
@@ -138,10 +162,35 @@ function Get-CompletionList {
         $groupMarker = $null,
         $listKey = "list",
         $language = $null,
-        $maxDepth = -1
+        $maxDepth = -1,
+        [hashtable]$OperationContext = $null
     )
 
     return Get-MapEntryList @PSBoundParameters
+}
+
+function Get-MapEntryListPair {
+    <#
+    .SYNOPSIS
+        Walks a map in both hierarchical and flatten forms.
+    .DESCRIPTION
+        Tab completion unions both result sets: hierarchical keys are dotted
+        paths (parent.child), flatten adds group markers (parent*).
+    #>
+    param(
+        $map,
+        $language,
+        [hashtable]$OperationContext = $null
+    )
+
+    if ($null -eq $OperationContext) {
+        $OperationContext = New-ConfigMapOperationContext
+    }
+
+    return [ordered]@{
+        hierarchical = Get-MapEntryList -map $map -language $language -OperationContext $OperationContext
+        flatten      = Get-MapEntryList -map $map -language $language -flatten -OperationContext $OperationContext
+    }
 }
 
 function Merge-IncludeDirectives {
@@ -159,24 +208,48 @@ function Merge-IncludeDirectives {
         [switch][bool]$flatten = $false,
         [switch][bool]$leafsOnly = $false,
         $separator = ".",
-        $language = $null
+        $language = $null,
+        [hashtable]$OperationContext = $null
     )
 
     $result = [ordered]@{}
 
     if (!$baseDir) { $baseDir = $PWD.Path }
+    if ($null -eq $OperationContext) {
+        $OperationContext = New-ConfigMapOperationContext
+    }
 
     foreach ($kvp in $includes.GetEnumerator()) {
         $dirName = $kvp.Key
         $includeConfig = $kvp.Value
 
-        $includedMap = Import-IncludedConfigMap -DirectoryName $dirName -BaseDir $baseDir -Cache @{} -Loading @{}
+        $includePath = Join-Path $baseDir $dirName
+        $mapFile = Join-Path $includePath '.build.map.ps1'
+        $fullMapPath = [System.IO.Path]::GetFullPath($mapFile)
+
+        if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
+            $OperationContext.Dependencies[$fullMapPath] = (Get-Item -LiteralPath $mapFile).LastWriteTimeUtc.Ticks
+        }
+        else {
+            $OperationContext.Dependencies[$fullMapPath] = $null
+        }
+
+        $includedMap = Import-IncludedConfigMap `
+            -DirectoryName $dirName `
+            -BaseDir $baseDir `
+            -Cache $OperationContext.IncludeCache `
+            -Loading $OperationContext.LoadingIncludes
         if (!$includedMap) {
             continue
         }
 
         # Process the included map
-        $includedEntries = Get-MapEntryList $includedMap -flatten:$flatten -leafsOnly:$leafsOnly -separator $separator -language $language
+        $includedEntries = Get-MapEntryList $includedMap `
+            -flatten:$flatten `
+            -leafsOnly:$leafsOnly `
+            -separator $separator `
+            -language $language `
+            -OperationContext $OperationContext
 
         # Apply prefix if configured
         $usePrefix = $false
@@ -191,12 +264,42 @@ function Merge-IncludeDirectives {
             else {
                 $key = $entry.Key
             }
-            
+
             $result[$key] = $entry.Value
         }
     }
 
     return $result
+}
+
+function Get-EntryCompletionKeys {
+    param(
+        [ValidateScript({ $_ -is [System.Collections.IDictionary] })]
+        $map,
+        [ValidateSet("build", "conf")]
+        $language
+    )
+
+    $allKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $cache = Get-ConfigMapDiscoveryCache -Map $map -Language $language
+    $pair = if ($cache) { $cache.entries } else { Get-MapEntryListPair -map $map -language $language }
+
+    foreach ($entryList in @($pair.hierarchical, $pair.flatten)) {
+        if ($entryList -is [System.Collections.IDictionary]) {
+            foreach ($key in $entryList.Keys) {
+                $allKeys.Add($key) | Out-Null
+            }
+            continue
+        }
+
+        foreach ($entry in @($entryList)) {
+            if ($null -ne $entry -and $entry.key) {
+                $allKeys.Add([string]$entry.key) | Out-Null
+            }
+        }
+    }
+
+    return $allKeys
 }
 
 function Get-EntryCompletion(
@@ -212,17 +315,7 @@ function Get-EntryCompletion(
     $commandAst,
     $fakeBoundParameters
 ) {
-    $allKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    foreach ($entryList in @(
-            (Get-MapEntryList -map $map -language $language),
-            (Get-MapEntryList -map $map -flatten -language $language)
-        )) {
-        foreach ($key in $entryList.Keys) {
-            $allKeys.Add($key) | Out-Null
-        }
-    }
-
-    return $allKeys | Sort-Object | ? { $_.startswith($wordToComplete) }
+    return (Get-EntryCompletionKeys $map $language) | Sort-Object | ? { $_.startswith($wordToComplete) }
 }
 
 function Get-EntryDynamicParam(

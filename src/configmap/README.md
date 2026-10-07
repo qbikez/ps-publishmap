@@ -182,6 +182,33 @@ Autocompletion works automatically when the configmap module is imported:
    qbuild <TAB>    # Should show available commands
    ```
 
+### Discovery cache
+
+Entry discovery for tab completion and `list`/`help` is cached under a `.configmap/` directory next to the map file (for example `.configmap/discovery.build.cache.json`). Non-canonical maps use `discovery.<name>.<language>.cache.json` so build and conf caches stay separate. The cache stores entry keys plus lightweight metadata (description, parameter names/types). It is invalidated when the root map, any transitively `#include`d map file, or any path listed in `_dependsOn` changes. Safe to delete or gitignore; it is rebuilt on demand.
+
+Maps that generate entries from other files should declare those files with `_dependsOn` on the map root (or on an individual target). Relative paths resolve against that node's `_baseDir`:
+
+```powershell
+@{
+    _dependsOn = @('install.yaml', 'helpers.ps1')
+    # generated entries...
+}
+```
+
+Enabled by default. Opt out per map or for the whole process:
+
+```powershell
+@{
+    _settings = @{ DiscoveryCache = $false }
+    build     = { dotnet build }
+}
+```
+
+```powershell
+$env:QCONF_DiscoveryCache = '0'
+```
+
+`qbuild !settings` shows the effective value.
 
 ### Dynamic Parameter Discovery
 
@@ -210,10 +237,12 @@ Run the opt-in performance harness from the module directory:
 .\test\Measure-ConfigMapPerformance.ps1
 ```
 
-It measures warm `Get-MapEntries`, tab completion, a no-op `qbuild` command,
-and included-map resolution with and without an operation cache. The generated
-maps contain 100 and 1,000 entries. The output includes median, p95, minimum
-and maximum latency, plus median and p95 allocated bytes.
+It measures warm `Get-MapEntries`, a no-op `qbuild` command, included-map
+resolution with and without an operation cache, and tab completion with and
+without the file-backed discovery cache (cold miss, disk hit, memory hit).
+In-memory maps skip discovery cache. The generated maps contain 100 and 1,000
+entries. The output includes median, p95, minimum and maximum latency, plus
+median and p95 allocated bytes.
 
 Use larger fixtures or emit structured output for comparison in CI:
 
