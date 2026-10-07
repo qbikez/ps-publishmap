@@ -68,6 +68,7 @@ function New-ConfigMapOperationContext {
     return @{
         IncludeCache    = @{}
         LoadingIncludes = @{}
+        Dependencies    = @{}
     }
 }
 

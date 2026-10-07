@@ -32,9 +32,7 @@ function Get-MapEntryList {
         $listKey = "list",
         $language = $null,
         $maxDepth = -1,
-        [hashtable]$IncludeCache = $null,
-        [hashtable]$LoadingIncludes = $null,
-        [hashtable]$Dependencies = $null
+        [hashtable]$OperationContext = $null
     )
 
     if ($maxDepth -eq 0) {
@@ -46,8 +44,9 @@ function Get-MapEntryList {
     }
 
     $reservedKeys = $language ? (Get-MapLanguage $language).reservedKeys : @()
-    if ($null -eq $IncludeCache) { $IncludeCache = @{} }
-    if ($null -eq $LoadingIncludes) { $LoadingIncludes = @{} }
+    if ($null -eq $OperationContext) {
+        $OperationContext = New-ConfigMapOperationContext
+    }
 
     $list = $map.$listKey ? $map.$listKey : $map
     $list = $list -is [scriptblock] ? (Invoke-Command -ScriptBlock $list) : $list
@@ -66,9 +65,7 @@ function Get-MapEntryList {
                         -leafsOnly:$leafsOnly `
                         -separator $separator `
                         -language $language `
-                        -IncludeCache $IncludeCache `
-                        -LoadingIncludes $LoadingIncludes `
-                        -Dependencies $Dependencies
+                        -OperationContext $OperationContext
                     foreach ($inc in $includedEntries.GetEnumerator()) {
                         $result[$inc.Key] = $inc.Value
                     }
@@ -99,9 +96,7 @@ function Get-MapEntryList {
                     -separator $separator `
                     -language $language `
                     -maxDepth ($maxDepth - 1) `
-                    -IncludeCache $IncludeCache `
-                    -LoadingIncludes $LoadingIncludes `
-                    -Dependencies $Dependencies
+                    -OperationContext $OperationContext
 
                 foreach ($sub in $subEntries.GetEnumerator()) {
                     $subKey = $flatten ? $sub.Key : "$($kvp.key)$separator$($sub.Key)"
@@ -161,9 +156,7 @@ function Get-CompletionList {
         $listKey = "list",
         $language = $null,
         $maxDepth = -1,
-        [hashtable]$IncludeCache = $null,
-        [hashtable]$LoadingIncludes = $null,
-        [hashtable]$Dependencies = $null
+        [hashtable]$OperationContext = $null
     )
 
     return Get-MapEntryList @PSBoundParameters
@@ -185,16 +178,15 @@ function Merge-IncludeDirectives {
         [switch][bool]$leafsOnly = $false,
         $separator = ".",
         $language = $null,
-        [hashtable]$IncludeCache = $null,
-        [hashtable]$LoadingIncludes = $null,
-        [hashtable]$Dependencies = $null
+        [hashtable]$OperationContext = $null
     )
 
     $result = [ordered]@{}
 
     if (!$baseDir) { $baseDir = $PWD.Path }
-    if ($null -eq $IncludeCache) { $IncludeCache = @{} }
-    if ($null -eq $LoadingIncludes) { $LoadingIncludes = @{} }
+    if ($null -eq $OperationContext) {
+        $OperationContext = New-ConfigMapOperationContext
+    }
 
     foreach ($kvp in $includes.GetEnumerator()) {
         $dirName = $kvp.Key
@@ -204,16 +196,18 @@ function Merge-IncludeDirectives {
         $mapFile = Join-Path $includePath '.build.map.ps1'
         $fullMapPath = [System.IO.Path]::GetFullPath($mapFile)
 
-        if ($null -ne $Dependencies) {
-            if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
-                $Dependencies[$fullMapPath] = (Get-Item -LiteralPath $mapFile).LastWriteTimeUtc.Ticks
-            }
-            else {
-                $Dependencies[$fullMapPath] = $null
-            }
+        if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
+            $OperationContext.Dependencies[$fullMapPath] = (Get-Item -LiteralPath $mapFile).LastWriteTimeUtc.Ticks
+        }
+        else {
+            $OperationContext.Dependencies[$fullMapPath] = $null
         }
 
-        $includedMap = Import-IncludedConfigMap -DirectoryName $dirName -BaseDir $baseDir -Cache $IncludeCache -Loading $LoadingIncludes
+        $includedMap = Import-IncludedConfigMap `
+            -DirectoryName $dirName `
+            -BaseDir $baseDir `
+            -Cache $OperationContext.IncludeCache `
+            -Loading $OperationContext.LoadingIncludes
         if (!$includedMap) {
             continue
         }
@@ -224,9 +218,7 @@ function Merge-IncludeDirectives {
             -leafsOnly:$leafsOnly `
             -separator $separator `
             -language $language `
-            -IncludeCache $IncludeCache `
-            -LoadingIncludes $LoadingIncludes `
-            -Dependencies $Dependencies
+            -OperationContext $OperationContext
 
         # Apply prefix if configured
         $usePrefix = $false

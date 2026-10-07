@@ -250,22 +250,17 @@ function Build-ConfigMapDiscoveryCache {
     )
 
     $sourceFile = [System.IO.Path]::GetFullPath($Map._sourceFile)
-    $dependencies = @{}
-    $dependencies[$sourceFile] = (Get-Item -LiteralPath $sourceFile).LastWriteTimeUtc.Ticks
+    $operationContext = New-ConfigMapOperationContext
+    $operationContext.Dependencies[$sourceFile] = (Get-Item -LiteralPath $sourceFile).LastWriteTimeUtc.Ticks
 
-    $includeCache = @{}
-    $loadingIncludes = @{}
-
-    $hierarchical = Get-MapEntryList -map $Map -language $Language `
-        -IncludeCache $includeCache -LoadingIncludes $loadingIncludes -Dependencies $dependencies
-    $flatten = Get-MapEntryList -map $Map -language $Language -flatten `
-        -IncludeCache $includeCache -LoadingIncludes $loadingIncludes -Dependencies $dependencies
+    $hierarchical = Get-MapEntryList -map $Map -language $Language -OperationContext $operationContext
+    $flatten = Get-MapEntryList -map $Map -language $Language -flatten -OperationContext $operationContext
 
     return @{
         version      = $script:discoveryCacheVersion
         rootMap      = $sourceFile
         language     = $Language
-        dependencies = @(ConvertTo-ConfigMapDiscoveryDependencyList $dependencies)
+        dependencies = @(ConvertTo-ConfigMapDiscoveryDependencyList $operationContext.Dependencies)
         entries      = @{
             hierarchical = @(ConvertTo-ConfigMapDiscoveryEntryDescriptors $hierarchical $Language)
             flatten      = @(ConvertTo-ConfigMapDiscoveryEntryDescriptors $flatten $Language)
