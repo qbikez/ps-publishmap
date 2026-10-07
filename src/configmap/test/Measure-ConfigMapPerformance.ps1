@@ -33,6 +33,25 @@ function New-BenchmarkMap {
     return $map
 }
 
+function New-FileBackedBenchmarkMap {
+    param(
+        [ValidateRange(1, [int]::MaxValue)]
+        [int]$Count,
+        [string]$Directory
+    )
+
+    New-Item -ItemType Directory -Path $Directory -Force | Out-Null
+    $mapFile = Join-Path $Directory '.build.map.ps1'
+    $builder = [System.Text.StringBuilder]::new()
+    [void]$builder.AppendLine('@{')
+    foreach ($number in 1..$Count) {
+        [void]$builder.AppendLine("    task$number = { param([string]`$Configuration = `"Debug`") }")
+    }
+    [void]$builder.AppendLine('}')
+    Set-Content -Path $mapFile -Value $builder.ToString() -Encoding utf8
+    return Import-ConfigMap -Map $mapFile -LookUp:$false
+}
+
 function Measure-BenchmarkAction {
     param(
         [string]$Scenario,
@@ -72,38 +91,82 @@ function Measure-BenchmarkAction {
     }
 }
 
-$results = foreach ($count in $EntryCount) {
-    $state = [pscustomobject]@{ InvocationCount = 0 }
-    $map = New-BenchmarkMap -Count $count -State $state
-    $targetKey = "task$([math]::Floor($count / 2))"
+$module = Get-Module ConfigMap
+$discoveryRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("configmap-discovery-benchmark-" + [guid]::NewGuid().ToString())
 
-    $lookup = {
-        $entries = @(Get-MapEntries $map $targetKey -language build)
-        if ($entries.Count -ne 1 -or $entries[0].Key -ne $targetKey) {
-            throw "Expected one lookup result for '$targetKey'."
+try {
+    $results = foreach ($count in $EntryCount) {
+        $state = [pscustomobject]@{ InvocationCount = 0 }
+        $map = New-BenchmarkMap -Count $count -State $state
+        $targetKey = "task$([math]::Floor($count / 2))"
+
+        $lookup = {
+            $entries = @(Get-MapEntries $map $targetKey -language build)
+            if ($entries.Count -ne 1 -or $entries[0].Key -ne $targetKey) {
+                throw "Expected one lookup result for '$targetKey'."
+            }
         }
-    }
 
-    $completion = {
-        $completions = @(Get-EntryCompletion -map $map -language build -wordToComplete '')
-        if ($completions.Count -ne $count -or $completions -notcontains $targetKey) {
-            throw "Completion results did not match the $count-entry fixture."
+        $completion = {
+            $completions = @(Get-EntryCompletion -map $map -language build -wordToComplete '')
+            if ($completions.Count -ne $count -or $completions -notcontains $targetKey) {
+                throw "Completion results did not match the $count-entry fixture."
+            }
         }
+
+        $qbuild = {
+            qbuild -map $map $targetKey
+        }
+
+        Measure-BenchmarkAction -Scenario 'Get-MapEntries' -Entries $count -Iterations $Iterations -Action $lookup
+        Measure-BenchmarkAction -Scenario 'Get-EntryCompletion (no discovery cache)' -Entries $count -Iterations $Iterations -Action $completion
+        Measure-BenchmarkAction -Scenario 'qbuild no-op' -Entries $count -Iterations $Iterations -Action $qbuild
+
+        if ($state.InvocationCount -ne ($Iterations + 1)) {
+            throw "Expected qbuild to invoke '$targetKey' $($Iterations + 1) times; invoked $($state.InvocationCount) times."
+        }
+
+        $fileMap = New-FileBackedBenchmarkMap -Count $count -Directory (Join-Path $discoveryRoot "n$count")
+        $cachePath = & $module {
+            param($SourceFile)
+            Get-ConfigMapDiscoveryCachePath -SourceFile $SourceFile -Language build
+        } $fileMap._sourceFile
+
+        $coldCompletion = {
+            & $module { Clear-ConfigMapDiscoveryCacheMemory }
+            if (Test-Path $cachePath) {
+                Remove-Item -Path $cachePath -Force
+            }
+            $completions = @(Get-EntryCompletion -map $fileMap -language build -wordToComplete '')
+            if ($completions.Count -ne $count -or $completions -notcontains $targetKey) {
+                throw "Cold discovery-cache completion results did not match the $count-entry fixture."
+            }
+        }
+
+        $diskHitCompletion = {
+            & $module { Clear-ConfigMapDiscoveryCacheMemory }
+            $completions = @(Get-EntryCompletion -map $fileMap -language build -wordToComplete '')
+            if ($completions.Count -ne $count -or $completions -notcontains $targetKey) {
+                throw "Disk-hit discovery-cache completion results did not match the $count-entry fixture."
+            }
+        }
+
+        $memoryHitCompletion = {
+            $completions = @(Get-EntryCompletion -map $fileMap -language build -wordToComplete '')
+            if ($completions.Count -ne $count -or $completions -notcontains $targetKey) {
+                throw "Memory-hit discovery-cache completion results did not match the $count-entry fixture."
+            }
+        }
+
+        Measure-BenchmarkAction -Scenario 'Get-EntryCompletion (cold miss + write)' -Entries $count -Iterations $Iterations -Action $coldCompletion
+        Measure-BenchmarkAction -Scenario 'Get-EntryCompletion (disk hit)' -Entries $count -Iterations $Iterations -Action $diskHitCompletion
+        Measure-BenchmarkAction -Scenario 'Get-EntryCompletion (memory hit)' -Entries $count -Iterations $Iterations -Action $memoryHitCompletion
     }
-
-    $qbuild = {
-        qbuild -map $map $targetKey
+}
+finally {
+    if (Test-Path $discoveryRoot) {
+        Remove-Item -Path $discoveryRoot -Recurse -Force
     }
-
-    Measure-BenchmarkAction -Scenario 'Get-MapEntries' -Entries $count -Iterations $Iterations -Action $lookup
-    Measure-BenchmarkAction -Scenario 'Get-EntryCompletion' -Entries $count -Iterations $Iterations -Action $completion
-    $qbuildResult = Measure-BenchmarkAction -Scenario 'qbuild no-op' -Entries $count -Iterations $Iterations -Action $qbuild
-
-    if ($state.InvocationCount -ne ($Iterations + 1)) {
-        throw "Expected qbuild to invoke '$targetKey' $($Iterations + 1) times; invoked $($state.InvocationCount) times."
-    }
-
-    $qbuildResult
 }
 
 $includeRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("configmap-include-benchmark-" + [guid]::NewGuid().ToString())
@@ -121,8 +184,6 @@ try {
         }
         _baseDir = $includeRoot
     }
-    $module = Get-Module ConfigMap
-
     $withoutOperationCache = {
         & $module {
             param($Map)

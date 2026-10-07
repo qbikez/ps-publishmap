@@ -204,10 +204,12 @@ Run the opt-in performance harness from the module directory:
 .\test\Measure-ConfigMapPerformance.ps1
 ```
 
-It measures warm `Get-MapEntries`, tab completion, a no-op `qbuild` command,
-and included-map resolution with and without an operation cache. The generated
-maps contain 100 and 1,000 entries. The output includes median, p95, minimum
-and maximum latency, plus median and p95 allocated bytes.
+It measures warm `Get-MapEntries`, a no-op `qbuild` command, included-map
+resolution with and without an operation cache, and tab completion with and
+without the file-backed discovery cache (cold miss, disk hit, memory hit).
+In-memory maps skip discovery cache. The generated maps contain 100 and 1,000
+entries. The output includes median, p95, minimum and maximum latency, plus
+median and p95 allocated bytes.
 
 Use larger fixtures or emit structured output for comparison in CI:
 
