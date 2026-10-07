@@ -305,13 +305,17 @@ function Write-ConfigMapDiscoveryCache {
         $Cache
     )
 
-    $dir = Split-Path -Parent $CachePath
-    if (!(Test-Path -LiteralPath $dir -PathType Container)) {
-        New-Item -ItemType Directory -Path $dir -Force | Out-Null
-    }
+    try {
+        $dir = Split-Path -Parent $CachePath
+        if (!(Test-Path -LiteralPath $dir -PathType Container)) {
+            New-Item -ItemType Directory -Path $dir -Force -ErrorAction Stop | Out-Null
+        }
 
-    $json = $Cache | ConvertTo-Json -Depth 8
-    Set-Content -LiteralPath $CachePath -Value $json -Encoding utf8
+        $json = $Cache | ConvertTo-Json -Depth 8
+        Set-Content -LiteralPath $CachePath -Value $json -Encoding utf8 -ErrorAction Stop
+    }
+    catch {
+    }
 }
 
 function Build-ConfigMapDiscoveryCache {

@@ -468,4 +468,24 @@ $data = (Get-Content (Join-Path $PSScriptRoot 'data.txt') -Raw).Trim()
         @($buildCache.entries.hierarchical).key | Should -Contain 'alpha'
         @($confCache.entries.hierarchical).key | Should -Contain 'alpha'
     }
+
+    It 'returns live descriptors when disk cache write fails' {
+        $dir = Join-Path $TestDrive 'write-fail'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $blocker = Join-Path $dir '.configmap'
+        Set-Content -Path $blocker -Value 'not a directory'
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value '@{ alpha = { "a" }; beta = { "b" } }'
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $cache = & (Get-Module ConfigMap) {
+            param($Map)
+            Get-ConfigMapDiscoveryCache -Map $Map -Language build
+        } $map
+
+        $cache | Should -Not -BeNullOrEmpty
+        @($cache.entries.hierarchical).key | Should -Contain 'alpha'
+        Test-Path -LiteralPath $blocker -PathType Leaf | Should -BeTrue
+        Test-Path -LiteralPath (Join-Path $dir '.configmap\discovery.build.cache.json') | Should -BeFalse
+    }
 }
