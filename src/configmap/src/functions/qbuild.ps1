@@ -21,7 +21,7 @@ function Invoke-QBuild {
                         }
                     }
                     if ($mapNotFound) {
-                        return @("!init", "!settings", "!describe", "!agent.init", "help", "list") | ? { $_.startswith($wordToComplete) }
+                        return @("!init", "!settings", "!describe", "!agent.init", "!cache", "help", "list") | ? { $_.startswith($wordToComplete) }
                     }
                     $map = $map | Assert-ConfigMap
 
@@ -30,7 +30,7 @@ function Invoke-QBuild {
                     if (!$localMapExists) {
                         $completions = @("!init" | ? { $_.startswith($wordToComplete) }) + $completions
                     }
-                    return @(@("!settings", "!describe", "!agent.init", "help", "list") | ? { $_.startswith($wordToComplete) }) + $completions
+                    return @(@("!settings", "!describe", "!agent.init", "!cache", "help", "list") | ? { $_.startswith($wordToComplete) }) + $completions
                 }
                 catch {
                     return "ERROR [-entry]: $($_.Exception.Message) $($_.ScriptStackTrace)"
@@ -48,6 +48,9 @@ function Invoke-QBuild {
     dynamicparam {
         if ($entry -eq '!agent.init') {
             return New-QBuildAgentInitDynamicParam
+        }
+        if ($entry -eq '!cache') {
+            return New-QBuildCacheDynamicParam
         }
         try {
             $map = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" | Assert-ConfigMap
@@ -114,6 +117,49 @@ function Invoke-QBuild {
             }
 
             return Get-ConfigMapSettingsForPath -Map $settingsMap -Path $settingsPath[0]
+        }
+        if ($entry -eq "!cache") {
+            $cacheArgs = @($RemainingArguments | Where-Object { $_ })
+            $boundAction = if ($PSBoundParameters.ContainsKey('Action') -and $PSBoundParameters['Action']) {
+                [string]$PSBoundParameters['Action']
+            }
+            else {
+                $null
+            }
+
+            if ($boundAction) {
+                if ($cacheArgs.Count -gt 0 -and $cacheArgs[0] -eq $boundAction) {
+                    $cacheArgs = @($cacheArgs | Select-Object -Skip 1)
+                }
+                if ($cacheArgs.Count -gt 0) {
+                    throw "!cache accepts at most one action."
+                }
+                $cacheAction = $boundAction
+            }
+            else {
+                if ($cacheArgs.Count -gt 1) {
+                    throw "!cache accepts at most one action."
+                }
+                $cacheAction = if ($cacheArgs.Count -eq 1) { $cacheArgs[0] } else { 'status' }
+            }
+
+            $allowedCacheActions = @('status', 'clear', 'rebuild')
+            if ($cacheAction -notin $allowedCacheActions) {
+                throw "!cache accepts status, clear, or rebuild."
+            }
+
+            $cacheMap = $null
+            try {
+                $cacheMap = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1"
+            }
+            catch {
+                if ($_.Exception.Message -match '^map file .* not found$|^No map provided and fallback .* not found$|^map is null and defaultMapFile is not provided$') {
+                    throw "No build map file found. Run 'qbuild !init' to create one, or provide -map."
+                }
+                throw
+            }
+
+            return Invoke-QBuildCacheCommand -Map $cacheMap -Language build -Action $cacheAction
         }
         if ($entry -eq "!describe") {
             $describePath = @($RemainingArguments | Where-Object { $_ })

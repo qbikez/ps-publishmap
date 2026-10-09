@@ -210,6 +210,15 @@ $env:QCONF_DiscoveryCache = '0'
 
 `qbuild !settings` shows the effective value.
 
+Inspect or reset the cache for the current build map:
+
+```powershell
+qbuild !cache              # status (path, validity, source)
+qbuild !cache status
+qbuild !cache clear        # delete this map's cache file and memory entry
+qbuild !cache rebuild      # clear, then rebuild
+```
+
 ### Dynamic Parameter Discovery
 
 ConfigMap automatically discovers parameters from your script blocks:
