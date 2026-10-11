@@ -1,6 +1,6 @@
 # qconf as a process type (under qbuild)
 
-Normative process CLI contract: [`process-cli-contract.md`](./process-cli-contract.md).
+Normative process CLI contract: [`process-cli.md`](../process-cli.md).
 This plan applies that contract to **qconf**, the same way **qrun** was wired.
 
 ## Goal
@@ -210,7 +210,7 @@ When run standalone without `-map`, keep fallback `./.configuration.map.ps1`.
 3. **Fix set path** — `Invoke-Set` / ordered binding; add regression tests.
 4. **Wire sample** — e.g. `samples/process-mixed` or `samples/configure` hybrid with `process=qconf`.
 5. **Optional** `process-qconf` plugin stub (metadata only).
-6. **Docs** — update CLAUDE.md / sample README; link from process-cli-contract as second process.
+6. **Docs** — update CLAUDE.md / sample README; link from the process CLI docs as a second process.
 
 ## Out of scope (v1)
 
