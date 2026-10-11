@@ -21,7 +21,7 @@ function Invoke-QRun {
                         }
                     }
                     if ($mapNotFound) {
-                        return @("!init", "!state", "help", "list") | ? { $_.startswith($wordToComplete) }
+                        return @("!init", "!state", "!complete", "help", "list") | ? { $_.startswith($wordToComplete) }
                     }
                     $map = $map | Assert-ConfigMap
 
@@ -29,7 +29,7 @@ function Invoke-QRun {
                     if (!$localMapExists) {
                         $completions = @("!init" | ? { $_.startswith($wordToComplete) }) + $completions
                     }
-                    return @(@("!state", "help", "list") | ? { $_.startswith($wordToComplete) }) + $completions
+                    return @(@("!state", "!complete", "help", "list") | ? { $_.startswith($wordToComplete) }) + $completions
                 }
                 catch {
                     return "ERROR [-entry]: $($_.Exception.Message) $($_.ScriptStackTrace)"
@@ -43,6 +43,12 @@ function Invoke-QRun {
         [switch]$Status,
         [switch]$Reset,
 
+        # Machine-readable !complete protocol (DontShow — used by qbuild / tooling)
+        [Parameter(DontShow)]
+        [string]$Word,
+        [Parameter(DontShow)]
+        [switch]$Params,
+
         [Parameter(DontShow)]
         $map = "./.process.map.ps1",
 
@@ -50,7 +56,7 @@ function Invoke-QRun {
         [string[]]$RemainingArguments
     )
     dynamicparam {
-        if (-not $entry -or $entry -in @('help', 'list', '!init', '!state')) {
+        if (-not $entry -or $entry -in @('help', 'list', '!init', '!state', '!complete')) {
             return
         }
         try {
@@ -72,6 +78,7 @@ function Invoke-QRun {
             Write-Host "    qrun <process> [-Force] [-Status] [-Reset]" -ForegroundColor White
             Write-Host "    qrun <process>.<step> [-Follow] [-Force]" -ForegroundColor White
             Write-Host "    qrun !state [show|clean] [<process>]" -ForegroundColor White
+            Write-Host "    qrun list [<process>]" -ForegroundColor White
             Write-Host ""
             Write-Host "OPTIONS:" -ForegroundColor Yellow
             Write-Host "    -Follow           With a step path, also run all following steps" -ForegroundColor White
@@ -90,12 +97,119 @@ function Invoke-QRun {
             return
         }
 
+        if ($entry -eq "!complete") {
+            $completeArgs = @{
+                Mode  = $null
+                Word  = $Word
+                Entry = $null
+            }
+            if ($Params) { $completeArgs.Mode = 'params' }
+            elseif ($PSBoundParameters.ContainsKey('Word')) { $completeArgs.Mode = 'word' }
+
+            $tokens = @($RemainingArguments | Where-Object { $null -ne $_ -and "$_" -ne '' })
+            for ($i = 0; $i -lt $tokens.Count; $i++) {
+                switch -Regex ($tokens[$i]) {
+                    '^-params$' {
+                        $completeArgs.Mode = 'params'
+                    }
+                    '^-word$' {
+                        if ($i + 1 -lt $tokens.Count) {
+                            $completeArgs.Word = $tokens[++$i]
+                            if (-not $completeArgs.Mode) { $completeArgs.Mode = 'word' }
+                        }
+                    }
+                    '^-entry$' {
+                        if ($i + 1 -lt $tokens.Count) {
+                            $completeArgs.Entry = $tokens[++$i]
+                        }
+                    }
+                    default {
+                        if (-not $completeArgs.Entry) {
+                            $completeArgs.Entry = $tokens[$i]
+                        }
+                    }
+                }
+            }
+
+            if (-not $completeArgs.Mode) {
+                $global:LASTEXITCODE = 2
+                return
+            }
+
+            $completeMap = . $ImportConfigMap -Map $map -Fallback "./.process.map.ps1" -ErrorAction Ignore
+            if (!$completeMap) {
+                $global:LASTEXITCODE = 2
+                return
+            }
+
+            if ($completeArgs.Mode -eq 'params') {
+                if (-not $completeArgs.Entry) {
+                    $global:LASTEXITCODE = 2
+                    return
+                }
+
+                $names = [System.Collections.Generic.List[string]]::new()
+                foreach ($switchName in @('Follow', 'Force', 'Status', 'Reset')) {
+                    $names.Add($switchName) | Out-Null
+                }
+
+                $followHint = $false
+                $typed = Get-ProcessDynamicParam -Map $completeMap -ProcessKey $completeArgs.Entry -Follow:$followHint
+                if ($typed) {
+                    foreach ($key in @($typed.Keys)) {
+                        if (-not $names.Contains($key)) {
+                            $names.Add($key) | Out-Null
+                        }
+                    }
+                }
+
+                $names | ForEach-Object { $_ }
+                $global:LASTEXITCODE = 0
+                return
+            }
+
+            # -word: entry / token completion
+            $prefix = if ($null -ne $completeArgs.Word) { [string]$completeArgs.Word } else { '' }
+            $completions = @(Get-EntryCompletion -map $completeMap -language build -wordToComplete $prefix)
+            $completions | ForEach-Object { $_ }
+            $global:LASTEXITCODE = 0
+            return
+        }
+
         if ($entry -eq "list") {
             $listMap = . $ImportConfigMap -Map $map -Fallback "./.process.map.ps1"
             if (!$listMap) {
                 Write-Help -invocation $MyInvocation -mapPath "./.process.map.ps1"
                 return
             }
+
+            $listEntry = @($RemainingArguments | Where-Object { $null -ne $_ -and "$_" -ne '' } | Select-Object -First 1)
+            if ($listEntry.Count -eq 1) {
+                $operationContext = New-ConfigMapOperationContext
+                try {
+                    $target = Resolve-ProcessTarget -Map $listMap -Entry $listEntry[0] -OperationContext $operationContext
+                }
+                catch {
+                    throw "Entry '$($listEntry[0])' not found. Run 'qrun list' to see all available commands."
+                }
+
+                $processKey = $target.ProcessKey
+                $processEntry = $target.ProcessEntry
+                $stepNames = @($target.StepNames)
+                $baseDir = if ($processEntry._baseDir) { $processEntry._baseDir } elseif ($listMap._baseDir) { $listMap._baseDir } else { (Get-Location).Path }
+                $sourceFile = if ($listMap._sourceFile) { [string]$listMap._sourceFile } else { $null }
+                $statePath = Get-ProcessStatePath -ProcessKey $processKey -BaseDir $baseDir -MapFile $sourceFile
+                $state = Read-ProcessState -StatePath $statePath -ProcessKey $processKey -StepNames $stepNames -MapFile $sourceFile
+                $description = if ($processEntry.description) { [string]$processEntry.description } else { '' }
+
+                Write-ProcessStatus `
+                    -ProcessKey $processKey `
+                    -StepNames $stepNames `
+                    -State $state `
+                    -Description $description
+                return
+            }
+
             Write-MapHelp -map $listMap -invocation $MyInvocation -language "build"
             return
         }
