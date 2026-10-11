@@ -12,16 +12,16 @@ Describe 'ConfigMap public API' {
             'Get-EntryDynamicParam', 'Get-MapEntries', 'Get-MapEntry',
             'Get-MapLanguage', 'Get-ScriptArgs',
             'Import-ConfigMap', 'Initialize-BuildMap', 'Initialize-ConfigMap',
-            'Initialize-QBuildAgent',
+            'Initialize-ProcessMap', 'Initialize-QBuildAgent',
             'Invoke-EntryCommand', 'Invoke-Get', 'Invoke-QBuild',
-            'Invoke-QConf', 'Invoke-Set', 'Merge-IncludeDirectives',
+            'Invoke-QConf', 'Invoke-QRun', 'Invoke-Set', 'Merge-IncludeDirectives',
             'Resolve-ConfigMap', 'Test-IsParentEntry'
         ) | Sort-Object
 
         (Get-Command -Module ConfigMap -CommandType Function).Name | Sort-Object |
             Should -Be $expectedFunctions
         (Get-Command -Module ConfigMap -CommandType Alias).Name | Sort-Object |
-            Should -Be @('qbuild', 'qconf')
+            Should -Be @('qbuild', 'qconf', 'qrun')
     }
 
     It 'imports a map through Import-ConfigMap' {

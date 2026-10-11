@@ -16,6 +16,16 @@ function Initialize-ConfigMap([Parameter(Mandatory = $true)] $file) {
 }
 
 
+function Initialize-ProcessMap([Parameter(Mandatory = $true)] $file) {
+    if (Test-Path $file) {
+        throw "map file '$file' already exists"
+    }
+
+    $defaultConfig = Get-Content $script:samplesPath/_default/.process.map.ps1 -Raw
+    Write-Host "Initializing process map file '$file'"
+    $defaultConfig | Out-File $file
+}
+
 function Initialize-BuildMap([Parameter(Mandatory = $true)] $file) {
     if (Test-Path $file) {
         throw "map file '$file' already exists"
