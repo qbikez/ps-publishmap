@@ -8,8 +8,8 @@ Export-ModuleMember `
     Get-CompletionList, Get-ScriptArgs, Get-MapEntries, Get-MapEntry, Get-EntryCommand, `
     Invoke-EntryCommand, Invoke-Set, Invoke-Get, Get-EntryCompletion, Get-EntryDynamicParam, `
     Get-ConfigMapCommandCatalog, Initialize-QBuildAgent, `
-    Invoke-QBuild, Invoke-QConf, ConvertTo-MapResult, `
-    Initialize-ConfigMap, Initialize-BuildMap, Get-MapLanguage, Merge-IncludeDirectives, Add-BaseDir `
-    -Alias qbuild, qconf `
+    Invoke-QBuild, Invoke-QConf, Invoke-QRun, ConvertTo-MapResult, `
+    Initialize-ConfigMap, Initialize-BuildMap, Initialize-ProcessMap, Get-MapLanguage, Merge-IncludeDirectives, Add-BaseDir `
+    -Alias qbuild, qconf, qrun `
     -Variable ImportConfigMap
     
