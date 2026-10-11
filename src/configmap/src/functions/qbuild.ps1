@@ -25,12 +25,38 @@ function Invoke-QBuild {
                     }
                     $map = $map | Assert-ConfigMap
 
-                    $completions = Get-EntryCompletion $map -language "build" @PSBoundParameters
+                    $builtins = @(@("!settings", "!describe", "!agent.init", "help", "list") | ? { $_.startswith($wordToComplete) })
+                    # Map-only baseline; enrich with process !complete -word when available.
+                    $completions = [System.Collections.Generic.List[string]]::new()
+                    foreach ($c in @(Get-EntryCompletion $map -language "build" @PSBoundParameters)) {
+                        if ($c) { $completions.Add([string]$c) | Out-Null }
+                    }
+
+                    try {
+                        $resolvedMapPath = Resolve-ConfigMapProcessMapPath -Map $map -MapPath $mapPath
+                        foreach ($procName in @(Get-ConfigMapProcessNamesInMap -Map $map)) {
+                            $procWords = Get-ConfigMapProcessCompleteWord `
+                                -ProcessName $procName `
+                                -MapPath $resolvedMapPath `
+                                -Word $wordToComplete
+                            if ($null -eq $procWords) { continue }
+                            foreach ($w in @($procWords)) {
+                                if ($w -and -not $completions.Contains([string]$w)) {
+                                    $completions.Add([string]$w) | Out-Null
+                                }
+                            }
+                        }
+                    }
+                    catch {
+                        # No file path / process discovery failure → keep map-only completions
+                    }
+
+                    $completionArray = @($completions)
                     # Include !init if no local map file exists
                     if (!$localMapExists) {
-                        $completions = @("!init" | ? { $_.startswith($wordToComplete) }) + $completions
+                        $completionArray = @("!init" | ? { $_.startswith($wordToComplete) }) + $completionArray
                     }
-                    return @(@("!settings", "!describe", "!agent.init", "help", "list") | ? { $_.startswith($wordToComplete) }) + $completions
+                    return $builtins + $completionArray
                 }
                 catch {
                     return "ERROR [-entry]: $($_.Exception.Message) $($_.ScriptStackTrace)"
@@ -38,6 +64,7 @@ function Invoke-QBuild {
             })]
         [Parameter(Position = 0)]
         $entry = $null,
+
         [Parameter(DontShow)]
         $command = "exec",
         [Parameter(DontShow)]
@@ -49,9 +76,23 @@ function Invoke-QBuild {
         if ($entry -eq '!agent.init') {
             return New-QBuildAgentInitDynamicParam
         }
+        if (-not $entry -or $entry -in @('help', 'list', '!init', '!settings', '!describe', '!agent.init')) {
+            return
+        }
         try {
-            $map = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" | Assert-ConfigMap
-            $result = Get-EntryDynamicParam $map $entry $command -skip 0 -bound $PSBoundParameters
+            $dynMap = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" | Assert-ConfigMap
+            $root = Resolve-ConfigMapProcessRoot -Map $dynMap -Entry $entry
+            if ($root.Process -ne 'qbuild') {
+                $mapPath = Resolve-ConfigMapProcessMapPath -Map $dynMap -MapPath $map
+                $followHint = [bool]$PSBoundParameters['Follow']
+                return New-ConfigMapProcessDynamicParam `
+                    -ProcessName $root.Process `
+                    -MapPath $mapPath `
+                    -Map $dynMap `
+                    -Entry $entry `
+                    -Follow:$followHint
+            }
+            $result = Get-EntryDynamicParam $dynMap $entry $command -skip 0 -bound $PSBoundParameters
             Write-Debug "Dynamic parameters for entry '$entry': $($result.Keys -join ', ')"
             return $result
         }
@@ -67,6 +108,7 @@ function Invoke-QBuild {
             Write-Host ""
             Write-Host "Usage:"
             Write-Host "qbuild <your-script-name>"
+            Write-Host "qbuild <process>[.<step>] [process options]  # when process=<name> (e.g. qrun)"
             return
         }
         if ($entry -eq "list") {
@@ -156,6 +198,24 @@ function Invoke-QBuild {
         }
 
         $operationContext = New-ConfigMapOperationContext
+        $processRoot = Resolve-ConfigMapProcessRoot -Map $map -Entry $entry -OperationContext $operationContext
+
+        if ($processRoot.Process -ne 'qbuild') {
+            if ($null -eq $processRoot.EntryValue) {
+                throw "Entry '$entry' not found. Run 'qbuild list' to see all available commands."
+            }
+
+            $resolvedMapPath = Resolve-ConfigMapProcessMapPath -Map $map -MapPath $mapPath
+            $splat = ConvertTo-ConfigMapProcessSplat `
+                -MapPath $resolvedMapPath `
+                -Entry $entry `
+                -BoundParameters $PSBoundParameters `
+                -RemainingArguments $RemainingArguments
+
+            Invoke-ConfigMapProcessCli -ProcessName $processRoot.Process -Splat $splat | Out-Null
+            return
+        }
+
         $targets = Get-MapEntries $map $entry -language "build" -OperationContext $operationContext
         
         # Validate that the entry exists
