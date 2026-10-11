@@ -22,7 +22,7 @@ Implication: in-memory maps used in tests must be written to a temp file before
 
 ```mermaid
 flowchart TD
-  qbuild[qbuild] --> known["Known contract: -map, entry path, list, !complete"]
+  qbuild[qbuild] --> known["Known contract: -map, -entry, list, !complete"]
   qbuild --> opaque["Opaque argv: discovered process params"]
   known --> call["call operator process args"]
   opaque --> call
@@ -31,7 +31,7 @@ flowchart TD
 
 | Layer | Examples | qbuild behavior |
 |-------|----------|-----------------|
-| Shared contract | `-map`, `<entry>`, `list <entry>`, `!complete …` | May construct these intentionally |
+| Shared contract | `-map`, `-entry`, `list <entry>`, `!complete …` | May construct these intentionally |
 | Process-owned | `!state`, `help`, `-Follow`, `-Force`, `-Status`, `-Reset`, `-Environment`, … | Discover + forward only when user-supplied; never special-case on `Invoke-QBuild` |
 
 `!state` is **not** a qbuild builtin. Status in `qbuild list` uses `list <entry>`.
@@ -61,22 +61,26 @@ A process command MUST support the following. Flag style is single-dash.
 ### Global
 
 ```text
-<process> [-map <path>] <command-or-entry> [opaque-args...]
+<process> [-map <path>] [-entry <entry> | <verb>] [opaque-args...]
 ```
 
 - `-map` — path to map file (required when not using the tool’s default map path)
+- `-entry` — required for run handoff from qbuild (explicit named parameter, not positional)
 - Success: exit `0` / no throw; failure: non-zero exit or terminating error from `&`
 - Human-oriented stdout/stderr; qbuild does not parse stdout for control flow in v1
+
+Processes MAY also accept a positional path for direct UX (`qrun bootstrap`), but
+**qbuild always delegates with explicit `-entry`**.
 
 ### Run entry
 
 ```text
-<process> [-map <path>] <entry> [opaque-args...]
-<process> [-map <path>] <entry>.<step> [opaque-args...]
-<process> [-map <path>] <entry>.all [opaque-args...]
+<process> [-map <path>] -entry <entry> [opaque-args...]
+<process> [-map <path>] -entry <entry>.<step> [opaque-args...]
+<process> [-map <path>] -entry <entry>.all [opaque-args...]
 ```
 
-qbuild builds argv as: command name, optional `-map <path>`, entry string, then
+qbuild builds argv as: command name, optional `-map <path>`, `-entry <path>`, then
 **opaque** bound/remaining arguments exactly as the user supplied them (order
 preserved as far as PowerShell binding allows).
 
@@ -138,7 +142,7 @@ not interpret their meaning. When invoking, it forwards whatever the user bound
 
 | Command | qbuild trigger | `&` argv |
 |---------|----------------|----------|
-| **Run** | `qbuild bootstrap` / `qbuild bootstrap.prepare -Follow` | `qrun -map <file> bootstrap.prepare -Follow` |
+| **Run** | `qbuild bootstrap` / `qbuild bootstrap.prepare -Follow` | `qrun -map <file> -entry bootstrap.prepare -Follow` |
 | **List entry** | `qbuild list` row for `process=qrun` | `qrun -map <file> list bootstrap` |
 | **Complete tokens** | Tab on entry | `qrun -map <file> !complete -word <prefix> …` |
 | **Complete params** | Tab / dynamicparam after entry | `qrun -map <file> !complete -params -entry …` |
@@ -169,8 +173,8 @@ These SHOULD appear in `!complete -params` for relevant entries so
 
 | qbuild action | `&` argv |
 |---------------|----------|
-| `qbuild -map f bootstrap -Force` | `qrun -map f bootstrap -Force` (Force opaque) |
-| `qbuild -map f bootstrap.prepare -Follow` | `qrun -map f bootstrap.prepare -Follow` |
+| `qbuild -map f bootstrap -Force` | `qrun -map f -entry bootstrap -Force` (Force opaque) |
+| `qbuild -map f bootstrap.prepare -Follow` | `qrun -map f -entry bootstrap.prepare -Follow` |
 | `qbuild list` (bootstrap row) | `qrun -map f list bootstrap` |
 | autocomplete params | `qrun -map f !complete -params -entry bootstrap` |
 
@@ -181,13 +185,17 @@ flowchart LR
   qbuild[qbuild] -->|"process=qrun"| resolve[Resolve qrun command]
   resolve --> complete["!complete -params"]
   complete --> dyn[Dynamicparam opaque names]
-  dyn --> call["call operator qrun -map path entry opaque"]
+  dyn --> call["call operator qrun -map path -entry path opaque"]
 ```
 
 - Strip `-Follow/-Force/-Status/-Reset` from `Invoke-QBuild`
 - Replace in-process `Invoke-QRun` in process plugin with `& $command @argv`
 - Wire dynparam/completer to `!complete`
 - Adjust `test/qbuild-process.tests.ps1` per below before or with the switch
+
+**qrun param split:** Position 0 is `$command` (verbs / direct UX path); named
+`-entry` is the run target and `!complete` subject so
+`qrun !complete -params -entry bootstrap` does not double-bind.
 
 ## Existing tests vs new contract
 

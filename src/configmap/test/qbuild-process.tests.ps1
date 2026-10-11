@@ -143,6 +143,31 @@ Describe 'qbuild process=qrun forwarding' {
         $completions | Should -Contain 'bootstrap.verify'
     }
 
+    It 'routes entry completion through process !complete -word' {
+        InModuleScope ConfigMap {
+            param($MapFile)
+            $words = @(Get-ConfigMapProcessCompleteWord -ProcessName 'qrun' -MapPath $MapFile -Word 'bootstrap.')
+            $words | Should -Contain 'bootstrap.prepare'
+            $words | Should -Contain 'bootstrap.restore'
+            $words | Should -Contain 'bootstrap.verify'
+
+            $names = @(Get-ConfigMapProcessNamesInMap -Map (Import-ConfigMap -Map $MapFile))
+            $names | Should -Contain 'qrun'
+        } -Parameters @{ MapFile = $script:mapFile }
+    }
+
+    It 'delegates run with explicit -entry' {
+        InModuleScope ConfigMap {
+            param($MapFile)
+            $splat = ConvertTo-ConfigMapProcessSplat -MapPath $MapFile -Entry 'bootstrap.prepare'
+            $splat.entry | Should -Be 'bootstrap.prepare'
+            $splat.Keys | Should -Not -Contain 'command'
+        } -Parameters @{ MapFile = $script:mapFile }
+
+        qbuild -map $script:mapFile bootstrap.prepare
+        Test-Path 'marker-a/done.txt' | Should -BeTrue
+    }
+
     It 'forwards process step parameters end-to-end' {
         qbuild -map $script:mapFile bootstrap.prepare
         qbuild -map $script:mapFile bootstrap.restore -Environment prod

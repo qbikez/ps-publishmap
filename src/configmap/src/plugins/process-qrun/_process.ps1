@@ -95,7 +95,7 @@
 
         try {
             $mapPath = Resolve-ConfigMapProcessMapPath -Map $Context.Map -MapPath $Context.MapPath
-            $splat = ConvertTo-ConfigMapProcessSplat -MapPath $mapPath -Entry 'list' -RemainingArguments @($Context.EntryKey)
+            $splat = ConvertTo-ConfigMapProcessSplat -MapPath $mapPath -Command 'list' -RemainingArguments @($Context.EntryKey)
             Invoke-ConfigMapProcessCli -ProcessName 'qrun' -Splat $splat | Out-Null
             return @{ Handled = $true }
         }

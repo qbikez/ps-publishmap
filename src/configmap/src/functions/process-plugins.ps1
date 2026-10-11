@@ -178,11 +178,15 @@ function ConvertTo-ConfigMapProcessSplat {
 
         Hashtable splat is required so -Force / -Follow bind as switches; a string[] argv
         splat passes '-Force' as a literal remaining argument.
+
+        Run:    -Entry <path>          →  process -map <file> -entry <path> …
+        Verb:   -Command list …        →  process -map <file> -command list …
+        Both:   -Command !complete -Entry x → process !complete -entry x
     #>
     param(
         [Parameter(Mandatory = $true)]
         [string]$MapPath,
-        [Parameter(Mandatory = $true)]
+        [string]$Command,
         [AllowEmptyString()]
         [string]$Entry,
         [hashtable]$BoundParameters,
@@ -196,8 +200,15 @@ function ConvertTo-ConfigMapProcessSplat {
     )
 
     $splat = @{
-        map   = $MapPath
-        entry = $Entry
+        map = $MapPath
+    }
+
+    if ($Command) {
+        $splat['command'] = $Command
+    }
+
+    if ($PSBoundParameters.ContainsKey('Entry') -and $null -ne $Entry) {
+        $splat['entry'] = $Entry
     }
 
     if ($BoundParameters) {
@@ -253,6 +264,33 @@ function Invoke-ConfigMapProcessCli {
     return $global:LASTEXITCODE
 }
 
+function Get-ConfigMapProcessNamesInMap {
+    <#
+    .SYNOPSIS
+        Distinct non-qbuild process names declared on top-level map entries.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Collections.IDictionary]$Map,
+        $OperationContext
+    )
+
+    if (-not $OperationContext) {
+        $OperationContext = New-ConfigMapOperationContext
+    }
+
+    $names = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($key in @($Map.Keys)) {
+        if ([string]$key -like '_*') { continue }
+        $resolved = Get-MapEntry $Map $key -language 'build' -OperationContext $OperationContext
+        $proc = Get-EntryProcess $resolved -Default 'qbuild'
+        if ($proc -and $proc -ne 'qbuild') {
+            [void]$names.Add($proc)
+        }
+    }
+    return @($names | Sort-Object)
+}
+
 function Get-ConfigMapProcessCompleteParams {
     <#
     .SYNOPSIS
@@ -279,7 +317,51 @@ function Get-ConfigMapProcessCompleteParams {
     }
 
     $global:LASTEXITCODE = 0
-    $output = & $cmd -map $MapPath '!complete' -Params -RemainingArguments @('-entry', $Entry) 2>$null
+    $output = & $cmd -map $MapPath '!complete' -Params -Entry $Entry 2>$null
+    if ($global:LASTEXITCODE -eq 2) {
+        return $null
+    }
+
+    return @(
+        @($output) |
+            ForEach-Object { "$_".Trim() } |
+            Where-Object { $_ }
+    )
+}
+
+function Get-ConfigMapProcessCompleteWord {
+    <#
+    .SYNOPSIS
+        Entry/token completion via '<process> !complete -word <prefix> [-entry …]'.
+        Returns $null when unsupported (exit 2 / missing command).
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ProcessName,
+        [Parameter(Mandatory = $true)]
+        [string]$MapPath,
+        [AllowEmptyString()]
+        [string]$Word = '',
+        [string]$Entry
+    )
+
+    try {
+        $cmd = Resolve-ConfigMapProcessCommand -ProcessName $ProcessName
+        if ($cmd.CommandType -eq 'Alias') {
+            $cmd = $cmd.ResolvedCommand
+        }
+    }
+    catch {
+        return $null
+    }
+
+    $global:LASTEXITCODE = 0
+    if ($Entry) {
+        $output = & $cmd -map $MapPath '!complete' -Word $Word -Entry $Entry 2>$null
+    }
+    else {
+        $output = & $cmd -map $MapPath '!complete' -Word $Word 2>$null
+    }
     if ($global:LASTEXITCODE -eq 2) {
         return $null
     }

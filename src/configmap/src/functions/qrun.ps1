@@ -32,11 +32,27 @@ function Invoke-QRun {
                     return @(@("!state", "!complete", "help", "list") | ? { $_.startswith($wordToComplete) }) + $completions
                 }
                 catch {
-                    return "ERROR [-entry]: $($_.Exception.Message) $($_.ScriptStackTrace)"
+                    return "ERROR [-command]: $($_.Exception.Message) $($_.ScriptStackTrace)"
                 }
             })]
+        # Positional verb/path (list, help, !complete, bootstrap, …). Named -entry is separate
+        # so `qrun !complete -params -entry bootstrap` does not double-bind.
         [Parameter(Position = 0)]
-        $entry = $null,
+        $command = $null,
+
+        # Process target for run (`qrun -entry bootstrap`) and !complete subject.
+        [Parameter()]
+        [ArgumentCompleter({
+                param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+                try {
+                    $map = Import-ConfigMap -Map $fakeBoundParameters.map -Fallback "./.process.map.ps1" -ErrorAction Stop | Assert-ConfigMap
+                    return @(Get-EntryCompletion $map -language "build" -wordToComplete $wordToComplete)
+                }
+                catch {
+                    return @()
+                }
+            })]
+        [string]$entry = $null,
 
         [switch]$Follow,
         [switch]$Force,
@@ -56,12 +72,13 @@ function Invoke-QRun {
         [string[]]$RemainingArguments
     )
     dynamicparam {
-        if (-not $entry -or $entry -in @('help', 'list', '!init', '!state', '!complete')) {
+        $dynEntry = if ($entry) { $entry } elseif ($command -and $command -notin @('help', 'list', '!init', '!state', '!complete')) { $command } else { $null }
+        if (-not $dynEntry) {
             return
         }
         try {
             $dynMap = . $ImportConfigMap -Map $map -Fallback "./.process.map.ps1" | Assert-ConfigMap
-            return Get-ProcessDynamicParam -Map $dynMap -ProcessKey $entry -Follow:$Follow
+            return Get-ProcessDynamicParam -Map $dynMap -ProcessKey $dynEntry -Follow:$Follow
         }
         catch {
             return
@@ -69,7 +86,20 @@ function Invoke-QRun {
     }
 
     process {
-        if ($entry -eq "help") {
+        $qrunVerbs = @('help', 'list', '!init', '!state', '!complete')
+        $verb = $null
+        $processEntry = $null
+        if ($command -in $qrunVerbs) {
+            $verb = $command
+        }
+        elseif ($entry) {
+            $processEntry = $entry
+        }
+        elseif ($command) {
+            $processEntry = [string]$command
+        }
+
+        if ($verb -eq "help") {
             Write-Host ""
             Write-Host "QRUN" -ForegroundColor Cyan
             Write-Host "Run multi-step processes with durable step state" -ForegroundColor Gray
@@ -97,11 +127,11 @@ function Invoke-QRun {
             return
         }
 
-        if ($entry -eq "!complete") {
+        if ($verb -eq "!complete") {
             $completeArgs = @{
                 Mode  = $null
                 Word  = $Word
-                Entry = $null
+                Entry = $entry
             }
             if ($Params) { $completeArgs.Mode = 'params' }
             elseif ($PSBoundParameters.ContainsKey('Word')) { $completeArgs.Mode = 'word' }
@@ -176,7 +206,7 @@ function Invoke-QRun {
             return
         }
 
-        if ($entry -eq "list") {
+        if ($verb -eq "list") {
             $listMap = . $ImportConfigMap -Map $map -Fallback "./.process.map.ps1"
             if (!$listMap) {
                 Write-Help -invocation $MyInvocation -mapPath "./.process.map.ps1"
@@ -194,13 +224,13 @@ function Invoke-QRun {
                 }
 
                 $processKey = $target.ProcessKey
-                $processEntry = $target.ProcessEntry
+                $listedEntry = $target.ProcessEntry
                 $stepNames = @($target.StepNames)
-                $baseDir = if ($processEntry._baseDir) { $processEntry._baseDir } elseif ($listMap._baseDir) { $listMap._baseDir } else { (Get-Location).Path }
+                $baseDir = if ($listedEntry._baseDir) { $listedEntry._baseDir } elseif ($listMap._baseDir) { $listMap._baseDir } else { (Get-Location).Path }
                 $sourceFile = if ($listMap._sourceFile) { [string]$listMap._sourceFile } else { $null }
                 $statePath = Get-ProcessStatePath -ProcessKey $processKey -BaseDir $baseDir -MapFile $sourceFile
                 $state = Read-ProcessState -StatePath $statePath -ProcessKey $processKey -StepNames $stepNames -MapFile $sourceFile
-                $description = if ($processEntry.description) { [string]$processEntry.description } else { '' }
+                $description = if ($listedEntry.description) { [string]$listedEntry.description } else { '' }
 
                 Write-ProcessStatus `
                     -ProcessKey $processKey `
@@ -214,7 +244,7 @@ function Invoke-QRun {
             return
         }
 
-        if ($entry -eq "!init") {
+        if ($verb -eq "!init") {
             if (Test-Path $map) {
                 throw "map file '$map' already exists"
             }
@@ -222,12 +252,12 @@ function Invoke-QRun {
             return
         }
 
-        if (-not $entry -or $entry -eq "!state") {
+        if (-not $processEntry -or $verb -eq "!state") {
             $stateArgs = @($RemainingArguments | Where-Object { $_ })
             $action = 'show'
             $processFilter = $null
 
-            if ($entry -eq "!state" -and $stateArgs.Count -ge 1) {
+            if ($verb -eq "!state" -and $stateArgs.Count -ge 1) {
                 if ($stateArgs[0] -in @('show', 'clean')) {
                     $action = $stateArgs[0]
                     if ($stateArgs.Count -ge 2) {
@@ -270,9 +300,9 @@ function Invoke-QRun {
         }
 
         $operationContext = New-ConfigMapOperationContext
-        $target = Resolve-ProcessTarget -Map $map -Entry $entry -OperationContext $operationContext
+        $target = Resolve-ProcessTarget -Map $map -Entry $processEntry -OperationContext $operationContext
         $processKey = $target.ProcessKey
-        $processEntry = $target.ProcessEntry
+        $processMapEntry = $target.ProcessEntry
         $stepNames = @($target.StepNames)
         $fromStep = $target.ImpliedStep
 
@@ -280,7 +310,7 @@ function Invoke-QRun {
             throw "-Follow requires a step path (e.g. qrun bootstrap.restore -Follow)"
         }
 
-        $baseDir = if ($processEntry._baseDir) { $processEntry._baseDir } elseif ($map._baseDir) { $map._baseDir } else { (Get-Location).Path }
+        $baseDir = if ($processMapEntry._baseDir) { $processMapEntry._baseDir } elseif ($map._baseDir) { $map._baseDir } else { (Get-Location).Path }
         $sourceFile = if ($map._sourceFile) { [string]$map._sourceFile } else { $null }
         $statePath = Get-ProcessStatePath -ProcessKey $processKey -BaseDir $baseDir -MapFile $sourceFile
 
@@ -328,7 +358,7 @@ function Invoke-QRun {
 
         $bound = @{}
         foreach ($key in $PSBoundParameters.Keys) {
-            if ($key -in @('entry', 'Follow', 'Force', 'Status', 'Reset', 'map', 'RemainingArguments')) {
+            if ($key -in @('command', 'entry', 'Follow', 'Force', 'Status', 'Reset', 'map', 'RemainingArguments', 'Word', 'Params')) {
                 continue
             }
             $bound[$key] = $PSBoundParameters[$key]
@@ -367,11 +397,11 @@ function Invoke-QRun {
             }
             Write-ProcessState -StatePath $statePath -State $state
 
-            $stepEntry = Get-ProcessStepEntry -ProcessEntry $processEntry -StepName $stepName
+            $stepEntry = Get-ProcessStepEntry -ProcessEntry $processMapEntry -StepName $stepName
             try {
                 Push-Location $baseDir
                 try {
-                    $settingsEntry = if ($stepEntry -is [System.Collections.IDictionary]) { $stepEntry } else { $processEntry }
+                    $settingsEntry = if ($stepEntry -is [System.Collections.IDictionary]) { $stepEntry } else { $processMapEntry }
                     Invoke-WithEntrySettings -Map $map -EntryKey "$processKey.$stepName" -Entry $settingsEntry -OperationContext $operationContext -ScriptBlock {
                         Invoke-EntryCommand -entry $stepEntry -key "exec" -bound $bound
                     }

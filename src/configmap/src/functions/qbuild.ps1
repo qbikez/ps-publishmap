@@ -25,12 +25,38 @@ function Invoke-QBuild {
                     }
                     $map = $map | Assert-ConfigMap
 
-                    $completions = Get-EntryCompletion $map -language "build" @PSBoundParameters
+                    $builtins = @(@("!settings", "!describe", "!agent.init", "help", "list") | ? { $_.startswith($wordToComplete) })
+                    # Map-only baseline; enrich with process !complete -word when available.
+                    $completions = [System.Collections.Generic.List[string]]::new()
+                    foreach ($c in @(Get-EntryCompletion $map -language "build" @PSBoundParameters)) {
+                        if ($c) { $completions.Add([string]$c) | Out-Null }
+                    }
+
+                    try {
+                        $resolvedMapPath = Resolve-ConfigMapProcessMapPath -Map $map -MapPath $mapPath
+                        foreach ($procName in @(Get-ConfigMapProcessNamesInMap -Map $map)) {
+                            $procWords = Get-ConfigMapProcessCompleteWord `
+                                -ProcessName $procName `
+                                -MapPath $resolvedMapPath `
+                                -Word $wordToComplete
+                            if ($null -eq $procWords) { continue }
+                            foreach ($w in @($procWords)) {
+                                if ($w -and -not $completions.Contains([string]$w)) {
+                                    $completions.Add([string]$w) | Out-Null
+                                }
+                            }
+                        }
+                    }
+                    catch {
+                        # No file path / process discovery failure → keep map-only completions
+                    }
+
+                    $completionArray = @($completions)
                     # Include !init if no local map file exists
                     if (!$localMapExists) {
-                        $completions = @("!init" | ? { $_.startswith($wordToComplete) }) + $completions
+                        $completionArray = @("!init" | ? { $_.startswith($wordToComplete) }) + $completionArray
                     }
-                    return @(@("!settings", "!describe", "!agent.init", "help", "list") | ? { $_.startswith($wordToComplete) }) + $completions
+                    return $builtins + $completionArray
                 }
                 catch {
                     return "ERROR [-entry]: $($_.Exception.Message) $($_.ScriptStackTrace)"

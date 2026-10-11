@@ -46,7 +46,7 @@ function Write-MapHelp {
         }
 
         try {
-            $splat = ConvertTo-ConfigMapProcessSplat -MapPath $mapPath -Entry 'list' -RemainingArguments @($name)
+            $splat = ConvertTo-ConfigMapProcessSplat -MapPath $mapPath -Command 'list' -RemainingArguments @($name)
             Invoke-ConfigMapProcessCli -ProcessName $root.Process -Splat $splat | Out-Null
             return $true
         }
