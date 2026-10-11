@@ -237,4 +237,45 @@ Describe 'qrun process runner' {
         Test-Path $mapFile | Should -BeTrue
         (Get-Content $mapFile -Raw) | Should -Match 'setup'
     }
+
+    It 'supports !complete -params -entry without double-binding' {
+        $mapFile = Join-Path $script:workDir '.process.map.ps1'
+        @'
+[ordered]@{
+    setup = [ordered]@{
+        prepare = { 'ok' | Set-Content 'ok.txt' }
+        restore = {
+            param([string]$Environment = 'dev')
+            "env:$Environment" | Set-Content 'env.txt'
+        }
+    }
+}
+'@ | Set-Content -LiteralPath $mapFile -Encoding utf8
+
+        $names = @(qrun -map $mapFile '!complete' -Params -Entry setup)
+        $global:LASTEXITCODE | Should -Be 0
+        $names | Should -Contain 'Follow'
+        $names | Should -Contain 'Force'
+        $names | Should -Contain 'Environment'
+    }
+
+    It 'supports !complete -word and named -entry run' {
+        $mapFile = Join-Path $script:workDir '.process.map.ps1'
+        @'
+[ordered]@{
+    setup = [ordered]@{
+        prepare = { 'ok' | Set-Content 'ok.txt' }
+        restore = { 'r' | Set-Content 'r.txt' }
+    }
+}
+'@ | Set-Content -LiteralPath $mapFile -Encoding utf8
+
+        $words = @(qrun -map $mapFile '!complete' -Word 'setup.')
+        $global:LASTEXITCODE | Should -Be 0
+        $words | Should -Contain 'setup.prepare'
+        $words | Should -Contain 'setup.restore'
+
+        qrun -map $mapFile -entry setup.prepare
+        Test-Path 'ok.txt' | Should -BeTrue
+    }
 }

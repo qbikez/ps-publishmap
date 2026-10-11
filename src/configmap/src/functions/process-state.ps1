@@ -175,7 +175,11 @@ function Get-ProcessMapCatalog {
     param(
         [Parameter(Mandatory = $true)]
         [System.Collections.IDictionary]$Map,
-        $OperationContext
+        $OperationContext,
+        # When set, only entries with process=<name>. When IncludeImplicit, also
+        # entries with no process key (standalone .process.map.ps1 via qrun).
+        [string]$ProcessName,
+        [switch]$IncludeImplicit
     )
 
     $reservedKeys = Get-ProcessReservedKeys
@@ -186,6 +190,15 @@ function Get-ProcessMapCatalog {
         if ($key -in $reservedKeys) { continue }
         if ($key.StartsWith('_')) { continue }
         if ($kvp.Value -isnot [System.Collections.IDictionary]) { continue }
+
+        if ($ProcessName) {
+            $entryProcess = Get-EntryProcess $kvp.Value -Default ''
+            $matchesExplicit = ($entryProcess -eq $ProcessName)
+            $matchesImplicit = ($IncludeImplicit -and -not $entryProcess)
+            if (-not $matchesExplicit -and -not $matchesImplicit) {
+                continue
+            }
+        }
 
         try {
             $target = Resolve-ProcessTarget -Map $Map -Entry $key -OperationContext $OperationContext
@@ -221,7 +234,10 @@ function Invoke-ProcessStateCommand {
         [System.Collections.IDictionary]$Map,
         [string]$BaseDir = (Get-Location).Path,
         [string]$MapFile,
-        $OperationContext
+        $OperationContext,
+        [string]$Title = 'QRUN',
+        [string]$ProcessName,
+        [switch]$IncludeImplicit
     )
 
     if ($Action -eq 'clean') {
@@ -249,13 +265,21 @@ function Invoke-ProcessStateCommand {
         throw "No process map file found. Run 'qrun !init' to create one, or provide -map."
     }
 
-    $catalog = @(Get-ProcessMapCatalog -Map $Map -OperationContext $OperationContext)
+    $catalogParams = @{
+        Map              = $Map
+        OperationContext = $OperationContext
+    }
+    if ($ProcessName) {
+        $catalogParams.ProcessName = $ProcessName
+        $catalogParams.IncludeImplicit = $IncludeImplicit
+    }
+    $catalog = @(Get-ProcessMapCatalog @catalogParams)
     if ($ProcessKey) {
         $catalog = @($catalog | Where-Object { $_.ProcessKey -eq $ProcessKey })
         if ($catalog.Count -eq 0) {
             # allow process.step filter by resolving to parent process
             $target = Resolve-ProcessTarget -Map $Map -Entry $ProcessKey -OperationContext $OperationContext
-            $catalog = @(Get-ProcessMapCatalog -Map $Map -OperationContext $OperationContext | Where-Object { $_.ProcessKey -eq $target.ProcessKey })
+            $catalog = @(Get-ProcessMapCatalog @catalogParams | Where-Object { $_.ProcessKey -eq $target.ProcessKey })
         }
         if ($catalog.Count -eq 0) {
             throw "Process '$ProcessKey' not found. Run 'qrun list' to see available processes."
@@ -264,14 +288,14 @@ function Invoke-ProcessStateCommand {
 
     if ($catalog.Count -eq 0) {
         Write-Host ""
-        Write-Host "QRUN" -ForegroundColor Cyan
+        Write-Host $Title -ForegroundColor Cyan
         Write-Host "No processes found in the map." -ForegroundColor DarkGray
         Write-Host ""
         return
     }
 
     Write-Host ""
-    Write-Host "QRUN" -ForegroundColor Cyan
+    Write-Host $Title -ForegroundColor Cyan
     Write-Host "Process state" -ForegroundColor Gray
     Write-Host ""
     Write-Host "PROCESSES:" -ForegroundColor Yellow
