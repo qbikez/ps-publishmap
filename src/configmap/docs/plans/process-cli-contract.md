@@ -50,7 +50,7 @@ block when implementing (revert the earlier in-process splat design).
 |------|------|
 | Entry setting | `process = "<name>"` (default `qbuild` = built-in, not delegated) |
 | Command | Resolve `<name>` via PATH / command discovery so `& <name> ...` works |
-| Plugin folder | Optional metadata later (`plugins/process-<name>`); not required if command resolves |
+| Plugin folder | Not used — a process is any command that implements this contract |
 | Working directory | Inherit qbuild’s current directory |
 | Environment | Inherit process env; no required `CONFIGMAP_*` vars in v1 |
 
@@ -189,7 +189,7 @@ flowchart LR
 ```
 
 - Strip `-Follow/-Force/-Status/-Reset` from `Invoke-QBuild`
-- Replace in-process `Invoke-QRun` in process plugin with `& $command @argv`
+- Delegate via `& <process> -map <path> -entry …` (no process plugin)
 - Wire dynparam/completer to `!complete`
 - Adjust `test/qbuild-process.tests.ps1` per below before or with the switch
 

@@ -42,7 +42,7 @@ flowchart LR
 | List | `Write-MapHelp` + process `list <entry>` | `list` / `list <entry>` status tree | `list` in ValidateSet but **unimplemented** |
 | Discovery | map walk + process `!complete` | `!complete -word` / `-params` | ArgumentCompleter attributes only |
 | Opaque params | via `!complete` | Follow/Force/Status/Reset + step params | dynparams from `"$entry.$command"` |
-| Process plugin | built-in | `plugins/process-qrun` (thin) | **none** |
+| Process plugin | built-in | none (command on PATH) | **none** |
 | Works with qbuild splat `{map, entry}` | yes | yes | **no** — `$command` null → throw |
 
 ### What “run entry” means for each
@@ -177,8 +177,7 @@ No qbuild special-cases for conf beyond existing process delegation:
 3. Invoke → `ConvertTo-ConfigMapProcessSplat` + `Invoke-ConfigMapProcessCli`
 4. List → `& qconf -map <file> list <entry>` (already in `Write-MapHelp` for non-qbuild process)
 
-Optional: `plugins/process-qconf/_process.ps1` as thin metadata / in-memory fallback
-(mirror process-qrun). Not required if `Get-Command qconf` resolves.
+No process plugin required — `Get-Command qconf` resolving is enough.
 
 ## Language / map loading
 

@@ -32,25 +32,12 @@ function Write-MapHelp {
 
         try {
             $mapPath = Resolve-ConfigMapProcessMapPath -Map $map -MapPath $null
-        }
-        catch {
-            # No file path available (in-memory map) — fall back to in-process list helper if present
-            $listResult = Invoke-ConfigMapProcess -ProcessName $root.Process -Member 'WriteListEntry' -Context @{
-                MainCommand = $commandName
-                Map         = $map
-                Entry       = $name
-                EntryKey    = $root.EntryKey
-                EntryValue  = $root.EntryValue
-            }
-            return [bool]$listResult.Handled
-        }
-
-        try {
             $splat = ConvertTo-ConfigMapProcessSplat -MapPath $mapPath -Command 'list' -RemainingArguments @($name)
             Invoke-ConfigMapProcessCli -ProcessName $root.Process -Splat $splat | Out-Null
             return $true
         }
         catch {
+            # No map path (in-memory) or process command missing — skip process list row
             return $false
         }
     }

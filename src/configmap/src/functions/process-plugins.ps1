@@ -1,7 +1,5 @@
 #requires -version 7.0
 
-$script:ConfigMapProcesses = @{}
-
 function Get-EntryProcess {
     param(
         $Entry,
@@ -12,23 +10,6 @@ function Get-EntryProcess {
         return [string]$Entry.process
     }
     return $Default
-}
-
-function Get-ConfigMapProcess {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Name
-    )
-
-    if ($Name -eq 'qbuild') {
-        return $null
-    }
-
-    $process = $script:ConfigMapProcesses[$Name]
-    if (-not $process) {
-        throw "Unknown process '$Name'. Available: qbuild, $(($script:ConfigMapProcesses.Keys | Sort-Object) -join ', ')"
-    }
-    return $process
 }
 
 function Resolve-ConfigMapProcessRoot {
@@ -87,38 +68,6 @@ function Resolve-ConfigMapProcessRoot {
         Process       = $DefaultProcess
         OriginalEntry = $Entry
     }
-}
-
-function Invoke-ConfigMapProcess {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$ProcessName,
-        [Parameter(Mandatory = $true)]
-        [string]$Member,
-        [hashtable]$Context
-    )
-
-    $process = Get-ConfigMapProcess -Name $ProcessName
-    if (-not $process) {
-        return @{ Handled = $false }
-    }
-
-    $handler = $process[$Member]
-    if (-not $handler) {
-        return @{ Handled = $false }
-    }
-
-    $result = & $handler $Context
-    if ($result -is [System.Management.Automation.RuntimeDefinedParameterDictionary]) {
-        return $result
-    }
-    if ($result -is [hashtable] -and $result.ContainsKey('Handled')) {
-        return $result
-    }
-    if ($null -eq $result) {
-        return @{ Handled = $true }
-    }
-    return @{ Handled = $true; Result = $result }
 }
 
 function Resolve-ConfigMapProcessMapPath {
