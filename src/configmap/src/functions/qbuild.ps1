@@ -21,7 +21,7 @@ function Invoke-QBuild {
                         }
                     }
                     if ($mapNotFound) {
-                        return @("!init", "!settings", "!describe", "!agent.init", "help", "list") | ? { $_.startswith($wordToComplete) }
+                        return @("!init", "!settings", "!describe", "!agent.init", "!state", "help", "list") | ? { $_.startswith($wordToComplete) }
                     }
                     $map = $map | Assert-ConfigMap
 
@@ -30,7 +30,7 @@ function Invoke-QBuild {
                     if (!$localMapExists) {
                         $completions = @("!init" | ? { $_.startswith($wordToComplete) }) + $completions
                     }
-                    return @(@("!settings", "!describe", "!agent.init", "help", "list") | ? { $_.startswith($wordToComplete) }) + $completions
+                    return @(@("!settings", "!describe", "!agent.init", "!state", "help", "list") | ? { $_.startswith($wordToComplete) }) + $completions
                 }
                 catch {
                     return "ERROR [-entry]: $($_.Exception.Message) $($_.ScriptStackTrace)"
@@ -38,6 +38,12 @@ function Invoke-QBuild {
             })]
         [Parameter(Position = 0)]
         $entry = $null,
+
+        [switch]$Follow,
+        [switch]$Force,
+        [switch]$Status,
+        [switch]$Reset,
+
         [Parameter(DontShow)]
         $command = "exec",
         [Parameter(DontShow)]
@@ -49,9 +55,26 @@ function Invoke-QBuild {
         if ($entry -eq '!agent.init') {
             return New-QBuildAgentInitDynamicParam
         }
+        if (-not $entry -or $entry -in @('help', 'list', '!init', '!settings', '!describe', '!state', '!agent.init')) {
+            return
+        }
         try {
-            $map = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" | Assert-ConfigMap
-            $result = Get-EntryDynamicParam $map $entry $command -skip 0 -bound $PSBoundParameters
+            $dynMap = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" | Assert-ConfigMap
+            $root = Resolve-ConfigMapProcessRoot -Map $dynMap -Entry $entry
+            if ($root.Process -ne 'qbuild') {
+                $dynResult = Invoke-ConfigMapProcess -ProcessName $root.Process -Member 'GetDynamicParam' -Context @{
+                    Map    = $dynMap
+                    Entry  = $entry
+                    Follow = [bool]$PSBoundParameters['Follow']
+                }
+                if ($dynResult -is [System.Management.Automation.RuntimeDefinedParameterDictionary]) {
+                    return $dynResult
+                }
+                if ($dynResult.Result -is [System.Management.Automation.RuntimeDefinedParameterDictionary]) {
+                    return $dynResult.Result
+                }
+            }
+            $result = Get-EntryDynamicParam $dynMap $entry $command -skip 0 -bound $PSBoundParameters
             Write-Debug "Dynamic parameters for entry '$entry': $($result.Keys -join ', ')"
             return $result
         }
@@ -67,6 +90,8 @@ function Invoke-QBuild {
             Write-Host ""
             Write-Host "Usage:"
             Write-Host "qbuild <your-script-name>"
+            Write-Host "qbuild <process> [-Follow] [-Force] [-Status] [-Reset]  # when process=qrun"
+            Write-Host "qbuild !state [show|clean] [<process>]"
             return
         }
         if ($entry -eq "list") {
@@ -138,6 +163,42 @@ function Invoke-QBuild {
 
             return Get-ConfigMapCommandCatalog -Map $describeMap -Language build
         }
+        if ($entry -eq "!state") {
+            $stateMap = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" -ErrorAction Ignore
+            if (!$stateMap) {
+                Write-Help -invocation $MyInvocation -mapPath "./.build.map.ps1"
+                return
+            }
+
+            $stateArgs = @($RemainingArguments | Where-Object { $_ })
+            $action = 'show'
+            $processFilter = $null
+            if ($stateArgs.Count -ge 1) {
+                if ($stateArgs[0] -in @('show', 'clean')) {
+                    $action = $stateArgs[0]
+                    if ($stateArgs.Count -ge 2) {
+                        $processFilter = $stateArgs[1]
+                    }
+                    if ($stateArgs.Count -gt 2) {
+                        throw "!state $action accepts at most one process name."
+                    }
+                }
+                else {
+                    throw "!state expects 'show' or 'clean', got '$($stateArgs[0])'. Try: qbuild !state show"
+                }
+            }
+
+            $operationContext = New-ConfigMapOperationContext
+            $stateResult = Invoke-ConfigMapProcess -ProcessName 'qrun' -Member 'InvokeStateCommand' -Context @{
+                Map              = $stateMap
+                MapPath          = $map
+                StateAction      = $action
+                StateProcessKey  = $processFilter
+                OperationContext = $operationContext
+                MainCommand      = 'qbuild'
+            }
+            return $stateResult.Result
+        }
 
         $mapPath = $map
         $map = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" -ErrorAction Ignore
@@ -156,6 +217,40 @@ function Invoke-QBuild {
         }
 
         $operationContext = New-ConfigMapOperationContext
+        $processRoot = Resolve-ConfigMapProcessRoot -Map $map -Entry $entry -OperationContext $operationContext
+
+        if ($processRoot.Process -ne 'qbuild') {
+            if ($null -eq $processRoot.EntryValue) {
+                throw "Entry '$entry' not found. Run 'qbuild list' to see all available commands."
+            }
+
+            $bound = @{}
+            foreach ($key in $PSBoundParameters.Keys) {
+                if ($key -in @('entry', 'command', 'map', 'RemainingArguments', 'Follow', 'Force', 'Status', 'Reset')) {
+                    continue
+                }
+                $bound[$key] = $PSBoundParameters[$key]
+            }
+            $passthrough = @($RemainingArguments) | Where-Object { $null -ne $_ }
+
+            $forwardResult = Invoke-ConfigMapProcess -ProcessName $processRoot.Process -Member 'Invoke' -Context @{
+                MainCommand        = 'qbuild'
+                Map                = $map
+                MapPath            = $mapPath
+                Entry              = $entry
+                EntryKey           = $processRoot.EntryKey
+                EntryValue         = $processRoot.EntryValue
+                Bound              = $bound
+                RemainingArguments = $passthrough
+                OperationContext   = $operationContext
+                Follow             = [bool]$Follow
+                Force              = [bool]$Force
+                Status             = [bool]$Status
+                Reset              = [bool]$Reset
+            }
+            return $forwardResult.Result
+        }
+
         $targets = Get-MapEntries $map $entry -language "build" -OperationContext $operationContext
         
         # Validate that the entry exists
@@ -171,6 +266,10 @@ function Invoke-QBuild {
         $bound = $PSBoundParameters
         $bound.Remove("entry") | Out-Null
         $bound.Remove("RemainingArguments") | Out-Null
+        $bound.Remove("Follow") | Out-Null
+        $bound.Remove("Force") | Out-Null
+        $bound.Remove("Status") | Out-Null
+        $bound.Remove("Reset") | Out-Null
         $passthrough = @($RemainingArguments) | Where-Object { $null -ne $_ }
         if ($passthrough.Count -gt 0) {
             if (-not $bound._context -or $bound._context -isnot [hashtable]) {

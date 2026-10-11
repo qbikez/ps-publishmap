@@ -1,6 +1,44 @@
 function Write-MapHelp {
     param([System.Collections.IDictionary]$map, $invocation, [ValidateSet("build", "conf")]$language = "build")
     $commandName = $invocation.InvocationName
+    $operationContext = New-ConfigMapOperationContext
+
+    $writeDefaultLine = {
+        param($name, $description, $paramInfo, $maxNameLength)
+        $paddedName = $name.PadRight($maxNameLength)
+        Write-Host "    " -NoNewline
+        Write-Host "$paddedName" -ForegroundColor Green -NoNewline
+        if ($paramInfo) {
+            Write-Host " [$paramInfo]" -ForegroundColor DarkGray -NoNewline
+        }
+        Write-Host "  $description" -ForegroundColor White
+    }
+
+    $tryWriteProcessListEntry = {
+        param($name, $entryValue)
+        if ($language -ne 'build') {
+            return $false
+        }
+
+        $root = Resolve-ConfigMapProcessRoot -Map $map -Entry $name -OperationContext $operationContext
+        if ($root.Process -eq 'qbuild') {
+            return $false
+        }
+
+        # Nested step paths under a process entry are shown inside the status tree
+        if ($root.EntryKey -ne $name) {
+            return $true
+        }
+
+        $listResult = Invoke-ConfigMapProcess -ProcessName $root.Process -Member 'WriteListEntry' -Context @{
+            MainCommand = $commandName
+            Map         = $map
+            Entry       = $name
+            EntryKey    = $root.EntryKey
+            EntryValue  = $root.EntryValue
+        }
+        return [bool]$listResult.Handled
+    }
 
     $cache = Get-ConfigMapDiscoveryCache -Map $map -Language $language
     if ($cache) {
@@ -23,17 +61,15 @@ function Write-MapHelp {
 
         foreach ($item in $scriptItems) {
             $name = [string]$item.key
+            $entryValue = Get-MapEntry $map $name -language $language -OperationContext $operationContext
+            if (& $tryWriteProcessListEntry $name $entryValue) {
+                continue
+            }
+
             $description = [string]$item.description
             $argList = @($item.parameters) | Where-Object { $_ } | ForEach-Object { "-$($_.name)" }
             $paramInfo = ($argList -join " ")
-            $paddedName = $name.PadRight($maxNameLength)
-
-            Write-Host "    " -NoNewline
-            Write-Host "$paddedName" -ForegroundColor Green -NoNewline
-            if ($paramInfo) {
-                Write-Host " [$paramInfo]" -ForegroundColor DarkGray -NoNewline
-            }
-            Write-Host "  $description" -ForegroundColor White
+            & $writeDefaultLine $name $description $paramInfo $maxNameLength
         }
         return
     }
@@ -64,6 +100,11 @@ function Write-MapHelp {
     foreach ($item in $scriptItems) {
         $name = $item.Name
         $script = $item.Value
+
+        if (& $tryWriteProcessListEntry $name $script) {
+            continue
+        }
+
         try {
             $entry = Get-EntryCommand $script "exec"
         }
@@ -77,10 +118,6 @@ function Write-MapHelp {
             $args = @{}
         }
 
-        # Format command name with proper padding
-        $paddedName = $name.PadRight($maxNameLength)
-
-        # Get description
         $description = ""
         if ($script -is [System.Collections.IDictionary] -and $script.description) {
             $description = $script.description
@@ -88,13 +125,7 @@ function Write-MapHelp {
 
         $argList = $args.Keys | % { "-$($_)" }
         $paramInfo = ($argList -join " ")
-
-        Write-Host "    " -NoNewline
-        Write-Host "$paddedName" -ForegroundColor Green -NoNewline
-        if ($paramInfo) {
-            Write-Host " [$paramInfo]" -ForegroundColor DarkGray -NoNewline
-        }
-        Write-Host "  $description" -ForegroundColor White
+        & $writeDefaultLine $name $description $paramInfo $maxNameLength
     }
 }
 
