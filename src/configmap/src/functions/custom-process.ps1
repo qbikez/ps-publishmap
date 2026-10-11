@@ -52,11 +52,12 @@ function Resolve-ConfigMapProcessRoot {
         $lastKey = $candidate
         $lastResolved = $resolved
 
-        if ($resolved -is [System.Collections.IDictionary] -and $resolved.Keys -contains 'process' -and $resolved.process) {
+        $proc = Get-EntryProcess $resolved -Default ''
+        if ($proc) {
             return [pscustomobject]@{
                 EntryKey      = $candidate
                 EntryValue    = $resolved
-                Process       = [string]$resolved.process
+                Process       = $proc
                 OriginalEntry = $Entry
             }
         }
@@ -86,7 +87,7 @@ function Resolve-ConfigMapProcessMapPath {
 
     if ($MapPath -is [string] -and $MapPath) {
         if (Test-Path -LiteralPath $MapPath) {
-            return [System.IO.Path]::GetFullPath((Resolve-Path -LiteralPath $MapPath).Path)
+            return (Resolve-Path -LiteralPath $MapPath).Path
         }
         return [System.IO.Path]::GetFullPath($MapPath)
     }
@@ -104,7 +105,44 @@ function Resolve-ConfigMapProcessCommand {
     if (-not $cmd) {
         throw "Process command '$ProcessName' not found on PATH / session. Install or import it so '& $ProcessName' works."
     }
+    if ($cmd.CommandType -eq 'Alias') {
+        $cmd = $cmd.ResolvedCommand
+    }
     return $cmd
+}
+
+function Invoke-ConfigMapProcessComplete {
+    <#
+    .SYNOPSIS
+        Run '<process> !complete …'; return trimmed lines, or $null if unsupported/missing.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ProcessName,
+        [Parameter(Mandatory = $true)]
+        [string]$MapPath,
+        [Parameter(Mandatory = $true)]
+        [hashtable]$CompleteArgs
+    )
+
+    try {
+        $cmd = Resolve-ConfigMapProcessCommand -ProcessName $ProcessName
+    }
+    catch {
+        return $null
+    }
+
+    $global:LASTEXITCODE = 0
+    $output = & $cmd -map $MapPath '!complete' @CompleteArgs 2>$null
+    if ($global:LASTEXITCODE -eq 2) {
+        return $null
+    }
+
+    return @(
+        @($output) |
+            ForEach-Object { "$_".Trim() } |
+            Where-Object { $_ }
+    )
 }
 
 function New-ConfigMapOpaqueDynamicParam {
@@ -204,10 +242,6 @@ function Invoke-ConfigMapProcessCli {
     )
 
     $cmd = Resolve-ConfigMapProcessCommand -ProcessName $ProcessName
-    if ($cmd.CommandType -eq 'Alias') {
-        $cmd = $cmd.ResolvedCommand
-    }
-
     $global:LASTEXITCODE = 0
     & $cmd @Splat
     return $global:LASTEXITCODE
@@ -255,27 +289,10 @@ function Get-ConfigMapProcessCompleteParams {
         [string]$Entry
     )
 
-    try {
-        $cmd = Resolve-ConfigMapProcessCommand -ProcessName $ProcessName
-        if ($cmd.CommandType -eq 'Alias') {
-            $cmd = $cmd.ResolvedCommand
-        }
+    return Invoke-ConfigMapProcessComplete -ProcessName $ProcessName -MapPath $MapPath -CompleteArgs @{
+        Params = $true
+        Entry  = $Entry
     }
-    catch {
-        return $null
-    }
-
-    $global:LASTEXITCODE = 0
-    $output = & $cmd -map $MapPath '!complete' -Params -Entry $Entry 2>$null
-    if ($global:LASTEXITCODE -eq 2) {
-        return $null
-    }
-
-    return @(
-        @($output) |
-            ForEach-Object { "$_".Trim() } |
-            Where-Object { $_ }
-    )
 }
 
 function Get-ConfigMapProcessCompleteWord {
@@ -294,32 +311,12 @@ function Get-ConfigMapProcessCompleteWord {
         [string]$Entry
     )
 
-    try {
-        $cmd = Resolve-ConfigMapProcessCommand -ProcessName $ProcessName
-        if ($cmd.CommandType -eq 'Alias') {
-            $cmd = $cmd.ResolvedCommand
-        }
-    }
-    catch {
-        return $null
-    }
-
-    $global:LASTEXITCODE = 0
+    $completeArgs = @{ Word = $Word }
     if ($Entry) {
-        $output = & $cmd -map $MapPath '!complete' -Word $Word -Entry $Entry 2>$null
-    }
-    else {
-        $output = & $cmd -map $MapPath '!complete' -Word $Word 2>$null
-    }
-    if ($global:LASTEXITCODE -eq 2) {
-        return $null
+        $completeArgs['Entry'] = $Entry
     }
 
-    return @(
-        @($output) |
-            ForEach-Object { "$_".Trim() } |
-            Where-Object { $_ }
-    )
+    return Invoke-ConfigMapProcessComplete -ProcessName $ProcessName -MapPath $MapPath -CompleteArgs $completeArgs
 }
 
 function New-ConfigMapProcessDynamicParam {
@@ -343,7 +340,6 @@ function New-ConfigMapProcessDynamicParam {
     $typed = Get-ProcessDynamicParam -Map $Map -ProcessKey $Entry -Follow:$Follow
 
     if ($null -eq $names) {
-        # Process does not support !complete — fall back to map-derived step params only
         return $typed
     }
 
