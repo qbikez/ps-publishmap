@@ -33,16 +33,18 @@ function Invoke-QBuild {
                     }
 
                     try {
-                        $resolvedMapPath = Resolve-ConfigMapProcessMapPath -Map $map -MapPath $mapPath
-                        foreach ($procName in @(Get-ConfigMapProcessNamesInMap -Map $map)) {
-                            $procWords = Get-ConfigMapProcessCompleteWord `
-                                -ProcessName $procName `
-                                -MapPath $resolvedMapPath `
-                                -Word $wordToComplete
-                            if ($null -eq $procWords) { continue }
-                            foreach ($w in @($procWords)) {
-                                if ($w -and -not $completions.Contains([string]$w)) {
-                                    $completions.Add([string]$w) | Out-Null
+                        $resolvedMapPath = Resolve-ConfigMapProcessMapPath -Map $map
+                        if ($resolvedMapPath) {
+                            foreach ($procName in @(Get-ConfigMapProcessNamesInMap -Map $map)) {
+                                $procWords = Get-ConfigMapProcessCompleteWord `
+                                    -ProcessName $procName `
+                                    -MapPath $resolvedMapPath `
+                                    -Word $wordToComplete
+                                if ($null -eq $procWords) { continue }
+                                foreach ($w in @($procWords)) {
+                                    if ($w -and -not $completions.Contains([string]$w)) {
+                                        $completions.Add([string]$w) | Out-Null
+                                    }
                                 }
                             }
                         }
@@ -83,8 +85,11 @@ function Invoke-QBuild {
             $dynMap = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" | Assert-ConfigMap
             $root = Resolve-ConfigMapProcessRoot -Map $dynMap -Entry $entry
             if ($root.Process -ne 'qbuild') {
-                $mapPath = Resolve-ConfigMapProcessMapPath -Map $dynMap -MapPath $map
+                $mapPath = Resolve-ConfigMapProcessMapPath -Map $dynMap
                 $followHint = [bool]$PSBoundParameters['Follow']
+                if (-not $mapPath) {
+                    return Get-ProcessDynamicParam -Map $dynMap -ProcessKey $entry -Follow:$followHint
+                }
                 return New-ConfigMapProcessDynamicParam `
                     -ProcessName $root.Process `
                     -MapPath $mapPath `
@@ -108,7 +113,7 @@ function Invoke-QBuild {
             Write-Host ""
             Write-Host "Usage:"
             Write-Host "qbuild <your-script-name>"
-            Write-Host "qbuild <process>[.<step>] [process options]  # when process=<name> (e.g. qrun)"
+            Write-Host "qbuild <process>[.<step>] [process options]  # when _settings.process=<name> (e.g. qrun)"
             return
         }
         if ($entry -eq "list") {
@@ -205,7 +210,10 @@ function Invoke-QBuild {
                 throw "Entry '$entry' not found. Run 'qbuild list' to see all available commands."
             }
 
-            $resolvedMapPath = Resolve-ConfigMapProcessMapPath -Map $map -MapPath $mapPath
+            $resolvedMapPath = Resolve-ConfigMapProcessMapPath -Map $map
+            if (-not $resolvedMapPath) {
+                throw "Cannot delegate process '$($processRoot.Process)' for entry '$entry': the map has no _sourceFile."
+            }
             $splat = ConvertTo-ConfigMapProcessSplat `
                 -MapPath $resolvedMapPath `
                 -Entry $entry `

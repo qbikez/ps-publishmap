@@ -31,7 +31,10 @@ function Write-MapHelp {
         }
 
         try {
-            $mapPath = Resolve-ConfigMapProcessMapPath -Map $map -MapPath $null
+            $mapPath = Resolve-ConfigMapProcessMapPath -Map $map
+            if (-not $mapPath) {
+                return $false
+            }
             $splat = ConvertTo-ConfigMapProcessSplat -MapPath $mapPath -Command 'list' -RemainingArguments @($name)
             Invoke-ConfigMapProcessCli -ProcessName $root.Process -Splat $splat | Out-Null
             return $true

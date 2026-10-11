@@ -176,8 +176,8 @@ function Get-ProcessMapCatalog {
         [Parameter(Mandatory = $true)]
         [System.Collections.IDictionary]$Map,
         $OperationContext,
-        # When set, only entries with process=<name>. When IncludeImplicit, also
-        # entries with no process key (standalone .process.map.ps1 via qrun).
+        # When set, only entries with _settings.process=<name>. When IncludeImplicit,
+        # also entries without that setting (standalone .process.map.ps1 via qrun).
         [string]$ProcessName,
         [switch]$IncludeImplicit
     )

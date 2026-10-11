@@ -6,8 +6,13 @@ function Get-EntryProcess {
         [string]$Default = 'qbuild'
     )
 
-    if ($Entry -is [System.Collections.IDictionary] -and $Entry.Keys -contains 'process' -and $Entry.process) {
-        return [string]$Entry.process
+    if (
+        $Entry -is [System.Collections.IDictionary] -and
+        $Entry._settings -is [System.Collections.IDictionary] -and
+        $Entry._settings.Contains('process') -and
+        $Entry._settings.process
+    ) {
+        return [string]$Entry._settings.process
     }
     return $Default
 }
@@ -74,25 +79,16 @@ function Resolve-ConfigMapProcessRoot {
 function Resolve-ConfigMapProcessMapPath {
     <#
     .SYNOPSIS
-        Resolve a filesystem path for process CLI -map handoff (path-only contract).
+        Get the source file path for process CLI -map handoff.
     #>
     param(
-        $Map,
-        $MapPath
+        $Map
     )
 
     if ($Map -is [System.Collections.IDictionary] -and $Map._sourceFile) {
         return [string]$Map._sourceFile
     }
-
-    if ($MapPath -is [string] -and $MapPath) {
-        if (Test-Path -LiteralPath $MapPath) {
-            return (Resolve-Path -LiteralPath $MapPath).Path
-        }
-        return [System.IO.Path]::GetFullPath($MapPath)
-    }
-
-    throw "Process delegation requires a map file path (-map <file>). In-memory maps are not supported."
+    return $null
 }
 
 function Resolve-ConfigMapProcessCommand {
@@ -250,7 +246,7 @@ function Invoke-ConfigMapProcessCli {
 function Get-ConfigMapProcessNamesInMap {
     <#
     .SYNOPSIS
-        Distinct non-qbuild process names declared on top-level map entries.
+        Distinct non-qbuild process names declared in top-level entry settings.
     #>
     param(
         [Parameter(Mandatory = $true)]

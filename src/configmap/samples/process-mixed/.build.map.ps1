@@ -1,6 +1,6 @@
 #requires -version 7.0
 
-# Mixed map: normal qbuild commands alongside process=qrun multi-step entries.
+# Mixed map: normal qbuild commands alongside _settings.process=qrun multi-step entries.
 # Try:
 #   qbuild clean
 #   qbuild build
@@ -28,7 +28,7 @@
     }
 
     "bootstrap" = [ordered]@{
-        process     = "qrun"
+        _settings   = @{ process = "qrun" }
         description = "Multi-step bootstrap with durable step state"
 
         "prepare"   = {

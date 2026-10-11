@@ -1,6 +1,7 @@
 # Mixed qbuild + qrun process sample
 
-This `.build.map.ps1` mixes normal qbuild commands with a `process=qrun` entry.
+This `.build.map.ps1` mixes normal qbuild commands with an
+`_settings.process=qrun` entry.
 
 ```powershell
 Import-Module ../../configmap.psm1 -Force
@@ -16,5 +17,6 @@ qbuild !state
 qbuild !state clean bootstrap
 ```
 
-Entries without `process` use the default qbuild runner. Entries with
-`process = "qrun"` are forwarded to the qrun step runner (same map).
+Entries without `_settings.process` use the default qbuild runner. Entries with
+`_settings = @{ process = "qrun" }` are forwarded to the qrun step runner
+(same map).
