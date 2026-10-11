@@ -1,3 +1,5 @@
+. "$PSScriptRoot\process-state.ps1"
+
 function Invoke-QRun {
     [CmdletBinding()]
     param(
