@@ -59,6 +59,7 @@ Entry script bodies live in the project's map (or maps it `#include`s):
 | Human listing | `qbuild` or `qbuild list` |
 | Effective settings | `qbuild !settings [path]` |
 | Discovery cache | `qbuild !cache [status\|clear\|rebuild]` |
+| Cache location | `qbuild !settings` → `DiscoveryCacheLocation` (`local` or `user`) |
 | Run a command | `qbuild <name> [-Param value ...]` |
 
 ## Catalog shape

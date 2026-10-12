@@ -1,6 +1,8 @@
 BeforeAll {
     $script:discoveryCacheEnvBackup = (Get-Item -Path env:QCONF_DiscoveryCache -ErrorAction SilentlyContinue).Value
+    $script:discoveryCacheLocationEnvBackup = (Get-Item -Path env:QCONF_DiscoveryCacheLocation -ErrorAction SilentlyContinue).Value
     Remove-Item -Path env:QCONF_DiscoveryCache -ErrorAction SilentlyContinue
+    Remove-Item -Path env:QCONF_DiscoveryCacheLocation -ErrorAction SilentlyContinue
 
     Get-Module ConfigMap -ErrorAction SilentlyContinue | Remove-Module
     Import-Module $PSScriptRoot\..\configmap.psm1 -Force
@@ -8,8 +10,12 @@ BeforeAll {
 
 AfterAll {
     Remove-Item -Path env:QCONF_DiscoveryCache -ErrorAction SilentlyContinue
+    Remove-Item -Path env:QCONF_DiscoveryCacheLocation -ErrorAction SilentlyContinue
     if ($null -ne $script:discoveryCacheEnvBackup) {
         Set-Item -Path env:QCONF_DiscoveryCache -Value $script:discoveryCacheEnvBackup
+    }
+    if ($null -ne $script:discoveryCacheLocationEnvBackup) {
+        Set-Item -Path env:QCONF_DiscoveryCacheLocation -Value $script:discoveryCacheLocationEnvBackup
     }
     & (Get-Module ConfigMap) { Update-ConfigMapSettings | Out-Null }
 }
@@ -38,6 +44,7 @@ Describe 'qbuild !cache' {
 
             $result.Action | Should -Be 'status'
             $result.Enabled | Should -BeTrue
+            $result.Location | Should -Be 'local'
             $result.Exists | Should -BeTrue
             $result.Valid | Should -BeTrue
             $result.Source | Should -Be 'memory'
@@ -204,6 +211,38 @@ Describe 'qbuild !cache' {
             $actionSet = $params['Action'].Attributes |
                 Where-Object { $_ -is [System.Management.Automation.ValidateSetAttribute] }
             @($actionSet.ValidValues) | Should -Be @('status', 'clear', 'rebuild')
+        }
+    }
+
+    It 'reports user cache path when DiscoveryCacheLocation is user' {
+        $userHome = Join-Path $TestDrive 'qbuild-cache-user-home'
+        New-Item -ItemType Directory -Force -Path $userHome | Out-Null
+        Set-Content -Path (Join-Path $script:tempRoot '.build.map.ps1') -Value @'
+@{
+    _settings = @{ DiscoveryCacheLocation = 'user' }
+    build = { "build" }
+}
+'@
+
+        $previousHome = $env:HOME
+        $env:HOME = $userHome
+        Push-Location $script:tempRoot
+        try {
+            $result = qbuild '!cache' 'rebuild'
+            $result.Location | Should -Be 'user'
+            $result.Exists | Should -BeTrue
+            $result.Path | Should -Match '\\.configmap\\'
+            $result.Path | Should -BeLike "$userHome*"
+            Test-Path (Join-Path $script:tempRoot '.configmap') | Should -BeFalse
+        }
+        finally {
+            Pop-Location
+            if ($null -eq $previousHome) {
+                Remove-Item env:HOME -ErrorAction SilentlyContinue
+            }
+            else {
+                $env:HOME = $previousHome
+            }
         }
     }
 
