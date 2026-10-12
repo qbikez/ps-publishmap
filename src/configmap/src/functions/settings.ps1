@@ -11,6 +11,7 @@ function New-ConfigMapSettings {
         Concurrently   = $false
         TmuxAutoWindow = $false
         DiscoveryCache = $true
+        Process        = 'qbuild'
     }
 
     foreach ($propertyName in @($settings.Keys)) {
