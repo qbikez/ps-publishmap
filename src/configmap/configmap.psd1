@@ -3,7 +3,7 @@
     RootModule           = 'configmap.psm1'
 
     # Version number of this module.
-    ModuleVersion = '1.2.5.0'
+    ModuleVersion = '1.2.10.0'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Core')
@@ -79,9 +79,11 @@
         'Initialize-QBuildAgent',
         'Invoke-QBuild',
         'Invoke-QConf',
+        'Invoke-QRun',
         'ConvertTo-MapResult',
         'Initialize-ConfigMap',
         'Initialize-BuildMap',
+        'Initialize-ProcessMap',
         'Get-MapLanguage',
         'Merge-IncludeDirectives',
         'Add-BaseDir'
@@ -94,7 +96,7 @@
     VariablesToExport    = @('ImportConfigMap')
 
     # Aliases to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no aliases to export.
-    AliasesToExport      = @('qbuild', 'qconf')
+    AliasesToExport      = @('qbuild', 'qconf', 'qrun')
 
     # DSC resources to export from this module
     # DscResourcesToExport = @()
@@ -170,6 +172,10 @@ Initial release of ConfigMap module providing:
     # Default prefix for commands exported from this module. Override the default prefix using Import-Module -Prefix.
     # DefaultCommandPrefix = ''
 }
+
+
+
+
 
 
 

@@ -8,6 +8,7 @@ $helpersPath = (Split-Path -Parent $MyInvocation.MyCommand.Definition)
 
 # Import all function files in dependency order
 . "$helpersPath\functions\plugins.ps1"
+. "$helpersPath\functions\custom-process.ps1"
 . "$helpersPath\functions\languages.ps1"
 . "$helpersPath\functions\resolve-map.ps1"
 . "$helpersPath\functions\settings.ps1"
@@ -21,5 +22,6 @@ $helpersPath = (Split-Path -Parent $MyInvocation.MyCommand.Definition)
 . "$helpersPath\functions\agent-init.ps1"
 . "$helpersPath\functions\qbuild.ps1"
 . "$helpersPath\functions\qconf.ps1"
+. "$helpersPath\qrun\qrun.ps1"
 
 . "$helpersPath\functions\plugins-init.ps1" -PluginsPath "$helpersPath\plugins"

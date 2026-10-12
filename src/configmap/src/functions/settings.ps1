@@ -7,11 +7,12 @@ function New-ConfigMapSettings {
     )
 
     $settings = @{
-        Debug                   = $false
-        Concurrently            = $false
-        TmuxAutoWindow          = $false
-        DiscoveryCache          = $true
-        DiscoveryCacheLocation  = 'local'
+        Debug                  = $false
+        Concurrently           = $false
+        TmuxAutoWindow         = $false
+        DiscoveryCache         = $true
+        DiscoveryCacheLocation = 'local'
+        Process                = 'qbuild'
     }
 
     foreach ($propertyName in @($settings.Keys)) {
@@ -228,7 +229,7 @@ function Enter-ConfigMapAncestorSettingsScopes {
     }
 
     foreach ($scope in $entered) {
-        ,$scope
+        , $scope
     }
 }
 
