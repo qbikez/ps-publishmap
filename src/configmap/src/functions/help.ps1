@@ -31,7 +31,7 @@ function Write-MapHelp {
         }
 
         try {
-            $mapPath = Resolve-ConfigMapProcessMapPath -Map $map
+            $mapPath = Resolve-MapPath -Map $map
             if (-not $mapPath) {
                 return $false
             }

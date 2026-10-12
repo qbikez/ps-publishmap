@@ -26,6 +26,7 @@ function Invoke-QBuild {
                     $map = $map | Assert-ConfigMap
 
                     $builtins = @(@("!settings", "!describe", "!agent.init", "help", "list") | ? { $_.startswith($wordToComplete) })
+                    
                     # Map-only baseline; enrich with process !complete -word when available.
                     $completions = [System.Collections.Generic.List[string]]::new()
                     foreach ($c in @(Get-EntryCompletion $map -language "build" @PSBoundParameters)) {
@@ -33,7 +34,7 @@ function Invoke-QBuild {
                     }
 
                     try {
-                        $resolvedMapPath = Resolve-ConfigMapProcessMapPath -Map $map
+                        $resolvedMapPath = Resolve-MapPath -Map $map
                         if ($resolvedMapPath) {
                             foreach ($procName in @(Get-ConfigMapProcessNamesInMap -Map $map)) {
                                 $procWords = Get-ConfigMapProcessCompleteWord `
@@ -85,7 +86,7 @@ function Invoke-QBuild {
             $dynMap = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" | Assert-ConfigMap
             $root = Resolve-ConfigMapProcessRoot -Map $dynMap -Entry $entry
             if ($root.Process -ne 'qbuild') {
-                $mapPath = Resolve-ConfigMapProcessMapPath -Map $dynMap
+                $mapPath = Resolve-MapPath -Map $dynMap
                 $followHint = [bool]$PSBoundParameters['Follow']
                 if (-not $mapPath) {
                     return Get-ProcessDynamicParam -Map $dynMap -ProcessKey $entry -Follow:$followHint
@@ -210,7 +211,7 @@ function Invoke-QBuild {
                 throw "Entry '$entry' not found. Run 'qbuild list' to see all available commands."
             }
 
-            $resolvedMapPath = Resolve-ConfigMapProcessMapPath -Map $map
+            $resolvedMapPath = Resolve-MapPath -Map $map
             if (-not $resolvedMapPath) {
                 throw "Cannot delegate process '$($processRoot.Process)' for entry '$entry': the map has no _sourceFile."
             }

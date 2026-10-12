@@ -76,7 +76,7 @@ function Resolve-ConfigMapProcessRoot {
     }
 }
 
-function Resolve-ConfigMapProcessMapPath {
+function Resolve-MapPath {
     <#
     .SYNOPSIS
         Get the source file path for process CLI -map handoff.
