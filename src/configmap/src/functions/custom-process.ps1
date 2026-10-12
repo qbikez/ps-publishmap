@@ -17,65 +17,6 @@ function Get-EntryProcess {
     return $Default
 }
 
-function Resolve-ConfigMapProcessRoot {
-    <#
-    .SYNOPSIS
-        Find the owning map entry for a path and its process name.
-        Walks up dotted paths so bootstrap.prepare resolves to bootstrap.
-    #>
-    param(
-        [Parameter(Mandatory = $true)]
-        [System.Collections.IDictionary]$Map,
-        [Parameter(Mandatory = $true)]
-        [string]$Entry,
-        $OperationContext,
-        [string]$DefaultProcess = 'qbuild'
-    )
-
-    $key = $Entry
-    if ($key -match '^(.*)\.all$') {
-        $key = $Matches[1]
-    }
-
-    $candidates = [System.Collections.Generic.List[string]]::new()
-    $candidates.Add($key) | Out-Null
-    $walk = $key
-    while ($walk -match '\.') {
-        $walk = $walk.Substring(0, $walk.LastIndexOf('.'))
-        $candidates.Add($walk) | Out-Null
-    }
-
-    $lastKey = $Entry
-    $lastResolved = $null
-
-    foreach ($candidate in $candidates) {
-        $resolved = Get-MapEntry $Map $candidate -language 'build' -OperationContext $OperationContext
-        if ($null -eq $resolved) {
-            continue
-        }
-
-        $lastKey = $candidate
-        $lastResolved = $resolved
-
-        $proc = Get-EntryProcess $resolved -Default ''
-        if ($proc) {
-            return [pscustomobject]@{
-                EntryKey      = $candidate
-                EntryValue    = $resolved
-                Process       = $proc
-                OriginalEntry = $Entry
-            }
-        }
-    }
-
-    return [pscustomobject]@{
-        EntryKey      = $lastKey
-        EntryValue    = $lastResolved
-        Process       = $DefaultProcess
-        OriginalEntry = $Entry
-    }
-}
-
 function Resolve-MapPath {
     <#
     .SYNOPSIS

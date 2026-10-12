@@ -20,13 +20,13 @@ function Write-MapHelp {
             return $false
         }
 
-        $root = Resolve-ConfigMapProcessRoot -Map $map -Entry $name -OperationContext $operationContext
-        if ($root.Process -eq 'qbuild') {
+        $settings = Get-ConfigMapSettingsForPath -Map $map -Path $name -OperationContext $operationContext
+        if ($settings.Process -eq 'qbuild') {
             return $false
         }
 
         # Nested step paths under a process entry are shown inside the status tree
-        if ($root.EntryKey -ne $name) {
+        if ($name -match '\.' -and -not (Get-EntryProcess $entryValue -Default '')) {
             return $true
         }
 
@@ -36,7 +36,7 @@ function Write-MapHelp {
                 return $false
             }
             $splat = ConvertTo-ConfigMapProcessSplat -MapPath $mapPath -Command 'list' -RemainingArguments @($name)
-            Invoke-ConfigMapProcessCli -ProcessName $root.Process -Splat $splat | Out-Null
+            Invoke-ConfigMapProcessCli -ProcessName $settings.Process -Splat $splat | Out-Null
             return $true
         }
         catch {

@@ -84,15 +84,15 @@ function Invoke-QBuild {
         }
         try {
             $dynMap = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" | Assert-ConfigMap
-            $root = Resolve-ConfigMapProcessRoot -Map $dynMap -Entry $entry
-            if ($root.Process -ne 'qbuild') {
+            $settings = Get-ConfigMapSettingsForPath -Map $dynMap -Path $entry
+            if ($settings.Process -ne 'qbuild') {
                 $mapPath = Resolve-MapPath -Map $dynMap
                 $followHint = [bool]$PSBoundParameters['Follow']
                 if (-not $mapPath) {
                     return Get-ProcessDynamicParam -Map $dynMap -ProcessKey $entry -Follow:$followHint
                 }
                 return New-ConfigMapProcessDynamicParam `
-                    -ProcessName $root.Process `
+                    -ProcessName $settings.Process `
                     -MapPath $mapPath `
                     -Map $dynMap `
                     -Entry $entry `
@@ -204,16 +204,12 @@ function Invoke-QBuild {
         }
 
         $operationContext = New-ConfigMapOperationContext
-        $processRoot = Resolve-ConfigMapProcessRoot -Map $map -Entry $entry -OperationContext $operationContext
+        $processSettings = Get-ConfigMapSettingsForPath -Map $map -Path $entry -OperationContext $operationContext
 
-        if ($processRoot.Process -ne 'qbuild') {
-            if ($null -eq $processRoot.EntryValue) {
-                throw "Entry '$entry' not found. Run 'qbuild list' to see all available commands."
-            }
-
+        if ($processSettings.Process -ne 'qbuild') {
             $resolvedMapPath = Resolve-MapPath -Map $map
             if (-not $resolvedMapPath) {
-                throw "Cannot delegate process '$($processRoot.Process)' for entry '$entry': the map has no _sourceFile."
+                throw "Cannot delegate process '$($processSettings.Process)' for entry '$entry': the map has no _sourceFile."
             }
             $splat = ConvertTo-ConfigMapProcessSplat `
                 -MapPath $resolvedMapPath `
@@ -221,7 +217,7 @@ function Invoke-QBuild {
                 -BoundParameters $PSBoundParameters `
                 -RemainingArguments $RemainingArguments
 
-            Invoke-ConfigMapProcessCli -ProcessName $processRoot.Process -Splat $splat | Out-Null
+            Invoke-ConfigMapProcessCli -ProcessName $processSettings.Process -Splat $splat | Out-Null
             return
         }
 
