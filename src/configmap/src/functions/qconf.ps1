@@ -36,7 +36,7 @@ function Invoke-QConf {
                     $entryName = if ($fakeBoundParameters.entry) {
                         [string]$fakeBoundParameters.entry
                     }
-                    elseif ($fakeBoundParameters.command -notin @('set', 'get', 'list', 'help', 'init', '!init', '!complete')) {
+                    elseif ($fakeBoundParameters.command -notin @('set', 'get', 'show', 'list', 'help', 'init', '!init', '!complete')) {
                         [string]$fakeBoundParameters.command
                     }
                     $entryValue = Get-MapEntry $map $entryName -language conf
@@ -55,7 +55,7 @@ function Invoke-QConf {
         [Parameter(Position = 1, DontShow)]
         [ArgumentCompleter({
                 param ($commandName, $parameterName, $wordToComplete)
-                @('get', 'set') | Where-Object { $_.StartsWith($wordToComplete, [StringComparison]::OrdinalIgnoreCase) }
+                @('get', 'set', 'show') | Where-Object { $_.StartsWith($wordToComplete, [StringComparison]::OrdinalIgnoreCase) }
             })]
         [string]$action,
 
@@ -64,7 +64,7 @@ function Invoke-QConf {
                 param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
                 try {
                     if ($fakeBoundParameters.action -ne 'set') { return @() }
-                    $verbs = @('set', 'get', 'list', 'help', 'init', '!init', '!complete')
+                    $verbs = @('set', 'get', 'show', 'list', 'help', 'init', '!init', '!complete')
                     $entryName = if ($fakeBoundParameters.entry) {
                         [string]$fakeBoundParameters.entry
                     }
@@ -98,7 +98,7 @@ function Invoke-QConf {
 
     dynamicparam {
         try {
-            $verbs = @('set', 'get', 'list', 'help', 'init', '!init', '!complete')
+            $verbs = @('set', 'get', 'show', 'list', 'help', 'init', '!init', '!complete')
             $dynamicEntry = if ($entry) {
                 $entry
             }
@@ -122,7 +122,7 @@ function Invoke-QConf {
     }
 
     process {
-        $verbs = @('set', 'get', 'list', 'help', 'init', '!init', '!complete')
+        $verbs = @('set', 'get', 'show', 'list', 'help', 'init', '!init', '!complete')
         $verb = $null
         $confEntry = $entry
 
@@ -135,13 +135,13 @@ function Invoke-QConf {
             }
         }
 
-        if ($verb -in @('get', 'set', 'list') -and -not $confEntry -and $action) {
+        if ($verb -in @('get', 'set', 'show', 'list') -and -not $confEntry -and $action) {
             $confEntry = $action
             if ($verb -eq 'set' -and -not $PSBoundParameters.ContainsKey('value') -and $option) {
                 $value = $option
             }
         }
-        elseif (-not $verb -and $confEntry -and $action -in @('get', 'set')) {
+        elseif (-not $verb -and $confEntry -and $action -in @('get', 'set', 'show')) {
             $verb = $action
             if ($verb -eq 'set' -and -not $PSBoundParameters.ContainsKey('value') -and $option) {
                 $value = $option
@@ -162,6 +162,10 @@ function Invoke-QConf {
                     }
                     $operationArgs = @($operationArgs | Select-Object -Skip 2)
                 }
+                'show' {
+                    $verb = 'show'
+                    $operationArgs = @($operationArgs | Select-Object -Skip 1)
+                }
             }
         }
 
@@ -176,6 +180,7 @@ function Invoke-QConf {
             Write-Host "Usage:"
             Write-Host "qconf <entry> get"
             Write-Host "qconf <entry> set <option>"
+            Write-Host "qconf <entry> show"
             Write-Host "qconf <entry> [-value <option>]  # shorthand"
             Write-Host "qconf list [<entry>]"
             return
@@ -237,7 +242,7 @@ function Invoke-QConf {
                 $prefix = if ($null -eq $Word) { '' } else { [string]$Word }
                 if ($completeEntry) {
                     if ($tokens.Count -eq 0) {
-                        @('get', 'set') |
+                        @('get', 'set', 'show') |
                             Where-Object { $_.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) }
                     }
                     elseif ($tokens[0] -eq 'set') {
@@ -262,7 +267,7 @@ function Invoke-QConf {
 
         $map = Import-ConfigMap -Map $map | Assert-ConfigMap
 
-        if ($verb -eq 'list') {
+        if ($verb -in @('list', 'show')) {
             $listEntry = if ($confEntry) {
                 $confEntry
             }
@@ -271,6 +276,9 @@ function Invoke-QConf {
             }
 
             if (-not $listEntry -or @($listEntry).Count -eq 0) {
+                if ($verb -eq 'show') {
+                    throw "The show command requires an entry. Example: qconf <entry> show"
+                }
                 Write-MapHelp -map $map -invocation $MyInvocation -language "conf"
                 return
             }

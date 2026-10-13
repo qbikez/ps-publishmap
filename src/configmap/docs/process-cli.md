@@ -15,6 +15,7 @@ qrun [-map <path>] !complete -params -entry <entry>
 
 qconf [-map <path>] <entry> get
 qconf [-map <path>] <entry> set <option-key>
+qconf [-map <path>] <entry> show
 qconf [-map <path>] [-entry <entry>] [-value <option-key>] [opaque-args...]
 qconf [-map <path>] list [<entry>]
 qconf [-map <path>] !complete -word <prefix> [-entry <entry>]
@@ -32,6 +33,7 @@ qconf [-map <path>] !complete -params -entry <entry>
 Success is exit `0` / no throw. Failure is non-zero exit or a terminating error.
 
 For qconf, `get` reads the entry and `set <option-key>` applies a named option.
+`show` prints the same host-formatted status block used by `list <entry>`.
 A bare entry still performs a get, and `-value <option-key>` remains a set
 shorthand. qbuild forwards these as opaque, process-owned arguments.
 

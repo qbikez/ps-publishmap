@@ -130,6 +130,28 @@ Describe 'qconf as a qbuild process' {
         $output | Should -Match 'Options'
     }
 
+    It 'shows one qconf entry through qbuild using the list format' {
+        qbuild -map $script:mapFile storage set prod
+        $output = (qbuild -map $script:mapFile storage show 6>&1 | Out-String)
+
+        $output | Should -Match 'storage'
+        $output | Should -Match 'App storage endpoint'
+        $output | Should -Match 'Active'
+        $output | Should -Match 'prod'
+        $output | Should -Match 'Value'
+        $output | Should -Match 'P'
+        $output | Should -Match 'Options'
+    }
+
+    It 'shows one entry directly through qconf' {
+        $output = (qconf -map $script:mapFile storage show 6>&1 | Out-String)
+
+        $output | Should -Match 'storage'
+        $output | Should -Match 'Active'
+        $output | Should -Match 'local'
+        $output | Should -Match 'Options'
+    }
+
     It 'advertises value as an opaque process parameter' {
         $params = @(qconf -map $script:mapFile '!complete' -Params -entry storage)
 
@@ -148,6 +170,7 @@ Describe 'qconf as a qbuild process' {
 
         $completions | Should -Contain 'get'
         $completions | Should -Contain 'set'
+        $completions | Should -Contain 'show'
     }
 
     It 'completes option keys after the explicit set verb' {
@@ -172,6 +195,7 @@ Describe 'qconf as a qbuild process' {
 
         $completions | Should -Contain 'get'
         $completions | Should -Contain 'set'
+        $completions | Should -Contain 'show'
     }
 
     It 'completes qconf option keys through qbuild' {

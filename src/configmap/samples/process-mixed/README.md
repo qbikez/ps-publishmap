@@ -15,6 +15,7 @@ qbuild bootstrap.prepare
 qbuild bootstrap.restore -Follow
 qbuild storage get             # reads the active storage option
 qbuild storage set prod        # activates the prod option
+qbuild storage show            # same status formatting as the list row
 qbuild !state
 qbuild !state clean bootstrap
 ```
