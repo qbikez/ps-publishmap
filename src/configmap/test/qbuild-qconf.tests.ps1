@@ -84,8 +84,11 @@ Describe 'qconf as a qbuild process' {
         qbuild -map $script:mapFile storage set prod
         Get-Content 'storage-set.txt' -Raw | Should -Match 'prod=P'
 
-        qbuild -map $script:mapFile storage get
+        $result = qbuild -map $script:mapFile storage get
         Get-Content 'storage-get.txt' -Raw | Should -Match 'get:prod'
+        $result.Path | Should -Be 'storage/'
+        $result.Value | Should -Be 'P'
+        @($result.Active) | Should -Contain 'prod'
     }
 
     It 'supports explicit get and set verbs through qconf directly' {
@@ -108,6 +111,11 @@ Describe 'qconf as a qbuild process' {
         $output | Should -Match 'storage'
         $output | Should -Match 'prod'
         $output | Should -Match 'local'
+        $output | Should -Match 'App storage endpoint'
+        $output | Should -Match '├'
+        $output | Should -Match 'Active'
+        $output | Should -Match '└'
+        $output | Should -Match 'Options'
     }
 
     It 'lists one entry directly through qconf' {
@@ -116,6 +124,10 @@ Describe 'qconf as a qbuild process' {
         $output | Should -Match 'storage'
         $output | Should -Match 'local'
         $output | Should -Match 'prod'
+        $output | Should -Match '├'
+        $output | Should -Match 'Value'
+        $output | Should -Match '└'
+        $output | Should -Match 'Options'
     }
 
     It 'advertises value as an opaque process parameter' {
@@ -128,6 +140,46 @@ Describe 'qconf as a qbuild process' {
         $words = @(qconf -map $script:mapFile '!complete' -Word 'sto')
 
         $words | Should -Contain 'storage'
+    }
+
+    It 'completes explicit qconf verbs after an entry' {
+        $line = "qconf -map '$script:mapFile' storage "
+        $completions = @(TabExpansion2 $line $line.Length).CompletionMatches.CompletionText
+
+        $completions | Should -Contain 'get'
+        $completions | Should -Contain 'set'
+    }
+
+    It 'completes option keys after the explicit set verb' {
+        $line = "qconf -map '$script:mapFile' storage set "
+        $completions = @(TabExpansion2 $line $line.Length).CompletionMatches.CompletionText
+
+        $completions | Should -Contain 'local'
+        $completions | Should -Contain 'prod'
+    }
+
+    It 'completes option keys for the value shorthand' {
+        $line = "qconf -map '$script:mapFile' storage -value "
+        $completions = @(TabExpansion2 $line $line.Length).CompletionMatches.CompletionText
+
+        $completions | Should -Contain 'local'
+        $completions | Should -Contain 'prod'
+    }
+
+    It 'completes qconf verbs through qbuild' {
+        $line = "qbuild -map '$script:mapFile' storage "
+        $completions = @(TabExpansion2 $line $line.Length).CompletionMatches.CompletionText
+
+        $completions | Should -Contain 'get'
+        $completions | Should -Contain 'set'
+    }
+
+    It 'completes qconf option keys through qbuild' {
+        $line = "qbuild -map '$script:mapFile' storage set "
+        $completions = @(TabExpansion2 $line $line.Length).CompletionMatches.CompletionText
+
+        $completions | Should -Contain 'local'
+        $completions | Should -Contain 'prod'
     }
 
     It 'keeps legacy named get and set commands working' {

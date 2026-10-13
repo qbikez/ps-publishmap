@@ -48,6 +48,71 @@ function Resolve-ConfigMapProcessCommand {
     return $cmd
 }
 
+function Get-QBuildProcessCompletionContext {
+    param(
+        $CommandAst,
+        [hashtable]$FakeBoundParameters
+    )
+
+    $elements = @($CommandAst.CommandElements | ForEach-Object { [string]$_.Extent.Text })
+    $mapInput = $FakeBoundParameters.map
+    $positionals = [System.Collections.Generic.List[string]]::new()
+
+    for ($index = 1; $index -lt $elements.Count; $index++) {
+        $token = $elements[$index]
+        if ($token -eq '-map' -and $index + 1 -lt $elements.Count) {
+            if (-not $mapInput) {
+                $mapInput = $elements[++$index].Trim("'`"")
+            }
+            else {
+                $index++
+            }
+            continue
+        }
+        if ($token.StartsWith('-')) { continue }
+        $positionals.Add($token.Trim("'`""))
+    }
+
+    return [pscustomobject]@{
+        MapInput      = $mapInput
+        Entry         = if ($FakeBoundParameters.entry) { [string]$FakeBoundParameters.entry } elseif ($positionals.Count -gt 0) { $positionals[0] } else { $null }
+        ProcessAction = if ($FakeBoundParameters.ProcessAction) { [string]$FakeBoundParameters.ProcessAction } elseif ($positionals.Count -gt 1) { $positionals[1] } else { $null }
+    }
+}
+
+function Get-QBuildProcessArgumentCompletion {
+    param(
+        $CommandAst,
+        [hashtable]$FakeBoundParameters,
+        [AllowEmptyString()]
+        [string]$Word = '',
+        [ValidateSet('Action', 'Value')]
+        [string]$Position
+    )
+
+    $context = Get-QBuildProcessCompletionContext -CommandAst $CommandAst -FakeBoundParameters $FakeBoundParameters
+    if (-not $context.Entry) { return @() }
+    if ($Position -eq 'Value' -and -not $context.ProcessAction) { return @() }
+
+    $processMap = Import-ConfigMap -Map $context.MapInput -Fallback "./.build.map.ps1" | Assert-ConfigMap
+    $settings = Get-ConfigMapSettingsForPath -Map $processMap -Path $context.Entry
+    if ($settings.Process -eq 'qbuild') { return @() }
+
+    $mapPath = Resolve-MapPath -Map $processMap
+    if (-not $mapPath) { return @() }
+
+    $complete = @{
+        ProcessName = $settings.Process
+        MapPath     = $mapPath
+        Entry       = $context.Entry
+        Word        = $Word
+    }
+    if ($Position -eq 'Value') {
+        $complete.RemainingArguments = @($context.ProcessAction)
+    }
+    return Get-ConfigMapProcessCompleteWord @complete
+}
+
 function Invoke-ConfigMapProcessComplete {
     <#
     .SYNOPSIS
@@ -116,7 +181,7 @@ function ConvertTo-ConfigMapProcessSplat {
         [hashtable]$BoundParameters,
         [string[]]$RemainingArguments,
         [string[]]$SkipKeys = @(
-            'entry', 'command', 'map', 'RemainingArguments',
+            'entry', 'command', 'map', 'ProcessAction', 'ProcessValue', 'RemainingArguments',
             'Verbose', 'Debug', 'ErrorAction', 'WarningAction', 'InformationAction',
             'ErrorVariable', 'WarningVariable', 'InformationVariable',
             'OutVariable', 'OutBuffer', 'PipelineVariable', 'ProgressAction'
@@ -181,7 +246,9 @@ function Invoke-ConfigMapProcessCli {
     $cmd = Resolve-ConfigMapProcessCommand -ProcessName $ProcessName
     $global:LASTEXITCODE = 0
     & $cmd @Splat
-    return $global:LASTEXITCODE
+    if ($global:LASTEXITCODE -ne 0) {
+        throw "Process command '$ProcessName' exited with code $global:LASTEXITCODE."
+    }
 }
 
 function Get-ConfigMapProcessNamesInMap {
@@ -245,12 +312,16 @@ function Get-ConfigMapProcessCompleteWord {
         [string]$MapPath,
         [AllowEmptyString()]
         [string]$Word = '',
-        [string]$Entry
+        [string]$Entry,
+        [string[]]$RemainingArguments
     )
 
     $completeArgs = @{ Word = $Word }
     if ($Entry) {
         $completeArgs['Entry'] = $Entry
+    }
+    if ($RemainingArguments) {
+        $completeArgs['RemainingArguments'] = @($RemainingArguments)
     }
 
     return Invoke-ConfigMapProcessComplete -ProcessName $ProcessName -MapPath $MapPath -CompleteArgs $completeArgs

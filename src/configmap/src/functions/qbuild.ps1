@@ -73,6 +73,49 @@ function Invoke-QBuild {
         $command = "exec",
         [Parameter(DontShow)]
         $map = "./.build.map.ps1",
+
+        [Parameter(Position = 1, DontShow)]
+        [ArgumentCompleter({
+                param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+                try {
+                    $module = Get-Module ConfigMap | Select-Object -First 1
+                    if (-not $module) { return @() }
+                    return & $module {
+                        param($Ast, $Bound, $Word)
+                        Get-QBuildProcessArgumentCompletion `
+                            -CommandAst $Ast `
+                            -FakeBoundParameters $Bound `
+                            -Word $Word `
+                            -Position Action
+                    } $commandAst $fakeBoundParameters $wordToComplete
+                }
+                catch {
+                    return @()
+                }
+            })]
+        [string]$ProcessAction,
+
+        [Parameter(Position = 2, DontShow)]
+        [ArgumentCompleter({
+                param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+                try {
+                    $module = Get-Module ConfigMap | Select-Object -First 1
+                    if (-not $module) { return @() }
+                    return & $module {
+                        param($Ast, $Bound, $Word)
+                        Get-QBuildProcessArgumentCompletion `
+                            -CommandAst $Ast `
+                            -FakeBoundParameters $Bound `
+                            -Word $Word `
+                            -Position Value
+                    } $commandAst $fakeBoundParameters $wordToComplete
+                }
+                catch {
+                    return @()
+                }
+            })]
+        [string]$ProcessValue,
+
         [Parameter(ValueFromRemainingArguments = $true, DontShow = $true)]
         [string[]]$RemainingArguments
     )
@@ -258,13 +301,18 @@ function Invoke-QBuild {
             if (-not $resolvedMapPath) {
                 throw "Cannot delegate process '$($processSettings.Process)' for entry '$entry': the map has no _sourceFile."
             }
+            $processArguments = @(
+                $ProcessAction
+                $ProcessValue
+                $RemainingArguments
+            ) | Where-Object { $null -ne $_ -and "$_" -ne '' }
             $splat = ConvertTo-ConfigMapProcessSplat `
                 -MapPath $resolvedMapPath `
                 -Entry $entry `
                 -BoundParameters $PSBoundParameters `
-                -RemainingArguments $RemainingArguments
+                -RemainingArguments $processArguments
 
-            Invoke-ConfigMapProcessCli -ProcessName $processSettings.Process -Splat $splat | Out-Null
+            Invoke-ConfigMapProcessCli -ProcessName $processSettings.Process -Splat $splat
             return
         }
 
@@ -282,8 +330,10 @@ function Invoke-QBuild {
         #Invoke-EntryCommand -entry $_.value -key $_.Key $bound
         $bound = $PSBoundParameters
         $bound.Remove("entry") | Out-Null
+        $bound.Remove("ProcessAction") | Out-Null
+        $bound.Remove("ProcessValue") | Out-Null
         $bound.Remove("RemainingArguments") | Out-Null
-        $passthrough = @($RemainingArguments) | Where-Object { $null -ne $_ }
+        $passthrough = @($ProcessAction, $ProcessValue, $RemainingArguments) | Where-Object { $null -ne $_ }
         if ($passthrough.Count -gt 0) {
             if (-not $bound._context -or $bound._context -isnot [hashtable]) {
                 $bound._context = @{}
