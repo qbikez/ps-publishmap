@@ -23,7 +23,9 @@
     "configmap"
   ],
   "activationEvents": [
-    "onLanguage:powershell"
+    "onLanguage:powershell",
+    "workspaceContains:**/.build.map.ps1",
+    "onCommand:workbench.action.showAllSymbols"
   ],
   "main": "./out/extension.js",
   "scripts": {

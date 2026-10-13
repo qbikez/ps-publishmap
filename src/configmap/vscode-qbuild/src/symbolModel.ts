@@ -74,3 +74,33 @@ function symbolFromMember(member: MapMember, parentPath: string): QbuildSymbol {
 export function getQbuildSymbols(parsed: ParsedMap): QbuildSymbol[] {
   return parsed.tables.flatMap((table) => membersFromTable(table, ""));
 }
+
+export function flattenQbuildSymbols(
+  symbols: QbuildSymbol[],
+): QbuildSymbol[] {
+  const flattened: QbuildSymbol[] = [];
+
+  for (const symbol of symbols) {
+    flattened.push(symbol);
+    flattened.push(...flattenQbuildSymbols(symbol.children));
+  }
+
+  return flattened;
+}
+
+export function matchQbuildSymbols(
+  symbols: QbuildSymbol[],
+  query: string,
+): QbuildSymbol[] {
+  const flattened = flattenQbuildSymbols(symbols);
+  const needle = query.trim().toLowerCase();
+  if (!needle) {
+    return flattened;
+  }
+
+  return flattened.filter(
+    (symbol) =>
+      symbol.name.toLowerCase().includes(needle) ||
+      symbol.detail.toLowerCase().includes(needle),
+  );
+}

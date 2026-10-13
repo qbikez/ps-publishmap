@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { QbuildCompletionProvider } from "./completionProvider";
 import { QbuildDocumentSymbolProvider } from "./symbolProvider";
+import { QbuildWorkspaceSymbolProvider } from "./workspaceSymbolProvider";
 
 const buildMapSelector: vscode.DocumentSelector = {
   language: "powershell",
@@ -22,6 +23,9 @@ export function activate(context: vscode.ExtensionContext): void {
       {
         label: "qbuild map entries",
       },
+    ),
+    vscode.languages.registerWorkspaceSymbolProvider(
+      new QbuildWorkspaceSymbolProvider(),
     ),
   );
 }

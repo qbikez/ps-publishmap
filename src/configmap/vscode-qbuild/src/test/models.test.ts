@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { getCompletionSuggestions } from "../completionModel";
 import { parseMap } from "../mapParser";
-import { getQbuildSymbols } from "../symbolModel";
+import {
+  getQbuildSymbols,
+  matchQbuildSymbols,
+} from "../symbolModel";
 
 function marked(source: string): { text: string; offset: number } {
   const offset = source.indexOf("|");
@@ -119,4 +122,29 @@ test("builds hierarchical symbols and flattens list containers", () => {
     assert.ok(symbol.span.start <= symbol.selectionSpan.start);
     assert.ok(symbol.span.end >= symbol.selectionSpan.end);
   }
+});
+
+test("matches nested symbols for workspace search", () => {
+  const symbols = getQbuildSymbols(
+    parseMap(`@{
+  frontend = @{
+    build = { 'build' }
+    test = { 'test' }
+  }
+  clean = { 'clean' }
+}`),
+  );
+
+  assert.deepEqual(
+    matchQbuildSymbols(symbols, "build").map((symbol) => symbol.detail),
+    ["frontend.build"],
+  );
+  assert.deepEqual(
+    matchQbuildSymbols(symbols, "front").map((symbol) => symbol.detail),
+    ["frontend", "frontend.build", "frontend.test"],
+  );
+  assert.deepEqual(
+    matchQbuildSymbols(symbols, "").map((symbol) => symbol.detail),
+    ["frontend", "frontend.build", "frontend.test", "clean"],
+  );
 });

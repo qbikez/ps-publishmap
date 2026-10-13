@@ -6,7 +6,7 @@ VS Code navigation and completion for qbuild `.build.map.ps1` files.
 
 - Completes qbuild metadata such as `_settings`, `exec`, `description`, `list`, `#include`, and `_dependsOn`.
 - Completes supported keys inside `_settings` and `prefix` inside include configuration.
-- Adds nested map entries to Breadcrumbs, Outline, and Go to Symbol.
+- Adds nested map entries to Breadcrumbs, Outline, Go to Symbol in Editor, and Go to Symbol in Workspace (`Ctrl+T`).
 - Parses map text without executing it.
 
 The extension does not register a language or grammar. Build maps remain PowerShell documents, so the normal PowerShell extension continues to provide highlighting, formatting, diagnostics, debugging, and general PowerShell IntelliSense.
