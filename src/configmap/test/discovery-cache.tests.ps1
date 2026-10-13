@@ -1,6 +1,8 @@
 BeforeAll {
     $script:discoveryCacheEnvBackup = (Get-Item -Path env:QCONF_DiscoveryCache -ErrorAction SilentlyContinue).Value
+    $script:discoveryCacheLocationEnvBackup = (Get-Item -Path env:QCONF_DiscoveryCacheLocation -ErrorAction SilentlyContinue).Value
     Remove-Item -Path env:QCONF_DiscoveryCache -ErrorAction SilentlyContinue
+    Remove-Item -Path env:QCONF_DiscoveryCacheLocation -ErrorAction SilentlyContinue
 
     Get-Module ConfigMap -ErrorAction SilentlyContinue | Remove-Module
     Import-Module $PSScriptRoot\..\configmap.psm1 -Force
@@ -8,8 +10,12 @@ BeforeAll {
 
 AfterAll {
     Remove-Item -Path env:QCONF_DiscoveryCache -ErrorAction SilentlyContinue
+    Remove-Item -Path env:QCONF_DiscoveryCacheLocation -ErrorAction SilentlyContinue
     if ($null -ne $script:discoveryCacheEnvBackup) {
         Set-Item -Path env:QCONF_DiscoveryCache -Value $script:discoveryCacheEnvBackup
+    }
+    if ($null -ne $script:discoveryCacheLocationEnvBackup) {
+        Set-Item -Path env:QCONF_DiscoveryCacheLocation -Value $script:discoveryCacheLocationEnvBackup
     }
 }
 
@@ -487,5 +493,255 @@ $data = (Get-Content (Join-Path $PSScriptRoot 'data.txt') -Raw).Trim()
         @($cache.entries.hierarchical).key | Should -Contain 'alpha'
         Test-Path -LiteralPath $blocker -PathType Leaf | Should -BeTrue
         Test-Path -LiteralPath (Join-Path $dir '.configmap\discovery.build.cache.json') | Should -BeFalse
+    }
+
+    It 'writes user cache under HOME/.configmap/<project> when map sets DiscoveryCacheLocation' {
+        $userHome = Join-Path $TestDrive 'user-home-map'
+        New-Item -ItemType Directory -Path $userHome -Force | Out-Null
+        $dir = Join-Path $TestDrive 'user-loc-map'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value @'
+@{
+    _settings = @{ DiscoveryCacheLocation = 'user' }
+    alpha = { "a" }
+}
+'@
+
+        $previousHome = $env:HOME
+        $env:HOME = $userHome
+        try {
+            $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+            $cache = & (Get-Module ConfigMap) {
+                param($Map)
+                Get-ConfigMapDiscoveryCache -Map $Map -Language build
+            } $map
+
+            $project = & (Get-Module ConfigMap) {
+                param($SourceFile)
+                ConvertTo-ConfigMapDiscoveryCacheProjectName -SourceFile $SourceFile
+            } $mapFile
+            $expected = Join-Path $userHome ".configmap\$project\discovery.build.cache.json"
+
+            $cache | Should -Not -BeNullOrEmpty
+            Test-Path -LiteralPath $expected | Should -BeTrue
+            Test-Path -LiteralPath (Join-Path $dir '.configmap') | Should -BeFalse
+
+            $info = & (Get-Module ConfigMap) {
+                param($Map)
+                Get-ConfigMapDiscoveryCacheInfo -Map $Map -Language build
+            } $map
+            $info.Location | Should -Be 'user'
+            $info.Path | Should -Be ([System.IO.Path]::GetFullPath($expected))
+        }
+        finally {
+            if ($null -eq $previousHome) {
+                Remove-Item env:HOME -ErrorAction SilentlyContinue
+            }
+            else {
+                $env:HOME = $previousHome
+            }
+        }
+    }
+
+    It 'writes user cache when QCONF_DiscoveryCacheLocation is user' {
+        $userHome = Join-Path $TestDrive 'user-home-env'
+        New-Item -ItemType Directory -Path $userHome -Force | Out-Null
+        $dir = Join-Path $TestDrive 'user-loc-env'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value '@{ alpha = { "a" } }'
+
+        $previousHome = $env:HOME
+        $previousLocation = $env:QCONF_DiscoveryCacheLocation
+        $env:HOME = $userHome
+        $env:QCONF_DiscoveryCacheLocation = 'user'
+        try {
+            & (Get-Module ConfigMap) { Update-ConfigMapSettings | Out-Null }
+
+            $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+            $null = & (Get-Module ConfigMap) {
+                param($Map)
+                Get-ConfigMapDiscoveryCache -Map $Map -Language build
+            } $map
+
+            $project = & (Get-Module ConfigMap) {
+                param($SourceFile)
+                ConvertTo-ConfigMapDiscoveryCacheProjectName -SourceFile $SourceFile
+            } $mapFile
+            Test-Path -LiteralPath (Join-Path $userHome ".configmap\$project\discovery.build.cache.json") | Should -BeTrue
+            Test-Path -LiteralPath (Join-Path $dir '.configmap') | Should -BeFalse
+        }
+        finally {
+            if ($null -eq $previousHome) {
+                Remove-Item env:HOME -ErrorAction SilentlyContinue
+            }
+            else {
+                $env:HOME = $previousHome
+            }
+            if ($null -eq $previousLocation) {
+                Remove-Item env:QCONF_DiscoveryCacheLocation -ErrorAction SilentlyContinue
+            }
+            else {
+                $env:QCONF_DiscoveryCacheLocation = $previousLocation
+            }
+            & (Get-Module ConfigMap) { Update-ConfigMapSettings | Out-Null }
+        }
+    }
+
+    It 'uses a Cursor-style sanitized project folder for user cache' {
+        $sourceFile = Join-Path 'C:\git\hmdev\demo' '.build.map.ps1'
+        $name = & (Get-Module ConfigMap) {
+            param($SourceFile)
+            ConvertTo-ConfigMapDiscoveryCacheProjectName -SourceFile $SourceFile
+        } $sourceFile
+
+        $name | Should -Be 'C-git-hmdev-demo'
+    }
+
+    It 'finds a user cache while the write location is local without reading map settings' {
+        $userHome = Join-Path $TestDrive 'user-home-probe'
+        New-Item -ItemType Directory -Path $userHome -Force | Out-Null
+        $dir = Join-Path $TestDrive 'user-loc-probe'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value @'
+@{
+    _settings = @{ DiscoveryCacheLocation = 'user' }
+    alpha = { "a" }
+}
+'@
+
+        $previousHome = $env:HOME
+        $env:HOME = $userHome
+        try {
+            $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+            $null = & (Get-Module ConfigMap) {
+                param($Map)
+                Get-ConfigMapDiscoveryCache -Map $Map -Language build
+            } $map
+
+            $project = & (Get-Module ConfigMap) {
+                param($SourceFile)
+                ConvertTo-ConfigMapDiscoveryCacheProjectName -SourceFile $SourceFile
+            } $mapFile
+            $userPath = Join-Path $userHome ".configmap\$project\discovery.build.cache.json"
+            Test-Path $userPath | Should -BeTrue
+
+            & (Get-Module ConfigMap) { Clear-ConfigMapDiscoveryCacheMemory }
+            $map.Remove('_settings')
+
+            $before = (Get-Item -LiteralPath $userPath).LastWriteTimeUtc
+            $cache = & (Get-Module ConfigMap) {
+                param($Map)
+                Get-ConfigMapDiscoveryCache -Map $Map -Language build
+            } $map
+
+            $cache | Should -Not -BeNullOrEmpty
+            @($cache.entries.hierarchical).key | Should -Contain 'alpha'
+            (Get-Item -LiteralPath $userPath).LastWriteTimeUtc | Should -Be $before
+            Test-Path -LiteralPath (Join-Path $dir '.configmap') | Should -BeFalse
+        }
+        finally {
+            if ($null -eq $previousHome) {
+                Remove-Item env:HOME -ErrorAction SilentlyContinue
+            }
+            else {
+                $env:HOME = $previousHome
+            }
+        }
+    }
+
+    It 'finds a local cache while the write location is user' {
+        $userHome = Join-Path $TestDrive 'user-home-local-hit'
+        New-Item -ItemType Directory -Path $userHome -Force | Out-Null
+        $dir = Join-Path $TestDrive 'local-hit-user-write'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value '@{ alpha = { "a" } }'
+
+        $previousHome = $env:HOME
+        $env:HOME = $userHome
+        try {
+            $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+            $null = & (Get-Module ConfigMap) {
+                param($Map)
+                Get-ConfigMapDiscoveryCache -Map $Map -Language build
+            } $map
+            $localPath = Join-Path $dir '.configmap\discovery.build.cache.json'
+            Test-Path $localPath | Should -BeTrue
+
+            & (Get-Module ConfigMap) { Clear-ConfigMapDiscoveryCacheMemory }
+            $map._settings = @{ DiscoveryCacheLocation = 'user' }
+
+            $before = (Get-Item -LiteralPath $localPath).LastWriteTimeUtc
+            $cache = & (Get-Module ConfigMap) {
+                param($Map)
+                Get-ConfigMapDiscoveryCache -Map $Map -Language build
+            } $map
+
+            $project = & (Get-Module ConfigMap) {
+                param($SourceFile)
+                ConvertTo-ConfigMapDiscoveryCacheProjectName -SourceFile $SourceFile
+            } $mapFile
+            $userPath = Join-Path $userHome ".configmap\$project\discovery.build.cache.json"
+
+            $cache | Should -Not -BeNullOrEmpty
+            @($cache.entries.hierarchical).key | Should -Contain 'alpha'
+            (Get-Item -LiteralPath $localPath).LastWriteTimeUtc | Should -Be $before
+            Test-Path $userPath | Should -BeFalse
+        }
+        finally {
+            if ($null -eq $previousHome) {
+                Remove-Item env:HOME -ErrorAction SilentlyContinue
+            }
+            else {
+                $env:HOME = $previousHome
+            }
+        }
+    }
+
+    It 'clears both local and user cache files' {
+        $userHome = Join-Path $TestDrive 'user-home-clear'
+        New-Item -ItemType Directory -Path $userHome -Force | Out-Null
+        $dir = Join-Path $TestDrive 'user-loc-clear'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value '@{ alpha = { "a" } }'
+
+        $previousHome = $env:HOME
+        $env:HOME = $userHome
+        try {
+            $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+            $null = & (Get-Module ConfigMap) {
+                param($Map)
+                Get-ConfigMapDiscoveryCache -Map $Map -Language build
+            } $map
+            $localPath = Join-Path $dir '.configmap\discovery.build.cache.json'
+            Test-Path $localPath | Should -BeTrue
+
+            $userPath = & (Get-Module ConfigMap) {
+                param($SourceFile)
+                (Get-ConfigMapDiscoveryCacheCandidate -SourceFile $SourceFile -Language build -Location user).Path
+            } $mapFile
+            New-Item -ItemType Directory -Path (Split-Path -Parent $userPath) -Force | Out-Null
+            Copy-Item -LiteralPath $localPath -Destination $userPath
+
+            $null = & (Get-Module ConfigMap) {
+                param($Map)
+                Clear-ConfigMapDiscoveryCache -Map $Map -Language build
+            } $map
+
+            Test-Path $userPath | Should -BeFalse
+            Test-Path $localPath | Should -BeFalse
+        }
+        finally {
+            if ($null -eq $previousHome) {
+                Remove-Item env:HOME -ErrorAction SilentlyContinue
+            }
+            else {
+                $env:HOME = $previousHome
+            }
+        }
     }
 }

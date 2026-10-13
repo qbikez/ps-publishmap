@@ -4,7 +4,8 @@ BeforeAll {
         'QCONF_TmuxAutoWindow',
         'QCONF_Concurrently',
         'QCONF_Debug',
-        'QCONF_DiscoveryCache'
+        'QCONF_DiscoveryCache',
+        'QCONF_DiscoveryCacheLocation'
     )
 
     foreach ($name in $script:settingsEnvironmentVariables) {
@@ -94,6 +95,7 @@ Describe 'ConfigMap settings' {
             $settings.Concurrently | Should -Be 'false'
             $settings.Debug | Should -Be '1'
             $settings.DiscoveryCache | Should -Be $true
+            $settings.DiscoveryCacheLocation | Should -Be 'local'
         }
     }
 
@@ -125,6 +127,7 @@ Describe 'ConfigMap settings' {
             $settings.Concurrently | Should -Be 'off'
             $settings.Debug | Should -Be $false
             $settings.DiscoveryCache | Should -Be $true
+            $settings.DiscoveryCacheLocation | Should -Be 'local'
             Test-ConfigMapFeatureEnabled -Name Concurrently | Should -Be $false
             Test-ConfigMapFeatureEnabled -Name DiscoveryCache | Should -Be $true
         }
@@ -137,6 +140,39 @@ Describe 'ConfigMap settings' {
             Update-ConfigMapSettings | Out-Null
             Get-ConfigMapSetting -Name DiscoveryCache | Should -Be '0'
             Test-ConfigMapFeatureEnabled -Name DiscoveryCache | Should -Be $false
+        }
+    }
+
+    It 'sets DiscoveryCacheLocation through QCONF_DiscoveryCacheLocation' {
+        $env:QCONF_DiscoveryCacheLocation = 'user'
+
+        InModuleScope ConfigMap {
+            Update-ConfigMapSettings | Out-Null
+            Get-ConfigMapSetting -Name DiscoveryCacheLocation | Should -Be 'user'
+        }
+    }
+
+    It 'sets DiscoveryCacheLocation through map _settings' {
+        InModuleScope ConfigMap {
+            $map = @{
+                _settings = @{ DiscoveryCacheLocation = 'user' }
+                build     = { }
+            }
+
+            $settings = qbuild -map $map '!settings'
+            $settings.DiscoveryCacheLocation | Should -Be 'user'
+            Get-ConfigMapSetting -Name DiscoveryCacheLocation | Should -Be 'local'
+        }
+    }
+
+    It 'rejects an invalid DiscoveryCacheLocation' {
+        InModuleScope ConfigMap {
+            $map = @{
+                _settings = @{ DiscoveryCacheLocation = 'cloud' }
+                build     = { }
+            }
+
+            { qbuild -map $map '!settings' } | Should -Throw "DiscoveryCacheLocation must be 'local' or 'user'."
         }
     }
 
@@ -162,6 +198,7 @@ Describe 'ConfigMap settings' {
             $settings.Concurrently | Should -Be $false
             $settings.TmuxAutoWindow | Should -Be $false
             $settings.DiscoveryCache | Should -Be $true
+            $settings.DiscoveryCacheLocation | Should -Be 'local'
         }
     }
 

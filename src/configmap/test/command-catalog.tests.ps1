@@ -173,6 +173,7 @@ Describe 'qbuild !describe' {
             $completions | Should -Contain '!describe'
             $completions | Should -Contain '!settings'
             $completions | Should -Contain '!agent.init'
+            $completions | Should -Contain '!cache'
             $completions | Should -Contain 'build'
         }
         finally {
