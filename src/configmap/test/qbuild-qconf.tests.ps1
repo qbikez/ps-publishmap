@@ -207,6 +207,25 @@ Describe 'qconf as a qbuild process' {
         $completions | Should -Contain 'prod'
     }
 
+    It 'does not suggest -value after a positional set option key' {
+        @'
+[ordered]@{
+    env = [ordered]@{
+        _settings = @{ process = 'qconf' }
+        options   = [ordered]@{ local = 'L'; dev = 'D' }
+        get       = { param($ctx, $options) '' }
+        set       = { param($ctx, $key, $value, [string]$tenant) }
+    }
+}
+'@ | Set-Content -LiteralPath $script:mapFile -Encoding utf8
+
+        $line = "qbuild -map '$script:mapFile' env set local -"
+        $completions = @(TabExpansion2 $line $line.Length).CompletionMatches.CompletionText
+
+        $completions | Should -Not -Contain '-value'
+        $completions | Should -Contain '-tenant'
+    }
+
     It 'keeps legacy named get and set commands working' {
         qconf -map $script:mapFile -command set -entry storage -value local
         $result = qconf -map $script:mapFile -command get -entry storage

@@ -16,7 +16,8 @@ qbuild bootstrap.restore -Follow
 qbuild storage get             # reads the active storage option
 qbuild storage set prod        # activates the prod option
 qbuild storage show            # same status formatting as the list row
-qbuild env set dev -tenant abc # option-less qconf entry with opaque -tenant
+qbuild env set <tab>           # completes local, dev, prod
+qbuild env set dev -tenant abc # option key + opaque -tenant
 qbuild env get
 qbuild !state
 qbuild !state clean bootstrap

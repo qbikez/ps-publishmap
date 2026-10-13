@@ -177,10 +177,14 @@ function New-ConfigMapOpaqueDynamicParam {
     param(
         [Parameter(Mandatory = $true)]
         [string]$Name,
-        [type]$ParameterType = [switch]
+        [type]$ParameterType = [switch],
+        [switch]$DontShow
     )
 
     $attribute = New-Object System.Management.Automation.ParameterAttribute
+    if ($DontShow) {
+        $attribute.DontShow = $true
+    }
     $attributes = New-Object System.Collections.ObjectModel.Collection[System.Attribute]
     $attributes.Add($attribute)
     return New-Object System.Management.Automation.RuntimeDefinedParameter($Name, $ParameterType, $attributes)
@@ -353,6 +357,28 @@ function Get-ConfigMapProcessCompleteWord {
     return Invoke-ConfigMapProcessComplete -ProcessName $ProcessName -MapPath $MapPath -CompleteArgs $completeArgs
 }
 
+function Test-ConfigMapProcessPositionalOptionKey {
+    <#
+    .SYNOPSIS
+        True when the option key was already supplied positionally (set <option> …).
+    #>
+    param(
+        [string]$ProcessAction,
+        [string]$ProcessValue,
+        [string[]]$RemainingArguments
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($ProcessValue)) {
+        return $true
+    }
+
+    $tokens = @(
+        @($ProcessAction) + @($RemainingArguments) |
+            Where-Object { $null -ne $_ -and "$_" -ne '' }
+    )
+    return ($tokens.Count -ge 2 -and $tokens[0] -eq 'set')
+}
+
 function New-ConfigMapProcessDynamicParam {
     <#
     .SYNOPSIS
@@ -367,7 +393,10 @@ function New-ConfigMapProcessDynamicParam {
         [System.Collections.IDictionary]$Map,
         [Parameter(Mandatory = $true)]
         [string]$Entry,
-        [switch]$Follow
+        [switch]$Follow,
+        [string]$ProcessAction,
+        [string]$ProcessValue,
+        [string[]]$RemainingArguments
     )
 
     $names = Get-ConfigMapProcessCompleteParams -ProcessName $ProcessName -MapPath $MapPath -Entry $Entry
@@ -386,18 +415,33 @@ function New-ConfigMapProcessDynamicParam {
         }
     }
 
+    # Positional `set <option>` already supplied the option key — drop -value entirely
+    # when we can see it (runtime). Tab completion often cannot see RemainingArguments in
+    # dynamicparam, so -value is also DontShow below and stays typeable but hidden.
+    $hideValue = Test-ConfigMapProcessPositionalOptionKey `
+        -ProcessAction $ProcessAction `
+        -ProcessValue $ProcessValue `
+        -RemainingArguments $RemainingArguments
+
     if ($null -eq $names) {
+        if ($hideValue -and $typed.ContainsKey('value')) {
+            $typed.Remove('value') | Out-Null
+        }
         return $typed
     }
 
     $merged = New-Object System.Management.Automation.RuntimeDefinedParameterDictionary
     foreach ($name in $names) {
         if ($merged.ContainsKey($name)) { continue }
+        if ($hideValue -and $name -eq 'value') { continue }
+
+        $parameterType = [switch]
+        $source = $null
         if ($typed -and $typed.ContainsKey($name)) {
-            $merged.Add($name, $typed[$name])
+            $source = $typed[$name]
+            $parameterType = $source.ParameterType
         }
         else {
-            $parameterType = [switch]
             try {
                 $processCommand = Resolve-ConfigMapProcessCommand -ProcessName $ProcessName
                 $processParameter = $processCommand.Parameters[$name]
@@ -408,6 +452,16 @@ function New-ConfigMapProcessDynamicParam {
             catch {
                 # Keep the protocol's backwards-compatible switch fallback.
             }
+        }
+
+        # Prefer set <option>; keep -value bindable but out of -<tab> suggestions.
+        if ($name -eq 'value') {
+            $merged.Add($name, (New-ConfigMapOpaqueDynamicParam -Name $name -ParameterType $parameterType -DontShow))
+        }
+        elseif ($source) {
+            $merged.Add($name, $source)
+        }
+        else {
             $merged.Add($name, (New-ConfigMapOpaqueDynamicParam -Name $name -ParameterType $parameterType))
         }
     }
