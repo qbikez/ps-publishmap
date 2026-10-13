@@ -8,7 +8,7 @@
 #   qbuild bootstrap.prepare
 #   qbuild storage
 #   qbuild storage -value prod
-#   qbuild set env -tenant abc
+#   qbuild env set dev -tenant abc
 #   qbuild env get
 #   qbuild list
 #   qbuild !state

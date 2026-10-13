@@ -372,6 +372,19 @@ function New-ConfigMapProcessDynamicParam {
 
     $names = Get-ConfigMapProcessCompleteParams -ProcessName $ProcessName -MapPath $MapPath -Entry $Entry
     $typed = Get-ProcessDynamicParam -Map $Map -ProcessKey $Entry -Follow:$Follow
+    if (-not $typed) {
+        $typed = New-Object System.Management.Automation.RuntimeDefinedParameterDictionary
+    }
+
+    # Conf-style set scripts (process=qconf) expose opaque params after ctx/key/value.
+    $setParams = Get-EntryDynamicParam $Map "$Entry.set" -skip 3 -bound @{}
+    if ($setParams) {
+        foreach ($name in @($setParams.Keys)) {
+            if (-not $typed.ContainsKey($name)) {
+                $typed.Add($name, $setParams[$name])
+            }
+        }
+    }
 
     if ($null -eq $names) {
         return $typed

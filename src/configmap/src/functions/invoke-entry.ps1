@@ -122,8 +122,26 @@ function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}
 #     }
 # }
 
-function Invoke-Set($entry, $bound = @{}) {
+function Invoke-Set($entry, $bound = @{}, $extra = @()) {
     # use ordered parameters, just in case the handler has different parameter names
+    # Nameless leftovers after the option key (e.g. `set local tenant_1`) bind by name to
+    # set params beyond ctx/key/value. Prefer already-bound names (e.g. -tenant).
+    if (-not $bound) { $bound = @{} }
+    $extras = @($extra | Where-Object { $null -ne $_ -and "$_" -ne '' })
+    if ($extras.Count -gt 0) {
+        $setCommand = Get-EntryCommand $entry 'set'
+        if ($setCommand -is [scriptblock]) {
+            $opaqueParams = Get-ScriptArgs $setCommand -skip 3 -exclude @('$_context', '$_self')
+            $index = 0
+            foreach ($name in @($opaqueParams.Keys)) {
+                if ($index -ge $extras.Count) { break }
+                if ($bound.ContainsKey($name)) { continue }
+                $bound[$name] = $extras[$index]
+                $index++
+            }
+        }
+    }
+
     Invoke-EntryCommand $entry "set" -ordered @("", $bound.key, $bound.value) -bound $bound
 }
 

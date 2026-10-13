@@ -215,6 +215,86 @@ Describe 'qconf as a qbuild process' {
         @($result.Active) | Should -Contain 'local'
     }
 
+    It 'forwards opaque set parameters for option-less qconf entries' {
+        @'
+[ordered]@{
+    env = [ordered]@{
+        _settings   = @{ process = 'qconf' }
+        description = 'Environment / tenant selection'
+        get         = {
+            param($ctx, $options)
+            if (Test-Path 'env.txt') {
+                (Get-Content 'env.txt' -Raw).Trim()
+            }
+            else {
+                ''
+            }
+        }
+        set         = {
+            param($ctx, $key, $value, [string]$tenant)
+            if ([string]::IsNullOrWhiteSpace($tenant)) {
+                throw "Set env requires -tenant <name>."
+            }
+            $tenant | Set-Content 'env.txt'
+            "$key|$tenant" | Set-Content 'env-set.txt'
+        }
+    }
+}
+'@ | Set-Content -LiteralPath $script:mapFile -Encoding utf8
+
+        qbuild -map $script:mapFile env set dev -tenant abc
+
+        Get-Content 'env.txt' -Raw | Should -Match 'abc'
+        Get-Content 'env-set.txt' -Raw | Should -Match 'dev\|abc'
+
+        $result = qbuild -map $script:mapFile env get
+        $result.Value | Should -Be 'abc'
+    }
+
+    It 'forwards nameless positional set parameters after the option key' {
+        @'
+[ordered]@{
+    env = [ordered]@{
+        _settings = @{ process = 'qconf' }
+        get       = {
+            param($ctx, $options)
+            if (Test-Path 'env.txt') { (Get-Content 'env.txt' -Raw).Trim() } else { '' }
+        }
+        set       = {
+            param($ctx, $key, $value, [string]$tenant)
+            if ([string]::IsNullOrWhiteSpace($tenant)) {
+                throw "Set env requires tenant."
+            }
+            $tenant | Set-Content 'env.txt'
+            "$key|$tenant" | Set-Content 'env-set.txt'
+        }
+    }
+}
+'@ | Set-Content -LiteralPath $script:mapFile -Encoding utf8
+
+        qbuild -map $script:mapFile env set local tenant_1
+
+        Get-Content 'env.txt' -Raw | Should -Match 'tenant_1'
+        Get-Content 'env-set.txt' -Raw | Should -Match 'local\|tenant_1'
+    }
+
+    It 'advertises custom set parameters through !complete -params' {
+        @'
+[ordered]@{
+    env = [ordered]@{
+        _settings = @{ process = 'qconf' }
+        get       = { param($ctx, $options) '' }
+        set       = { param($ctx, $key, $value, [string]$tenant) }
+    }
+}
+'@ | Set-Content -LiteralPath $script:mapFile -Encoding utf8
+
+        $params = @(qconf -map $script:mapFile '!complete' -Params -entry env)
+
+        $params | Should -Contain 'value'
+        $params | Should -Contain 'tenant'
+    }
+
     It 'smoke-runs the mixed process sample' {
         $sampleFile = Join-Path $PSScriptRoot '..' 'samples' 'process-mixed' '.build.map.ps1'
         Copy-Item -LiteralPath $sampleFile -Destination $script:mapFile -Force
@@ -222,8 +302,10 @@ Describe 'qconf as a qbuild process' {
         qbuild -map $script:mapFile build
         qbuild -map $script:mapFile storage set prod
         qbuild -map $script:mapFile storage get
+        qbuild -map $script:mapFile env set dev -tenant abc
 
         Test-Path 'out/build.txt' | Should -BeTrue
         Get-Content 'workspace/storage.txt' -Raw | Should -Match 'prod'
+        Get-Content 'workspace/env.txt' -Raw | Should -Match 'abc'
     }
 }
