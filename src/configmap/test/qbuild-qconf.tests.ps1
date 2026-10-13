@@ -108,6 +108,7 @@ Describe 'qconf as a qbuild process' {
         qbuild -map $script:mapFile storage -value prod
 
         $output = (qbuild -map $script:mapFile list 6>&1 | Out-String)
+        $output | Should -Match 'Map:\s+\./\.build\.map\.ps1'
         $output | Should -Match 'storage'
         $output | Should -Match 'prod'
         $output | Should -Match 'local'
