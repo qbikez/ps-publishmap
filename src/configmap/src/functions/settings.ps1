@@ -7,11 +7,12 @@ function New-ConfigMapSettings {
     )
 
     $settings = @{
-        Debug          = $false
-        Concurrently   = $false
-        TmuxAutoWindow = $false
-        DiscoveryCache = $true
-        Process        = 'qbuild'
+        Debug                  = $false
+        Concurrently           = $false
+        TmuxAutoWindow         = $false
+        DiscoveryCache         = $true
+        DiscoveryCacheLocation = 'local'
+        Process                = 'qbuild'
     }
 
     foreach ($propertyName in @($settings.Keys)) {
@@ -34,6 +35,12 @@ function New-ConfigMapSettings {
 
         $settings[$override.Key] = $override.Value
     }
+
+    $normalizedLocation = "$($settings.DiscoveryCacheLocation)".Trim().ToLowerInvariant()
+    if ($normalizedLocation -notin @('local', 'user')) {
+        throw "DiscoveryCacheLocation must be 'local' or 'user'."
+    }
+    $settings.DiscoveryCacheLocation = $normalizedLocation
 
     $settingsObject = [pscustomobject]$settings
     $settingsObject.PSObject.TypeNames.Insert(0, 'ConfigMap.Settings')
@@ -222,7 +229,7 @@ function Enter-ConfigMapAncestorSettingsScopes {
     }
 
     foreach ($scope in $entered) {
-        ,$scope
+        , $scope
     }
 }
 

@@ -3,7 +3,26 @@
 $script:discoveryCacheMemory = @{}
 $script:discoveryCacheVersion = 1
 
-function Get-ConfigMapDiscoveryCachePath {
+function Get-ConfigMapUserHome {
+    if ($env:HOME) {
+        return [System.IO.Path]::GetFullPath($env:HOME)
+    }
+
+    return [System.IO.Path]::GetFullPath([Environment]::GetFolderPath('UserProfile'))
+}
+
+function ConvertTo-ConfigMapDiscoveryCacheProjectName {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SourceFile
+    )
+
+    $dir = [System.IO.Path]::GetFullPath((Split-Path -Parent $SourceFile)).TrimEnd('\', '/')
+    $dir = $dir -replace ':', ''
+    return ($dir -replace '[\\/]', '-')
+}
+
+function Get-ConfigMapDiscoveryCacheFileName {
     param(
         [Parameter(Mandatory = $true)]
         [string]$SourceFile,
@@ -11,9 +30,7 @@ function Get-ConfigMapDiscoveryCachePath {
         [string]$Language
     )
 
-    $fullPath = [System.IO.Path]::GetFullPath($SourceFile)
-    $dir = Split-Path -Parent $fullPath
-    $leaf = Split-Path -Leaf $fullPath
+    $leaf = Split-Path -Leaf $SourceFile
     $name = if ($leaf -match '^\.(.+)\.map\.ps1$') {
         $Matches[1]
     }
@@ -23,22 +40,189 @@ function Get-ConfigMapDiscoveryCachePath {
 
     $isCanonical = ($Language -eq 'build' -and $name -eq 'build') -or
                    ($Language -eq 'conf' -and $name -eq 'configuration')
-    $fileName = if ($isCanonical) {
-        "discovery.$name.cache.json"
-    }
-    else {
-        "discovery.$name.$Language.cache.json"
+    if ($isCanonical) {
+        return "discovery.$name.cache.json"
     }
 
-    return Join-Path (Join-Path $dir '.configmap') $fileName
+    return "discovery.$name.$Language.cache.json"
+}
+
+function Get-ConfigMapDiscoveryCacheSettingOverrides {
+    param([System.Collections.IDictionary]$Map)
+
+    if (!$Map -or $Map._settings -isnot [System.Collections.IDictionary]) {
+        return $null
+    }
+
+    $overrides = @{}
+    foreach ($name in @('DiscoveryCache', 'DiscoveryCacheLocation')) {
+        if ($Map._settings.Contains($name)) {
+            $overrides[$name] = $Map._settings[$name]
+        }
+    }
+
+    if ($overrides.Count -eq 0) {
+        return $null
+    }
+
+    return $overrides
+}
+
+function Resolve-ConfigMapDiscoveryCacheLocation {
+    param($Value)
+
+    if ($null -eq $Value -or "$Value" -eq '') {
+        $Value = Get-ConfigMapSetting -Name DiscoveryCacheLocation
+    }
+
+    $normalized = "$Value".Trim().ToLowerInvariant()
+    if ($normalized -notin @('local', 'user')) {
+        throw "DiscoveryCacheLocation must be 'local' or 'user'."
+    }
+
+    return $normalized
+}
+
+function Get-ConfigMapDiscoveryCachePath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SourceFile,
+        [ValidateSet('build', 'conf')]
+        [string]$Language,
+        [System.Collections.IDictionary]$Map,
+        [string]$Location
+    )
+
+    $fullPath = [System.IO.Path]::GetFullPath($SourceFile)
+    if (-not $Location) {
+        $previous = Enter-ConfigMapSettingsScope -Settings (Get-ConfigMapDiscoveryCacheSettingOverrides -Map $Map)
+        try {
+            $Location = Resolve-ConfigMapDiscoveryCacheLocation
+        }
+        finally {
+            Exit-ConfigMapSettingsScope -PreviousSettings $previous
+        }
+    }
+    else {
+        $Location = Resolve-ConfigMapDiscoveryCacheLocation -Value $Location
+    }
+
+    $fileName = Get-ConfigMapDiscoveryCacheFileName -SourceFile $fullPath -Language $Language
+    $cacheDir = if ($Location -eq 'user') {
+        Join-Path (Join-Path (Get-ConfigMapUserHome) '.configmap') (ConvertTo-ConfigMapDiscoveryCacheProjectName -SourceFile $fullPath)
+    }
+    else {
+        Join-Path (Split-Path -Parent $fullPath) '.configmap'
+    }
+
+    return Join-Path $cacheDir $fileName
+}
+
+function Get-ConfigMapDiscoveryCacheCandidate {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SourceFile,
+        [ValidateSet('build', 'conf')]
+        [string]$Language,
+        [ValidateSet('local', 'user')]
+        [string]$Location
+    )
+
+    $fullPath = [System.IO.Path]::GetFullPath($SourceFile)
+    return [pscustomobject]@{
+        Location  = $Location
+        Path      = Get-ConfigMapDiscoveryCachePath -SourceFile $fullPath -Language $Language -Location $Location
+        MemoryKey = Get-ConfigMapDiscoveryMemoryKey -SourceFile $fullPath -Language $Language -Location $Location
+    }
+}
+
+function Get-ConfigMapDiscoveryCacheCandidates {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SourceFile,
+        [ValidateSet('build', 'conf')]
+        [string]$Language
+    )
+
+    return @(
+        Get-ConfigMapDiscoveryCacheCandidate -SourceFile $SourceFile -Language $Language -Location local
+        Get-ConfigMapDiscoveryCacheCandidate -SourceFile $SourceFile -Language $Language -Location user
+    )
+}
+
+function Get-ConfigMapDiscoveryCacheTarget {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SourceFile,
+        [ValidateSet('build', 'conf')]
+        [string]$Language,
+        [System.Collections.IDictionary]$Map
+    )
+
+    $previous = Enter-ConfigMapSettingsScope -Settings (Get-ConfigMapDiscoveryCacheSettingOverrides -Map $Map)
+    try {
+        $location = Resolve-ConfigMapDiscoveryCacheLocation
+        return Get-ConfigMapDiscoveryCacheCandidate -SourceFile $SourceFile -Language $Language -Location $location
+    }
+    finally {
+        Exit-ConfigMapSettingsScope -PreviousSettings $previous
+    }
+}
+
+function Find-ConfigMapDiscoveryCache {
+    <#
+    .SYNOPSIS
+        Finds a valid discovery cache by probing local and user files.
+    .DESCRIPTION
+        Does not read map settings. Validity uses only the cache payload and
+        dependency file mtimes stored in that payload.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SourceFile,
+        [ValidateSet('build', 'conf')]
+        [string]$Language,
+        [switch]$WriteMemory
+    )
+
+    $sourceFile = [System.IO.Path]::GetFullPath($SourceFile)
+    $candidates = Get-ConfigMapDiscoveryCacheCandidates -SourceFile $sourceFile -Language $Language
+
+    foreach ($candidate in $candidates) {
+        $memoryCache = $script:discoveryCacheMemory[$candidate.MemoryKey]
+        if (Test-ConfigMapDiscoveryCacheValid -Cache $memoryCache -SourceFile $sourceFile -Language $Language) {
+            return [pscustomobject]@{
+                Cache     = $memoryCache
+                Candidate = $candidate
+                Source    = 'memory'
+            }
+        }
+    }
+
+    foreach ($candidate in $candidates) {
+        $diskCache = Read-ConfigMapDiscoveryCache -CachePath $candidate.Path
+        if (Test-ConfigMapDiscoveryCacheValid -Cache $diskCache -SourceFile $sourceFile -Language $Language) {
+            if ($WriteMemory) {
+                $script:discoveryCacheMemory[$candidate.MemoryKey] = $diskCache
+            }
+            return [pscustomobject]@{
+                Cache     = $diskCache
+                Candidate = $candidate
+                Source    = 'disk'
+            }
+        }
+    }
+
+    return $null
 }
 
 function Get-ConfigMapDiscoveryMemoryKey {
     param(
         [string]$SourceFile,
-        [string]$Language
+        [string]$Language,
+        [string]$Location = 'local'
     )
-    return "$([System.IO.Path]::GetFullPath($SourceFile))|$Language"
+    return "$([System.IO.Path]::GetFullPath($SourceFile))|$Language|$Location"
 }
 
 function Add-ConfigMapDependsOnDependencies {
@@ -347,12 +531,7 @@ function Build-ConfigMapDiscoveryCache {
 function Test-ConfigMapDiscoveryCacheEnabled {
     param([System.Collections.IDictionary]$Map)
 
-    $overrides = $null
-    if ($Map._settings -is [System.Collections.IDictionary] -and $Map._settings.Contains('DiscoveryCache')) {
-        $overrides = @{ DiscoveryCache = $Map._settings['DiscoveryCache'] }
-    }
-
-    $previous = Enter-ConfigMapSettingsScope -Settings $overrides
+    $previous = Enter-ConfigMapSettingsScope -Settings (Get-ConfigMapDiscoveryCacheSettingOverrides -Map $Map)
     try {
         return Test-ConfigMapFeatureEnabled -Name DiscoveryCache
     }
@@ -367,7 +546,7 @@ function Get-ConfigMapDiscoveryCache {
         Returns a fresh or rebuilt discovery cache for a file-backed map.
     .DESCRIPTION
         Skips disk cache when the map has no _sourceFile (in-memory maps).
-        Uses a process memory layer keyed by source file and language.
+        Probes local and user cache files without reading map settings.
         Disabled when DiscoveryCache is opted out via _settings or QCONF_DiscoveryCache.
     #>
     param(
@@ -386,26 +565,212 @@ function Get-ConfigMapDiscoveryCache {
     }
 
     $sourceFile = [System.IO.Path]::GetFullPath($Map._sourceFile)
-    $memoryKey = Get-ConfigMapDiscoveryMemoryKey -SourceFile $sourceFile -Language $Language
-
-    $memoryCache = $script:discoveryCacheMemory[$memoryKey]
-    if (Test-ConfigMapDiscoveryCacheValid -Cache $memoryCache -SourceFile $sourceFile -Language $Language) {
-        return $memoryCache
+    $found = Find-ConfigMapDiscoveryCache -SourceFile $sourceFile -Language $Language -WriteMemory
+    if ($found) {
+        return $found.Cache
     }
 
-    $cachePath = Get-ConfigMapDiscoveryCachePath -SourceFile $sourceFile -Language $Language
-    $diskCache = Read-ConfigMapDiscoveryCache -CachePath $cachePath
-    if (Test-ConfigMapDiscoveryCacheValid -Cache $diskCache -SourceFile $sourceFile -Language $Language) {
-        $script:discoveryCacheMemory[$memoryKey] = $diskCache
-        return $diskCache
-    }
-
+    $target = Get-ConfigMapDiscoveryCacheTarget -SourceFile $sourceFile -Language $Language -Map $Map
     $built = Build-ConfigMapDiscoveryCache -Map $Map -Language $Language
-    Write-ConfigMapDiscoveryCache -CachePath $cachePath -Cache $built
-    $script:discoveryCacheMemory[$memoryKey] = $built
+    Write-ConfigMapDiscoveryCache -CachePath $target.Path -Cache $built
+    $script:discoveryCacheMemory[$target.MemoryKey] = $built
     return $built
 }
 
 function Clear-ConfigMapDiscoveryCacheMemory {
+    param([string]$MemoryKey)
+
+    if ($MemoryKey) {
+        $script:discoveryCacheMemory.Remove($MemoryKey) | Out-Null
+        return
+    }
+
     $script:discoveryCacheMemory = @{}
+}
+
+function New-QBuildCacheDynamicParam {
+    <#
+    .SYNOPSIS
+        Builds the -Action dynamic parameter for qbuild !cache.
+    #>
+    [OutputType([System.Management.Automation.RuntimeDefinedParameterDictionary])]
+    param()
+
+    $dict = New-Object System.Management.Automation.RuntimeDefinedParameterDictionary
+
+    $attributes = New-Object System.Collections.ObjectModel.Collection[System.Attribute]
+    $paramAttr = New-Object System.Management.Automation.ParameterAttribute
+    $paramAttr.Position = 1
+    $attributes.Add($paramAttr)
+    $attributes.Add((New-Object System.Management.Automation.ValidateSetAttribute(@('status', 'clear', 'rebuild'))))
+    $dict.Add('Action', (New-Object System.Management.Automation.RuntimeDefinedParameter('Action', [string], $attributes)))
+
+    return $dict
+}
+
+function New-ConfigMapDiscoveryCacheInfo {
+    param(
+        [string]$Action,
+        [bool]$Enabled,
+        [string]$Path,
+        [bool]$Exists,
+        [bool]$Valid,
+        [string]$Source,
+        [string]$RootMap,
+        [string]$Language,
+        [string]$Location,
+        $Cache
+    )
+
+    $entryCount = 0
+    $version = $null
+    $dependencies = @()
+    if ($Cache) {
+        $version = $Cache.version
+        if ($Cache.entries -and $null -ne $Cache.entries.hierarchical) {
+            $entryCount = @($Cache.entries.hierarchical).Count
+        }
+        if ($Cache.dependencies) {
+            $dependencies = @($Cache.dependencies)
+        }
+        if (-not $RootMap -and $Cache.rootMap) {
+            $RootMap = [string]$Cache.rootMap
+        }
+    }
+
+    return [pscustomobject]@{
+        Action       = $Action
+        Enabled      = [bool]$Enabled
+        Location     = $Location
+        Path         = $Path
+        Exists       = [bool]$Exists
+        Valid        = [bool]$Valid
+        Source       = $Source
+        Version      = $version
+        RootMap      = $RootMap
+        Language     = $Language
+        EntryCount   = $entryCount
+        Dependencies = $dependencies
+    }
+}
+
+function Get-ConfigMapDiscoveryCacheInfo {
+    <#
+    .SYNOPSIS
+        Inspects discovery cache state for a map without rebuilding it.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Collections.IDictionary]$Map,
+        [ValidateSet('build', 'conf')]
+        [string]$Language,
+        [string]$Action = 'status'
+    )
+
+    $enabled = Test-ConfigMapDiscoveryCacheEnabled -Map $Map
+    if (!$Map._sourceFile) {
+        $previous = Enter-ConfigMapSettingsScope -Settings (Get-ConfigMapDiscoveryCacheSettingOverrides -Map $Map)
+        try {
+            $location = Resolve-ConfigMapDiscoveryCacheLocation
+        }
+        finally {
+            Exit-ConfigMapSettingsScope -PreviousSettings $previous
+        }
+        return New-ConfigMapDiscoveryCacheInfo -Action $Action -Enabled $enabled -Location $location -Path $null -Exists $false -Valid $false -Source 'none' -RootMap $null -Language $Language
+    }
+
+    $sourceFile = [System.IO.Path]::GetFullPath($Map._sourceFile)
+    $found = Find-ConfigMapDiscoveryCache -SourceFile $sourceFile -Language $Language
+    if ($found) {
+        $exists = Test-Path -LiteralPath $found.Candidate.Path -PathType Leaf
+        return New-ConfigMapDiscoveryCacheInfo -Action $Action -Enabled $enabled -Location $found.Candidate.Location -Path $found.Candidate.Path -Exists $exists -Valid $true -Source $found.Source -RootMap $sourceFile -Language $Language -Cache $found.Cache
+    }
+
+    foreach ($candidate in (Get-ConfigMapDiscoveryCacheCandidates -SourceFile $sourceFile -Language $Language)) {
+        $stale = Read-ConfigMapDiscoveryCache -CachePath $candidate.Path
+        if ($stale) {
+            $exists = Test-Path -LiteralPath $candidate.Path -PathType Leaf
+            return New-ConfigMapDiscoveryCacheInfo -Action $Action -Enabled $enabled -Location $candidate.Location -Path $candidate.Path -Exists $exists -Valid $false -Source 'none' -RootMap $sourceFile -Language $Language -Cache $stale
+        }
+    }
+
+    $target = Get-ConfigMapDiscoveryCacheTarget -SourceFile $sourceFile -Language $Language -Map $Map
+    return New-ConfigMapDiscoveryCacheInfo -Action $Action -Enabled $enabled -Location $target.Location -Path $target.Path -Exists $false -Valid $false -Source 'none' -RootMap $sourceFile -Language $Language
+}
+
+function Clear-ConfigMapDiscoveryCache {
+    <#
+    .SYNOPSIS
+        Deletes the discovery cache file and memory entry for a map.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Collections.IDictionary]$Map,
+        [ValidateSet('build', 'conf')]
+        [string]$Language
+    )
+
+    if ($Map._sourceFile) {
+        $sourceFile = [System.IO.Path]::GetFullPath($Map._sourceFile)
+        foreach ($candidate in (Get-ConfigMapDiscoveryCacheCandidates -SourceFile $sourceFile -Language $Language)) {
+            Clear-ConfigMapDiscoveryCacheMemory -MemoryKey $candidate.MemoryKey
+            if (Test-Path -LiteralPath $candidate.Path -PathType Leaf) {
+                Remove-Item -LiteralPath $candidate.Path -Force
+            }
+        }
+    }
+
+    return Get-ConfigMapDiscoveryCacheInfo -Map $Map -Language $Language -Action 'clear'
+}
+
+function Rebuild-ConfigMapDiscoveryCache {
+    <#
+    .SYNOPSIS
+        Clears and rebuilds the discovery cache for a file-backed map.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Collections.IDictionary]$Map,
+        [ValidateSet('build', 'conf')]
+        [string]$Language
+    )
+
+    if (-not (Test-ConfigMapDiscoveryCacheEnabled -Map $Map)) {
+        throw "Discovery cache is disabled. Enable it with _settings.DiscoveryCache or unset QCONF_DiscoveryCache."
+    }
+
+    if (!$Map._sourceFile) {
+        throw "Cannot rebuild discovery cache for an in-memory map."
+    }
+
+    $null = Clear-ConfigMapDiscoveryCache -Map $Map -Language $Language
+
+    $sourceFile = [System.IO.Path]::GetFullPath($Map._sourceFile)
+    $target = Get-ConfigMapDiscoveryCacheTarget -SourceFile $sourceFile -Language $Language -Map $Map
+    $built = Build-ConfigMapDiscoveryCache -Map $Map -Language $Language
+    Write-ConfigMapDiscoveryCache -CachePath $target.Path -Cache $built
+    $script:discoveryCacheMemory[$target.MemoryKey] = $built
+
+    return Get-ConfigMapDiscoveryCacheInfo -Map $Map -Language $Language -Action 'rebuild'
+}
+
+function Invoke-QBuildCacheCommand {
+    <#
+    .SYNOPSIS
+        Runs a qbuild !cache action against a map.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Collections.IDictionary]$Map,
+        [ValidateSet('build', 'conf')]
+        [string]$Language,
+        [string]$Action = 'status'
+    )
+
+    switch ($Action) {
+        'status' { return Get-ConfigMapDiscoveryCacheInfo -Map $Map -Language $Language -Action 'status' }
+        'clear' { return Clear-ConfigMapDiscoveryCache -Map $Map -Language $Language }
+        'rebuild' { return Rebuild-ConfigMapDiscoveryCache -Map $Map -Language $Language }
+        default { throw "!cache accepts status, clear, or rebuild." }
+    }
 }
