@@ -82,7 +82,9 @@ function Invoke-QBuild {
         [Parameter(DontShow)]
         $map = "./.build.map.ps1",
 
-        [Parameter(Position = 1, DontShow)]
+        # Not positional. With dynamic parameters present, PowerShell binds these
+        # slots out of order and treats the unbound strings as empty arguments.
+        [Parameter(DontShow)]
         [ArgumentCompleter({
                 param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
                 try {
@@ -103,7 +105,7 @@ function Invoke-QBuild {
             })]
         [string]$ProcessAction,
 
-        [Parameter(Position = 2, DontShow)]
+        [Parameter(DontShow)]
         [ArgumentCompleter({
                 param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
                 try {
@@ -125,6 +127,29 @@ function Invoke-QBuild {
         [string]$ProcessValue,
 
         [Parameter(ValueFromRemainingArguments = $true, DontShow = $true)]
+        [ArgumentCompleter({
+                param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+                try {
+                    $module = Get-Module ConfigMap | Select-Object -First 1
+                    if (-not $module) { return @() }
+                    return & $module {
+                        param($Ast, $Bound, $Word)
+                        $position = Get-QBuildRemainingArgumentPosition `
+                            -CommandAst $Ast `
+                            -FakeBoundParameters $Bound `
+                            -Word $Word
+                        if (-not $position) { return @() }
+                        Get-QBuildProcessArgumentCompletion `
+                            -CommandAst $Ast `
+                            -FakeBoundParameters $Bound `
+                            -Word $Word `
+                            -Position $position
+                    } $commandAst $fakeBoundParameters $wordToComplete
+                }
+                catch {
+                    return @()
+                }
+            })]
         [string[]]$RemainingArguments
     )
     dynamicparam {
@@ -240,7 +265,11 @@ function Invoke-QBuild {
                 $bound[$item.Key] = $item.Value
             }
         }
-        $passthrough = @($ProcessAction, $ProcessValue, $RemainingArguments) | Where-Object { $null -ne $_ }
+        $passthrough = @(
+            $ProcessAction
+            $ProcessValue
+            $RemainingArguments
+        ) | Where-Object { $null -ne $_ -and "$_" -ne '' }
         if ($isInternalCommand) {
             $bound._context = @{
                 Map                = $map

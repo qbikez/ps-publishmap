@@ -65,7 +65,7 @@ function Format-QBuildCommand {
     )
 
     foreach ($key in ($BoundParameters.Keys | Sort-Object)) {
-        if ($key -in $skip) { continue }
+        if ($key -in $skip -or $key -like '_*') { continue }
 
         $val = $BoundParameters[$key]
         if ($val -is [switch]) {
@@ -80,7 +80,7 @@ function Format-QBuildCommand {
         }
     }
 
-    $passthrough = @($RemainingArguments) | Where-Object { $null -ne $_ }
+    $passthrough = @($RemainingArguments) | Where-Object { $null -ne $_ -and "$_" -ne '' }
     if ($passthrough.Count -gt 0) {
         $parts += '--'
         $parts += $passthrough

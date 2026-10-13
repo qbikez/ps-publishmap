@@ -77,6 +77,32 @@ function Get-QBuildProcessCompletionContext {
         MapInput      = $mapInput
         Entry         = if ($FakeBoundParameters.entry) { [string]$FakeBoundParameters.entry } elseif ($positionals.Count -gt 0) { $positionals[0] } else { $null }
         ProcessAction = if ($FakeBoundParameters.ProcessAction) { [string]$FakeBoundParameters.ProcessAction } elseif ($positionals.Count -gt 1) { $positionals[1] } else { $null }
+        Positionals   = @($positionals)
+    }
+}
+
+function Get-QBuildRemainingArgumentPosition {
+    param(
+        $CommandAst,
+        [hashtable]$FakeBoundParameters,
+        [AllowEmptyString()]
+        [string]$Word = ''
+    )
+
+    if (-not $CommandAst) { return $null }
+
+    $context = Get-QBuildProcessCompletionContext -CommandAst $CommandAst -FakeBoundParameters $FakeBoundParameters
+    $positionals = @($context.Positionals)
+    $slot = $positionals.Count
+    $normalizedWord = $Word.Trim("'`"")
+    if ($normalizedWord -ne '' -and $slot -gt 0 -and $positionals[-1] -eq $normalizedWord) {
+        $slot = $slot - 1
+    }
+
+    switch ($slot) {
+        1 { return 'Action' }
+        2 { return 'Value' }
+        default { return $null }
     }
 }
 
