@@ -10,14 +10,10 @@ function Get-ConfigMapInternalCommands {
 
     return [ordered]@{
         'help' = @{
-            description = 'Show qbuild usage'
+            description = 'Show qbuild usage and internal commands'
             exec = {
-                Write-Host "QBUILD"
-                Write-Host "A command line tool to manage build scripts"
-                Write-Host ""
-                Write-Host "Usage:"
-                Write-Host "qbuild <your-script-name>"
-                Write-Host "qbuild <process>[.<step>] [process options]  # when _settings.process=<name> (e.g. qrun)"
+                param($_context)
+                Write-InternalHelp -invocation $_context.Invocation
             }
         }
         'list' = @{

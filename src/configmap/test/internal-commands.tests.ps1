@@ -45,6 +45,22 @@ Describe 'qbuild internal commands' {
         }
     }
 
+    It 'prints every internal command from help' {
+        $output = qbuild help 6>&1 5>&1 4>&1 3>&1 2>&1 | Out-String
+
+        $output | Should -Match 'INTERNAL COMMANDS'
+        $output | Should -Match 'help'
+        $output | Should -Match 'list'
+        $output | Should -Match '!init'
+        $output | Should -Match '!agent.init'
+        $output | Should -Match '!settings'
+        $output | Should -Match '!describe'
+        $output | Should -Match '!cache'
+        $output | Should -Match '-Scope'
+        $output | Should -Match '-Agent'
+        $output | Should -Match '-Action'
+    }
+
     It 'preserves root map metadata used by settings and file-backed commands' {
         InModuleScope ConfigMap {
             $map = [ordered]@{

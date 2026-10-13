@@ -1,18 +1,67 @@
+function Write-CommandHelpLine {
+    param($name, $description, $paramInfo, $maxNameLength)
+    $paddedName = $name.PadRight($maxNameLength)
+    Write-Host "    " -NoNewline
+    Write-Host "$paddedName" -ForegroundColor Green -NoNewline
+    if ($paramInfo) {
+        Write-Host " [$paramInfo]" -ForegroundColor DarkGray -NoNewline
+    }
+    Write-Host "  $description" -ForegroundColor White
+}
+
+function Get-CommandHelpParamInfo {
+    param($script)
+
+    try {
+        $entry = Get-EntryCommand $script "exec"
+    }
+    catch {
+        $entry = $null
+    }
+    if ($entry -isnot [scriptblock]) {
+        return ''
+    }
+
+    $args = Get-ScriptArgs $entry
+    return (($args.Keys | ForEach-Object { "-$_" }) -join " ")
+}
+
+function Write-InternalHelp {
+    param($invocation)
+
+    $commandName = if ($invocation -and $invocation.InvocationName) { $invocation.InvocationName } else { 'qbuild' }
+    $commands = Get-ConfigMapInternalCommands -Language build
+
+    $maxNameLength = @($commands.Keys | ForEach-Object { ([string]$_).Length } | Measure-Object -Maximum).Maximum
+    if ($null -eq $maxNameLength) { $maxNameLength = 0 }
+    $maxNameLength = [Math]::Max($maxNameLength, 12)
+
+    Write-Host ""
+    Write-Host "$($commandName.ToUpper())" -ForegroundColor Cyan
+    Write-Host "A command line tool to manage build scripts" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "USAGE:" -ForegroundColor Yellow
+    Write-Host "    $commandName <COMMAND> [OPTIONS]" -ForegroundColor White
+    Write-Host "    $commandName <process>[.<step>] [process options]  # when _settings.process=<name> (e.g. qrun)" -ForegroundColor White
+    Write-Host ""
+    Write-Host "INTERNAL COMMANDS:" -ForegroundColor Yellow
+
+    foreach ($item in $commands.GetEnumerator()) {
+        $name = [string]$item.Key
+        $script = $item.Value
+        $description = ""
+        if ($script -is [System.Collections.IDictionary] -and $script.description) {
+            $description = $script.description
+        }
+
+        Write-CommandHelpLine $name $description (Get-CommandHelpParamInfo $script) $maxNameLength
+    }
+}
+
 function Write-MapHelp {
     param([System.Collections.IDictionary]$map, $invocation, [ValidateSet("build", "conf")]$language = "build")
     $commandName = $invocation.InvocationName
     $operationContext = New-ConfigMapOperationContext
-
-    $writeDefaultLine = {
-        param($name, $description, $paramInfo, $maxNameLength)
-        $paddedName = $name.PadRight($maxNameLength)
-        Write-Host "    " -NoNewline
-        Write-Host "$paddedName" -ForegroundColor Green -NoNewline
-        if ($paramInfo) {
-            Write-Host " [$paramInfo]" -ForegroundColor DarkGray -NoNewline
-        }
-        Write-Host "  $description" -ForegroundColor White
-    }
 
     $tryWriteProcessListEntry = {
         param($name, $entryValue)
@@ -74,7 +123,7 @@ function Write-MapHelp {
             $description = [string]$item.description
             $argList = @($item.parameters) | Where-Object { $_ } | ForEach-Object { "-$($_.name)" }
             $paramInfo = ($argList -join " ")
-            & $writeDefaultLine $name $description $paramInfo $maxNameLength
+            Write-CommandHelpLine $name $description $paramInfo $maxNameLength
         }
         return
     }
@@ -110,27 +159,12 @@ function Write-MapHelp {
             continue
         }
 
-        try {
-            $entry = Get-EntryCommand $script "exec"
-        }
-        catch {
-            $entry = $null
-        }
-        if ($entry -is [scriptblock]) {
-            $args = Get-ScriptArgs $entry
-        }
-        else {
-            $args = @{}
-        }
-
         $description = ""
         if ($script -is [System.Collections.IDictionary] -and $script.description) {
             $description = $script.description
         }
 
-        $argList = $args.Keys | % { "-$($_)" }
-        $paramInfo = ($argList -join " ")
-        & $writeDefaultLine $name $description $paramInfo $maxNameLength
+        Write-CommandHelpLine $name $description (Get-CommandHelpParamInfo $script) $maxNameLength
     }
 }
 
