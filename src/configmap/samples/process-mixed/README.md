@@ -16,13 +16,16 @@ qbuild bootstrap.restore -Follow
 qbuild storage get             # reads the active storage option
 qbuild storage set prod        # activates the prod option
 qbuild storage show            # same status formatting as the list row
+qbuild env set <tab>           # completes local, dev, prod
+qbuild env set dev -tenant abc # option key + opaque -tenant
+qbuild env get
 qbuild !state
 qbuild !state clean bootstrap
 ```
 
 Entries without `_settings.process` use the default qbuild runner. Entries with
 `_settings = @{ process = "qrun" }` are forwarded to the qrun step runner
-(same map). The `storage` entry uses `_settings = @{ process = "qconf" }`;
-qbuild forwards the process-owned `get` and `set` arguments without knowing
-qconf's semantics. The shorter `qbuild storage` and
-`qbuild storage -value prod` forms remain supported.
+(same map). The `storage` and `env` entries use `_settings = @{ process = "qconf" }`;
+qbuild forwards the process-owned `get`/`set` arguments and opaque parameters
+(such as `-tenant`) without knowing qconf's semantics. The shorter
+`qbuild storage` and `qbuild storage -value prod` forms remain supported.

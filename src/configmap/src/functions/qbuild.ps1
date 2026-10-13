@@ -189,7 +189,10 @@ function Invoke-QBuild {
                     -MapPath $mapPath `
                     -Map $dynMap `
                     -Entry $entry `
-                    -Follow:$followHint
+                    -Follow:$followHint `
+                    -ProcessAction $ProcessAction `
+                    -ProcessValue $ProcessValue `
+                    -RemainingArguments $RemainingArguments
             }
             $result = Get-EntryDynamicParam $dynMap $entry $command -skip 0 -bound $PSBoundParameters
             Write-Debug "Dynamic parameters for entry '$entry': $($result.Keys -join ', ')"

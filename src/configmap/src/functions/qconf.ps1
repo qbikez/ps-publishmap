@@ -111,10 +111,38 @@ function Invoke-QConf {
             if (-not $dynamicEntry) { return }
 
             $map = Import-ConfigMap -Map $map -Fallback ".configuration.map.ps1" | Assert-ConfigMap
-            $dynamicOperation = if ($command -eq 'set' -or $action -eq 'set' -or $PSBoundParameters.ContainsKey('value')) { 'set' } else { 'get' }
+
+            # RemainingArguments carry process-owned verbs when qbuild forwards
+            # (e.g. RemainingArguments = set,dev). Detect set before verb parsing.
+            $remainingHead = @(
+                $RemainingArguments | Where-Object { $null -ne $_ -and "$_" -ne '' } | Select-Object -First 1
+            )
+            $impliesSet = $command -eq 'set' -or $action -eq 'set' -or
+                $PSBoundParameters.ContainsKey('value') -or
+                ($remainingHead.Count -gt 0 -and $remainingHead[0] -eq 'set')
+
+            $dynamicOperation = if ($impliesSet) { 'set' } else { 'get' }
             $skip = if ($dynamicOperation -eq 'set') { 3 } else { 0 }
 
-            return Get-EntryDynamicParam $map "$dynamicEntry.$dynamicOperation" -skip $skip -bound $PSBoundParameters
+            $result = Get-EntryDynamicParam $map "$dynamicEntry.$dynamicOperation" -skip $skip -bound $PSBoundParameters
+            if (-not $result) {
+                $result = New-Object System.Management.Automation.RuntimeDefinedParameterDictionary
+            }
+
+            # Always expose set custom params so qbuild can forward opaque names
+            # discovered via !complete -params even when the verb arrives later.
+            if ($dynamicOperation -ne 'set') {
+                $setExtras = Get-EntryDynamicParam $map "$dynamicEntry.set" -skip 3 -bound $PSBoundParameters
+                if ($setExtras) {
+                    foreach ($name in @($setExtras.Keys)) {
+                        if (-not $result.ContainsKey($name)) {
+                            $result.Add($name, $setExtras[$name])
+                        }
+                    }
+                }
+            }
+
+            return $result
         }
         catch {
             return "ERROR [dynamic]: $($_.Exception.Message) $($_.ScriptStackTrace)"
@@ -323,10 +351,18 @@ function Invoke-QConf {
 
                 $optionKey = $value
                 $options = Get-CompletionList $subEntry -listKey "options" -language "conf" -maxDepth 1
-                if ([string]::IsNullOrWhiteSpace($optionKey) -or -not $options.Contains($optionKey)) {
-                    throw "Unknown option '$optionKey' for entry '$confEntry'. Available options: $($options.Keys -join ', ')."
+                $hasOptions = $options -and @($options.Keys).Count -gt 0
+
+                if ($hasOptions) {
+                    if ([string]::IsNullOrWhiteSpace($optionKey) -or -not $options.Contains($optionKey)) {
+                        throw "Unknown option '$optionKey' for entry '$confEntry'. Available options: $($options.Keys -join ', ')."
+                    }
+                    $optionValue = $options[$optionKey]
                 }
-                $optionValue = $options[$optionKey]
+                else {
+                    # Option-less entries rely on opaque/custom set parameters.
+                    $optionValue = $null
+                }
 
                 $bound = @{}
                 foreach ($boundKey in $PSBoundParameters.Keys) {
@@ -334,8 +370,9 @@ function Invoke-QConf {
                 }
                 $bound.key = $optionKey
                 $bound.value = $optionValue
+                $setExtras = @($operationArgs | Where-Object { $null -ne $_ -and "$_" -ne '' })
                 Invoke-WithEntrySettings -Map $map -EntryKey "$confEntry" -Entry $subEntry -OperationContext $operationContext -ScriptBlock {
-                    Invoke-Set $subEntry -bound $bound
+                    Invoke-Set $subEntry -bound $bound -extra $setExtras
                 }
             }
             "get" {

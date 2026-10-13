@@ -8,6 +8,8 @@
 #   qbuild bootstrap.prepare
 #   qbuild storage
 #   qbuild storage -value prod
+#   qbuild env set dev -tenant abc
+#   qbuild env get
 #   qbuild list
 #   qbuild !state
 
@@ -83,6 +85,42 @@
             New-Item -ItemType Directory -Path $workspace -Force | Out-Null
             $key | Set-Content (Join-Path $workspace 'storage.txt')
             Write-Host "  storage=$key ($value)" -ForegroundColor Green
+        }
+    }
+
+    "env" = [ordered]@{
+        _settings   = @{ process = "qconf" }
+        description = "Environment / tenant selection (opaque -tenant)"
+        options     = [ordered]@{
+            local = "local"
+            dev   = "dev"
+            prod  = "prod"
+        }
+        get         = {
+            param($ctx, $options)
+            $keyFile = Join-Path (Get-Location) 'workspace/env-key.txt'
+            if (Test-Path $keyFile) {
+                $key = (Get-Content $keyFile -Raw).Trim()
+                if ($options.Contains($key)) { return $options[$key] }
+            }
+            $tenantFile = Join-Path (Get-Location) 'workspace/env.txt'
+            if (Test-Path $tenantFile) {
+                (Get-Content $tenantFile -Raw).Trim()
+            }
+            else {
+                ''
+            }
+        }
+        set         = {
+            param($ctx, $key, $value, [string]$tenant)
+            if ([string]::IsNullOrWhiteSpace($tenant)) {
+                throw "Set env requires -tenant <name>."
+            }
+            $workspace = Join-Path (Get-Location) 'workspace'
+            New-Item -ItemType Directory -Path $workspace -Force | Out-Null
+            $key | Set-Content (Join-Path $workspace 'env-key.txt')
+            $tenant | Set-Content (Join-Path $workspace 'env.txt')
+            Write-Host "  env=$key tenant=$tenant" -ForegroundColor Green
         }
     }
 }
