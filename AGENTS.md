@@ -141,6 +141,11 @@ VSCode tasks are configured for running individual test files with Pester integr
 - Prefer pure transformations for business rules and keep side effects near orchestration boundaries where practical
 
 #### Tests
+- Use test-driven development for behavior changes and bug fixes, following the red-green-refactor cycle:
+  1. **Red:** write a focused test for the desired behavior and confirm that it fails for the expected reason
+  2. **Green:** make the smallest production-code change that makes the test pass
+  3. **Refactor:** improve the implementation and tests while keeping the suite green
+- Do not skip confirming the red phase; a test that never failed may not exercise the intended behavior
 - Add a Pester regression test for every bug fix and behavior tests for new features
 - Prefer tests through public behavior. Test internal helpers directly when they contain substantial standalone logic
 - Mock external boundaries rather than the code under test
