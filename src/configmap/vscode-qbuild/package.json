@@ -2,7 +2,7 @@
   "name": "qbuild-map-tools",
   "displayName": "qbuild Map Tools",
   "description": "Navigation and completion for qbuild PowerShell map files.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "hmdev",
   "license": "UNLICENSED",
   "repository": {
