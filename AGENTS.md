@@ -101,9 +101,56 @@ VSCode tasks are configured for running individual test files with Pester integr
 ## Code Quality
 
 - **PSScriptAnalyzer** settings defined in `PSScriptAnalyzerSettings.psd1`
-- Powershell: allow specific aliases like `cd`, `%`, `select`, `where`, `pushd`, `popd`, `?` and dont try to replace them
+- PowerShell aliases permitted by `PSScriptAnalyzerSettings.psd1` are acceptable; do not replace them solely for style
 - CI/CD via AppVeyor with automatic testing and deployment
-- avoid commenting obvious things
+
+### PowerShell Coding Guidelines
+
+#### Scope and Refactoring
+- Apply these guidelines to new and changed code
+- Make only the changes needed for the requested behavior; propose broader cleanup separately
+- Preserve all observable behavior unless the task explicitly authorizes a breaking change. This includes exported commands, aliases, parameters, output, dynamic parameters, completion, and map contracts
+
+#### Functions and Complexity
+- Give each function one responsibility and keep its statements at one abstraction level
+- Treat roughly 50 executable lines or nesting deeper than three levels as a signal to review the function, not as a hard limit
+- Long orchestration functions are acceptable when their steps remain cohesive and readable
+- Keep pipeline output deliberate. Do not emit incidental values from method calls or helper commands
+- Use `$null -eq $value` where placing a collection on the left could change null-comparison behavior
+- Validate public inputs and add types when they clarify or enforce a boundary; avoid types that only add noise internally
+- Use `try`/`finally` whenever temporarily changing locations, environment variables, module state, settings scopes, or other process state
+- Prefer guard clauses, named arguments, and splatting when they improve readability; they are not mandatory
+
+#### Naming
+- Name functions with an approved PowerShell `Verb-SingularNoun` pair, using verbs according to their standard semantics
+- Use intention-revealing domain names and otherwise follow the established casing in the surrounding file
+- Preserve externally visible names and schema keys such as `exec`, `_settings`, and `_context`
+
+#### Module Organization
+- Keep module entry points focused on dependency-ordered imports, exports, and initialization
+- Group functions by one cohesive domain concern in the existing `functions/` directories
+- Split a file when it accumulates unrelated responsibilities; do not require one file per function
+
+#### Clean Code and Abstractions
+- Remove dead and commented-out code; version control retains history
+- Comments should explain rationale, constraints, or non-obvious PowerShell behavior rather than restating the code
+- Use `Write-Verbose` and `Write-Debug` for diagnostics. Use `Write-Host` only for intentional CLI presentation
+- Use terminating errors for operations that cannot produce a valid result
+- Extract a helper when it materially improves readability or represents a domain concept or side-effect boundary
+- Avoid forwarding wrappers, speculative abstraction layers, and classes that do not improve the existing function/hashtable design
+- Prefer pure transformations for business rules and keep side effects near orchestration boundaries where practical
+
+#### Tests
+- Add a Pester regression test for every bug fix and behavior tests for new features
+- Prefer tests through public behavior. Test internal helpers directly when they contain substantial standalone logic
+- Mock external boundaries rather than the code under test
+- Use `TestDrive` for filesystem tests and reliably restore environment, module, global, and location state
+- Run directly related Pester tests before handoff. Run broader suites or PSScriptAnalyzer when requested
+- State what verification was and was not run, and report any failures
+
+#### Formatting
+- Use consistent indentation and a readable layout
+- Follow the nearby style and avoid formatting-only churn
 
 ## File Patterns
 
@@ -111,4 +158,4 @@ VSCode tasks are configured for running individual test files with Pester integr
 - Module manifests: `*.psd1` 
 - Module files: `*.psm1`
 - Test files: `*.Tests.ps1` or `*.tests.ps1`
-- Function files: Individual `.ps1` files in `/functions/` directories
+- Function files: Concern-focused `.ps1` files in `/functions/` directories
