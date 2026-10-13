@@ -307,5 +307,11 @@ Describe 'qconf as a qbuild process' {
         Test-Path 'out/build.txt' | Should -BeTrue
         Get-Content 'workspace/storage.txt' -Raw | Should -Match 'prod'
         Get-Content 'workspace/env.txt' -Raw | Should -Match 'abc'
+
+        $line = "qbuild -map '$script:mapFile' env set "
+        $completions = @(TabExpansion2 $line $line.Length).CompletionMatches.CompletionText
+        $completions | Should -Contain 'local'
+        $completions | Should -Contain 'dev'
+        $completions | Should -Contain 'prod'
     }
 }

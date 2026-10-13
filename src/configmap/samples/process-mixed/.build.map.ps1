@@ -91,11 +91,21 @@
     "env" = [ordered]@{
         _settings   = @{ process = "qconf" }
         description = "Environment / tenant selection (opaque -tenant)"
+        options     = [ordered]@{
+            local = "local"
+            dev   = "dev"
+            prod  = "prod"
+        }
         get         = {
             param($ctx, $options)
-            $stateFile = Join-Path (Get-Location) 'workspace/env.txt'
-            if (Test-Path $stateFile) {
-                (Get-Content $stateFile -Raw).Trim()
+            $keyFile = Join-Path (Get-Location) 'workspace/env-key.txt'
+            if (Test-Path $keyFile) {
+                $key = (Get-Content $keyFile -Raw).Trim()
+                if ($options.Contains($key)) { return $options[$key] }
+            }
+            $tenantFile = Join-Path (Get-Location) 'workspace/env.txt'
+            if (Test-Path $tenantFile) {
+                (Get-Content $tenantFile -Raw).Trim()
             }
             else {
                 ''
@@ -108,8 +118,9 @@
             }
             $workspace = Join-Path (Get-Location) 'workspace'
             New-Item -ItemType Directory -Path $workspace -Force | Out-Null
+            $key | Set-Content (Join-Path $workspace 'env-key.txt')
             $tenant | Set-Content (Join-Path $workspace 'env.txt')
-            Write-Host "  env tenant=$tenant" -ForegroundColor Green
+            Write-Host "  env=$key tenant=$tenant" -ForegroundColor Green
         }
     }
 }
