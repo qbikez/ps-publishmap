@@ -20,6 +20,7 @@ $helpersPath = (Split-Path -Parent $MyInvocation.MyCommand.Definition)
 . "$helpersPath\functions\help.ps1"
 . "$helpersPath\functions\initialize.ps1"
 . "$helpersPath\functions\agent-init.ps1"
+. "$helpersPath\functions\internal-commands.ps1"
 . "$helpersPath\functions\qbuild.ps1"
 . "$helpersPath\functions\qconf.ps1"
 . "$helpersPath\qrun\qrun.ps1"

@@ -588,26 +588,6 @@ function Clear-ConfigMapDiscoveryCacheMemory {
     $script:discoveryCacheMemory = @{}
 }
 
-function New-QBuildCacheDynamicParam {
-    <#
-    .SYNOPSIS
-        Builds the -Action dynamic parameter for qbuild !cache.
-    #>
-    [OutputType([System.Management.Automation.RuntimeDefinedParameterDictionary])]
-    param()
-
-    $dict = New-Object System.Management.Automation.RuntimeDefinedParameterDictionary
-
-    $attributes = New-Object System.Collections.ObjectModel.Collection[System.Attribute]
-    $paramAttr = New-Object System.Management.Automation.ParameterAttribute
-    $paramAttr.Position = 1
-    $attributes.Add($paramAttr)
-    $attributes.Add((New-Object System.Management.Automation.ValidateSetAttribute(@('status', 'clear', 'rebuild'))))
-    $dict.Add('Action', (New-Object System.Management.Automation.RuntimeDefinedParameter('Action', [string], $attributes)))
-
-    return $dict
-}
-
 function New-ConfigMapDiscoveryCacheInfo {
     param(
         [string]$Action,

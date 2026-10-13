@@ -205,7 +205,8 @@ Describe 'qbuild !cache' {
 
     It 'exposes Action ValidateSet values for !cache' {
         InModuleScope ConfigMap {
-            $params = New-QBuildCacheDynamicParam
+            $map = Merge-ConfigMapCommands -Language build
+            $params = Get-EntryDynamicParam -map $map -key '!cache' -command exec
             @($params.Keys) | Should -Be @('Action')
 
             $actionSet = $params['Action'].Attributes |

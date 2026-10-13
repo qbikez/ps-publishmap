@@ -1441,7 +1441,7 @@ Describe "qbuild with no map file" {
         New-Item -ItemType Directory -Path $testDir -Force | Out-Null
     }
 
-    It "should output nothing when no map file exists and entry is provided" {
+    It "should show help when no map file exists and entry is provided" {
         pushd $testDir
         try {
             # Capture all output streams and errors
@@ -1454,16 +1454,17 @@ Describe "qbuild with no map file" {
                 $errorOutput = $_.Exception.Message
             }
             
-            # Currently throws an error, but ideally should output nothing
-            # Documenting current behavior: throws "map file './.build.map.ps1' not found"
-            $errorOutput | Should -Match "map file.*not found"
+            $errorOutput | Should -BeNullOrEmpty
+            $output | Should -Match "No build map file found"
+            $output | Should -Match "qbuild !init"
+            $output | Should -Not -Match "qbuild anything !init"
         }
         finally {
             popd
         }
     }
 
-    It "should output nothing when no map file exists and no entry is provided" {
+    It "should show help when no map file exists and no entry is provided" {
         pushd $testDir
         try {
             # Capture all output streams and errors
@@ -1476,9 +1477,25 @@ Describe "qbuild with no map file" {
                 $errorOutput = $_.Exception.Message
             }
             
-            # Currently throws an error, but ideally should output nothing
-            # Documenting current behavior: throws "map file './.build.map.ps1' not found"  
-            $errorOutput | Should -Match "map file.*not found"
+            $errorOutput | Should -BeNullOrEmpty
+            $output | Should -Match "No build map file found"
+            $output | Should -Match "qbuild !init"
+            $output | Should -Not -Match "qbuild list !init"
+        }
+        finally {
+            popd
+        }
+    }
+
+    It "should suggest qbuild !init when list is run without a map file" {
+        pushd $testDir
+        try {
+            $output = qbuild list 6>&1 5>&1 4>&1 3>&1 2>&1 | Out-String
+
+            $output | Should -Match "No build map file found"
+            $output | Should -Match "qbuild !init"
+            $output | Should -Not -Match "qbuild list !init"
+            $output | Should -Not -Match "qbuild list init"
         }
         finally {
             popd
