@@ -1,0 +1,44 @@
+{
+  "name": "qbuild-map-tools",
+  "displayName": "qbuild Map Tools",
+  "description": "Navigation and completion for qbuild PowerShell map files.",
+  "version": "0.1.0",
+  "publisher": "hmdev",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/qbikez/ps-publishmap.git",
+    "directory": "src/configmap/vscode-qbuild"
+  },
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "powershell",
+    "qbuild",
+    "configmap"
+  ],
+  "activationEvents": [
+    "onLanguage:powershell"
+  ],
+  "main": "./out/extension.js",
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -w -p ./",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "npm run compile && node --test out/test/mapParser.test.js out/test/models.test.js",
+    "test:integration": "npm run compile && node out/test/runTest.js",
+    "package": "npm run compile && vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/vscode": "^1.95.0",
+    "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^3.2.1",
+    "typescript": "^5.7.2"
+  }
+}
