@@ -1441,7 +1441,7 @@ Describe "qbuild with no map file" {
         New-Item -ItemType Directory -Path $testDir -Force | Out-Null
     }
 
-    It "should output nothing when no map file exists and entry is provided" {
+    It "should show help when no map file exists and entry is provided" {
         pushd $testDir
         try {
             # Capture all output streams and errors
@@ -1454,16 +1454,15 @@ Describe "qbuild with no map file" {
                 $errorOutput = $_.Exception.Message
             }
             
-            # Currently throws an error, but ideally should output nothing
-            # Documenting current behavior: throws "map file './.build.map.ps1' not found"
-            $errorOutput | Should -Match "map file.*not found"
+            $errorOutput | Should -BeNullOrEmpty
+            $output | Should -Match "QBUILD"
         }
         finally {
             popd
         }
     }
 
-    It "should output nothing when no map file exists and no entry is provided" {
+    It "should show help when no map file exists and no entry is provided" {
         pushd $testDir
         try {
             # Capture all output streams and errors
@@ -1476,9 +1475,8 @@ Describe "qbuild with no map file" {
                 $errorOutput = $_.Exception.Message
             }
             
-            # Currently throws an error, but ideally should output nothing
-            # Documenting current behavior: throws "map file './.build.map.ps1' not found"  
-            $errorOutput | Should -Match "map file.*not found"
+            $errorOutput | Should -BeNullOrEmpty
+            $output | Should -Match "QBUILD"
         }
         finally {
             popd

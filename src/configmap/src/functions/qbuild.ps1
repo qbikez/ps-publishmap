@@ -7,36 +7,50 @@ function Invoke-QBuild {
                     $mapPath = if ($fakeBoundParameters.map) { $fakeBoundParameters.map } else { "./.build.map.ps1" }
                     $localMapExists = Test-Path $mapPath
 
-                    $mapNotFound = $false
-                    $map = try {
+                    $userMap = try {
                         Import-ConfigMap -Map $fakeBoundParameters.map -Fallback "./.build.map.ps1" -ErrorAction Stop
                     }
                     catch {
                         if ($_.Exception.Message -match '^map file .* not found$|^No map provided and fallback .* not found$|^map is null and defaultMapFile is not provided$') {
-                            $mapNotFound = $true
                             $null
                         }
                         else {
                             throw
                         }
                     }
-                    if ($mapNotFound) {
-                        return @("!init", "!settings", "!describe", "!agent.init", "!cache", "help", "list") | ? { $_.startswith($wordToComplete) }
+                    if ($userMap) {
+                        $userMap = $userMap | Assert-ConfigMap
                     }
-                    $map = $map | Assert-ConfigMap
 
-                    $builtins = @(@("!settings", "!describe", "!agent.init", "help", "list") | ? { $_.startswith($wordToComplete) })
-                    
-                    # Map-only baseline; enrich with process !complete -word when available.
                     $completions = [System.Collections.Generic.List[string]]::new()
-                    foreach ($c in @(Get-EntryCompletion $map -language "build" @PSBoundParameters)) {
-                        if ($c) { $completions.Add([string]$c) | Out-Null }
+                    if ($userMap) {
+                        foreach ($c in @(Get-EntryCompletion $userMap -language "build" @PSBoundParameters)) {
+                            if ($c) { $completions.Add([string]$c) | Out-Null }
+                        }
+                    }
+
+                    $qbuildModule = (Get-Command Invoke-QBuild).Module
+                    $internalCommands = & $qbuildModule { Get-ConfigMapInternalCommands -Language build }
+                    foreach ($item in $internalCommands.GetEnumerator()) {
+                        if (-not ([string]$item.Key).StartsWith($wordToComplete)) {
+                            continue
+                        }
+                        $includeCompletion = & $qbuildModule {
+                            param($commandEntry, $mapExists)
+                            Test-ConfigMapCommandCompletion -Entry $commandEntry -LocalMapExists $mapExists
+                        } $item.Value $localMapExists
+                        if (-not $includeCompletion) {
+                            continue
+                        }
+                        if (-not $completions.Contains([string]$item.Key)) {
+                            $completions.Add([string]$item.Key) | Out-Null
+                        }
                     }
 
                     try {
-                        $resolvedMapPath = Resolve-MapPath -Map $map
+                        $resolvedMapPath = Resolve-MapPath -Map $userMap
                         if ($resolvedMapPath) {
-                            foreach ($procName in @(Get-ConfigMapProcessNamesInMap -Map $map)) {
+                            foreach ($procName in @(Get-ConfigMapProcessNamesInMap -Map $userMap)) {
                                 $procWords = Get-ConfigMapProcessCompleteWord `
                                     -ProcessName $procName `
                                     -MapPath $resolvedMapPath `
@@ -54,13 +68,7 @@ function Invoke-QBuild {
                         # No file path / process discovery failure → keep map-only completions
                     }
 
-                    $completionArray = @($completions)
-                    # Include !init if no local map file exists
-                    if (!$localMapExists) {
-                        $completionArray = @("!init" | ? { $_.startswith($wordToComplete) }) + $completionArray
-                    }
-                  
-                    return $builtins + $completionArray
+                    return @($completions)
                 }
                 catch {
                     return "ERROR [-entry]: $($_.Exception.Message) $($_.ScriptStackTrace)"
@@ -77,17 +85,30 @@ function Invoke-QBuild {
         [string[]]$RemainingArguments
     )
     dynamicparam {
-        if ($entry -eq '!agent.init') {
-            return New-QBuildAgentInitDynamicParam
-        }
-        if ($entry -eq '!cache') {
-            return New-QBuildCacheDynamicParam
-        }
-        if (-not $entry -or $entry -in @('help', 'list', '!init', '!settings', '!describe', '!agent.init')) {
+        if (-not $entry) {
             return
         }
         try {
-            $dynMap = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" | Assert-ConfigMap
+            $dynUserMap = try {
+                . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" | Assert-ConfigMap
+            }
+            catch {
+                if ($_.Exception.Message -match '^map file .* not found$|^No map provided and fallback .* not found$|^map is null and defaultMapFile is not provided$') {
+                    $null
+                }
+                else {
+                    throw
+                }
+            }
+            $dynMap = Merge-ConfigMapCommands -Map $dynUserMap -Language build
+
+            if (Test-ConfigMapInternalCommand -Name $entry -Language build) {
+                return Get-EntryDynamicParam $dynMap $entry $command -skip 0 -bound $PSBoundParameters
+            }
+            if (!$dynUserMap) {
+                return
+            }
+
             $settings = Get-ConfigMapSettingsForPath -Map $dynMap -Path $entry
             if ($settings.Process -ne 'qbuild') {
                 $mapPath = Resolve-MapPath -Map $dynMap
@@ -112,160 +133,48 @@ function Invoke-QBuild {
     }
 
     process {
-        if ($entry -eq "help") {
-            Write-Host "QBUILD"
-            Write-Host "A command line tool to manage build scripts"
-            Write-Host ""
-            Write-Host "Usage:"
-            Write-Host "qbuild <your-script-name>"
-            Write-Host "qbuild <process>[.<step>] [process options]  # when _settings.process=<name> (e.g. qrun)"
-            return
+        $mapPath = $map
+        $userMap = try {
+            . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" | Assert-ConfigMap
         }
-        if ($entry -eq "list") {
-            $map = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1"
-            if (!$map) {
-                $invocation = $MyInvocation
-                Write-Help -invocation $invocation -mapPath "./.build.map.ps1"
-                return
-            }
-            Write-MapHelp -map $map -invocation $MyInvocation
-            return
-        }
-        if ($entry -eq "!init") {
-            # Only check current directory - create new map regardless of parent configs
-            if (Test-Path $map) {
-                throw "map file '$map' already exists"
-            }
-            Initialize-BuildMap -file $map
-            return
-        }
-        if ($entry -eq '!agent.init') {
-            $agentScope = if ($PSBoundParameters.ContainsKey('Scope') -and $PSBoundParameters['Scope']) {
-                $PSBoundParameters['Scope']
-            }
-            else {
-                'project'
-            }
-            $agentTarget = if ($PSBoundParameters.ContainsKey('Agent') -and $PSBoundParameters['Agent']) {
-                $PSBoundParameters['Agent']
-            }
-            else {
-                'cursor'
-            }
-            return Initialize-QBuildAgent -Scope $agentScope -Agent $agentTarget
-        }
-        if ($entry -eq "!settings") {
-            $settingsPath = @($RemainingArguments | Where-Object { $_ })
-            if ($settingsPath.Count -gt 1) {
-                throw "!settings accepts at most one command path."
-            }
-
-            $settingsMap = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" -ErrorAction Ignore
-            if (!$settingsMap) {
-                return Get-ConfigMapSettings
-            }
-
-            return Get-ConfigMapSettingsForPath -Map $settingsMap -Path $settingsPath[0]
-        }
-        if ($entry -eq "!cache") {
-            $cacheArgs = @($RemainingArguments | Where-Object { $_ })
-            $boundAction = if ($PSBoundParameters.ContainsKey('Action') -and $PSBoundParameters['Action']) {
-                [string]$PSBoundParameters['Action']
-            }
-            else {
+        catch {
+            if ($_.Exception.Message -match '^map file .* not found$|^No map provided and fallback .* not found$|^map is null and defaultMapFile is not provided$') {
                 $null
             }
-
-            if ($boundAction) {
-                if ($cacheArgs.Count -gt 0 -and $cacheArgs[0] -eq $boundAction) {
-                    $cacheArgs = @($cacheArgs | Select-Object -Skip 1)
-                }
-                if ($cacheArgs.Count -gt 0) {
-                    throw "!cache accepts at most one action."
-                }
-                $cacheAction = $boundAction
-            }
             else {
-                if ($cacheArgs.Count -gt 1) {
-                    throw "!cache accepts at most one action."
-                }
-                $cacheAction = if ($cacheArgs.Count -eq 1) { $cacheArgs[0] } else { 'status' }
-            }
-
-            $allowedCacheActions = @('status', 'clear', 'rebuild')
-            if ($cacheAction -notin $allowedCacheActions) {
-                throw "!cache accepts status, clear, or rebuild."
-            }
-
-            $cacheMap = $null
-            try {
-                $cacheMap = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1"
-            }
-            catch {
-                if ($_.Exception.Message -match '^map file .* not found$|^No map provided and fallback .* not found$|^map is null and defaultMapFile is not provided$') {
-                    throw "No build map file found. Run 'qbuild !init' to create one, or provide -map."
-                }
                 throw
             }
-
-            return Invoke-QBuildCacheCommand -Map $cacheMap -Language build -Action $cacheAction
         }
-        if ($entry -eq "!describe") {
-            $describePath = @($RemainingArguments | Where-Object { $_ })
-            if ($describePath.Count -gt 1) {
-                throw "!describe accepts at most one command path."
-            }
+        $map = Merge-ConfigMapCommands -Map $userMap -Language build
 
-            $describeMap = $null
-            try {
-                $describeMap = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1"
-            }
-            catch {
-                if ($_.Exception.Message -match '^map file .* not found$|^No map provided and fallback .* not found$|^map is null and defaultMapFile is not provided$') {
-                    throw "No build map file found. Run 'qbuild !init' to create one, or provide -map."
-                }
-                throw
-            }
-
-            if ($describePath.Count -eq 1) {
-                return Get-ConfigMapCommandCatalog -Map $describeMap -Path $describePath[0] -Language build
-            }
-
-            return Get-ConfigMapCommandCatalog -Map $describeMap -Language build
-        }
-
-        $mapPath = $map
-        $map = . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" -ErrorAction Ignore
-        if (!$map) {
-            $invocation = $MyInvocation
-            $commandName = $invocation.Statement
-
-            Write-Help -invocation $invocation -mapPath "./.build.map.ps1"
-            return
-        }
-
-        # If no entry is provided, list all available scripts
         if (-not $entry) {
-            Write-MapHelp -map $map -invocation $MyInvocation
+            $entry = 'list'
+        }
+
+        $isInternalCommand = Test-ConfigMapInternalCommand -Name $entry -Language build
+        if (!$userMap -and !$isInternalCommand) {
+            Write-Help -invocation $MyInvocation -mapPath "./.build.map.ps1"
             return
         }
 
         $operationContext = New-ConfigMapOperationContext
-        $processSettings = Get-ConfigMapSettingsForPath -Map $map -Path $entry -OperationContext $operationContext
+        if (!$isInternalCommand) {
+            $processSettings = Get-ConfigMapSettingsForPath -Map $map -Path $entry -OperationContext $operationContext
 
-        if ($processSettings.Process -ne 'qbuild') {
-            $resolvedMapPath = Resolve-MapPath -Map $map
-            if (-not $resolvedMapPath) {
-                throw "Cannot delegate process '$($processSettings.Process)' for entry '$entry': the map has no _sourceFile."
+            if ($processSettings.Process -ne 'qbuild') {
+                $resolvedMapPath = Resolve-MapPath -Map $map
+                if (-not $resolvedMapPath) {
+                    throw "Cannot delegate process '$($processSettings.Process)' for entry '$entry': the map has no _sourceFile."
+                }
+                $splat = ConvertTo-ConfigMapProcessSplat `
+                    -MapPath $resolvedMapPath `
+                    -Entry $entry `
+                    -BoundParameters $PSBoundParameters `
+                    -RemainingArguments $RemainingArguments
+
+                Invoke-ConfigMapProcessCli -ProcessName $processSettings.Process -Splat $splat | Out-Null
+                return
             }
-            $splat = ConvertTo-ConfigMapProcessSplat `
-                -MapPath $resolvedMapPath `
-                -Entry $entry `
-                -BoundParameters $PSBoundParameters `
-                -RemainingArguments $RemainingArguments
-
-            Invoke-ConfigMapProcessCli -ProcessName $processSettings.Process -Splat $splat | Out-Null
-            return
         }
 
         $targets = Get-MapEntries $map $entry -language "build" -OperationContext $operationContext
@@ -277,17 +186,24 @@ function Invoke-QBuild {
         
         Write-Verbose "running targets: $($targets.Key)"
 
-        # FIXME: we already have the entry in $_.value, we know ITs own key, but we don't want to search for this key inside this object
-        # we should pass null instead?
-        #Invoke-EntryCommand -entry $_.value -key $_.Key $bound
-        $bound = $PSBoundParameters
-        $bound.Remove("entry") | Out-Null
-        $bound.Remove("RemainingArguments") | Out-Null
-        $passthrough = @($RemainingArguments) | Where-Object { $null -ne $_ }
-        if ($passthrough.Count -gt 0) {
-            if (-not $bound._context -or $bound._context -isnot [hashtable]) {
-                $bound._context = @{}
+        $bound = @{}
+        foreach ($item in $PSBoundParameters.GetEnumerator()) {
+            if ($item.Key -notin @('entry', 'RemainingArguments')) {
+                $bound[$item.Key] = $item.Value
             }
+        }
+        $passthrough = @($RemainingArguments) | Where-Object { $null -ne $_ }
+        if ($isInternalCommand) {
+            $bound._context = @{
+                Map                = $map
+                UserMap            = $userMap
+                MapArgument        = $mapPath
+                Invocation         = $MyInvocation
+                RemainingArguments = @($passthrough)
+            }
+        }
+        elseif ($passthrough.Count -gt 0) {
+            $bound._context = @{}
             $bound._context['additionalArgs'] = @($passthrough)
         }
 

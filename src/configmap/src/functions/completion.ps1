@@ -346,7 +346,7 @@ function Get-ScriptArgs {
     param(
         [scriptblock]$func,
         [int]$skip = 0,
-        $exclude = @("$_context", "$_self"),
+        $exclude = @('$_context', '$_self'),
         [System.Collections.IDictionary]$entry = $null
     )
     function Get-SingleArg {

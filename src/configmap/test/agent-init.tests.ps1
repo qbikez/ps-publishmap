@@ -72,7 +72,8 @@ Describe 'Initialize-QBuildAgent / qbuild !agent.init' {
 
     It 'exposes Scope and Agent dynamic parameters for !agent.init' {
         InModuleScope ConfigMap {
-            $params = New-QBuildAgentInitDynamicParam
+            $map = Merge-ConfigMapCommands -Language build
+            $params = Get-EntryDynamicParam -map $map -key '!agent.init' -command exec
             @($params.Keys | Sort-Object) | Should -Be @('Agent', 'Scope')
 
             $scopeSet = $params['Scope'].Attributes |
