@@ -43,29 +43,6 @@ function Get-QBuildAgentSkillDestination {
     return [System.IO.Path]::GetFullPath((Join-Path $root (Join-Path $skillsParent $script:qbuildSkillName)))
 }
 
-function New-QBuildAgentInitDynamicParam {
-    <#
-    .SYNOPSIS
-        Builds -Scope / -Agent dynamic parameters for qbuild !agent.init.
-    #>
-    [OutputType([System.Management.Automation.RuntimeDefinedParameterDictionary])]
-    param()
-
-    $dict = New-Object System.Management.Automation.RuntimeDefinedParameterDictionary
-
-    $scopeAttributes = New-Object System.Collections.ObjectModel.Collection[System.Attribute]
-    $scopeAttributes.Add((New-Object System.Management.Automation.ParameterAttribute))
-    $scopeAttributes.Add((New-Object System.Management.Automation.ValidateSetAttribute(@('user', 'project'))))
-    $dict.Add('Scope', (New-Object System.Management.Automation.RuntimeDefinedParameter('Scope', [string], $scopeAttributes)))
-
-    $agentAttributes = New-Object System.Collections.ObjectModel.Collection[System.Attribute]
-    $agentAttributes.Add((New-Object System.Management.Automation.ParameterAttribute))
-    $agentAttributes.Add((New-Object System.Management.Automation.ValidateSetAttribute(@('cursor', 'copilot', 'claude'))))
-    $dict.Add('Agent', (New-Object System.Management.Automation.RuntimeDefinedParameter('Agent', [string], $agentAttributes)))
-
-    return $dict
-}
-
 function Initialize-QBuildAgent {
     <#
     .SYNOPSIS
