@@ -287,7 +287,18 @@ function New-ConfigMapProcessDynamicParam {
             $merged.Add($name, $typed[$name])
         }
         else {
-            $merged.Add($name, (New-ConfigMapOpaqueDynamicParam -Name $name -ParameterType ([switch])))
+            $parameterType = [switch]
+            try {
+                $processCommand = Resolve-ConfigMapProcessCommand -ProcessName $ProcessName
+                $processParameter = $processCommand.Parameters[$name]
+                if ($processParameter -and $processParameter.ParameterType) {
+                    $parameterType = $processParameter.ParameterType
+                }
+            }
+            catch {
+                # Keep the protocol's backwards-compatible switch fallback.
+            }
+            $merged.Add($name, (New-ConfigMapOpaqueDynamicParam -Name $name -ParameterType $parameterType))
         }
     }
     return $merged
