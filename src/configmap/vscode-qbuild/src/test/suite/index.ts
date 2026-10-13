@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
+function completionLabel(item: vscode.CompletionItem): string {
+  return typeof item.label === "string" ? item.label : item.label.label;
+}
+
 export async function run(): Promise<void> {
   const extension = vscode.extensions.getExtension("hmdev.qbuild-map-tools");
   assert.ok(extension, "Development extension was not loaded");
@@ -31,17 +35,21 @@ export async function run(): Promise<void> {
       ["build"],
     );
 
-    const source = document.getText();
-    const settingsOffset = source.indexOf("    \n", source.indexOf("_settings"));
+    const settingsOpen = document.getText().indexOf("_settings = @{");
+    assert.ok(settingsOpen >= 0);
+    const settingsPosition = document.positionAt(
+      settingsOpen + "_settings = @{".length + 1,
+    );
     const completions = await vscode.commands.executeCommand<
       vscode.CompletionList
     >(
       "vscode.executeCompletionItemProvider",
       document.uri,
-      document.positionAt(settingsOffset + 4),
+      settingsPosition,
     );
-    assert.ok(completions.items.some((item) => item.label === "Debug"));
-    assert.ok(completions.items.some((item) => item.label === "Process"));
+    const labels = completions.items.map(completionLabel);
+    assert.ok(labels.includes("Debug"), `Got completions: ${labels.join(", ")}`);
+    assert.ok(labels.includes("Process"), `Got completions: ${labels.join(", ")}`);
 
     const workspaceSymbols = await vscode.commands.executeCommand<
       vscode.SymbolInformation[]

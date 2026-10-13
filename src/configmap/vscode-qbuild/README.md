@@ -26,4 +26,21 @@ Open this directory in VS Code and press `F5` to start an Extension Development 
 npm run package
 ```
 
-The generated `.vsix` can be installed with **Extensions: Install from VSIX...**.
+The packaged extension is written to `.publish/`. Install that `.vsix` with **Extensions: Install from VSIX...**, or run `qbuild install` from this directory.
+
+`package` and `install` do not change the version.
+
+## Releasing
+
+`qbuild release` is the only command that publishes the extension. It bumps the version, runs the unit tests, packages `.publish/qbuild-map-tools-<version>.vsix`, commits that version, pushes the current branch, and creates a GitHub release tagged `qbuild-map-tools-v<version>` with the VSIX attached. The tag is namespaced so it stays separate from publishmap module tags.
+
+Bump patch for fixes, minor for features, and major for breaking changes. Use `current` to publish the version already in `package.json` without bumping it, including the first release of `0.1.0`.
+
+```powershell
+qbuild release
+qbuild release -Part minor
+qbuild release -Part major
+qbuild release -Part current -Notes "First extension release"
+```
+
+Commit changes under `vscode-qbuild` before releasing. The command requires `gh` to be authenticated and pushes the current branch.

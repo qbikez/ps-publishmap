@@ -32,9 +32,10 @@
     "compile": "tsc -p ./",
     "watch": "tsc -w -p ./",
     "test": "npm run test:unit && npm run test:integration",
-    "test:unit": "npm run compile && node --test out/test/mapParser.test.js out/test/models.test.js",
+    "test:unit": "npm run compile && node --test out/test/mapParser.test.js out/test/models.test.js scripts/version.test.js",
+    "release": "node scripts/release.js",
     "test:integration": "npm run compile && node out/test/runTest.js",
-    "package": "npm run compile && vsce package"
+    "package": "npm run compile && node scripts/package-vsix.js"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
