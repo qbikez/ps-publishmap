@@ -1,7 +1,7 @@
 function Invoke-QConf {
     [CmdletBinding()]
     param(
-        [ValidateSet("set", "get", "list", "help", "init")]
+        [Parameter(Position = 0)]
         $command,
 
         [ArgumentCompleter({
@@ -33,37 +33,88 @@ function Invoke-QConf {
                     }
 
                     $map = Import-ConfigMap -Map $fakeBoundParameters.map -Fallback ".configuration.map.ps1" | Assert-ConfigMap
-                    $entry = $fakeBoundParameters.entry
-                    $entry = Get-MapEntry $map $entry
-                    if (!$entry) {
-                        throw "entry '$entry' not found"
+                    $entryName = if ($fakeBoundParameters.entry) {
+                        [string]$fakeBoundParameters.entry
                     }
-                    $options = Get-CompletionList $entry -listKey "options" -language "conf" -maxDepth 1
+                    elseif ($fakeBoundParameters.command -notin @('set', 'get', 'show', 'list', 'help', 'init', '!init', '!complete')) {
+                        [string]$fakeBoundParameters.command
+                    }
+                    $entryValue = Get-MapEntry $map $entryName -language conf
+                    if (!$entryValue) {
+                        throw "entry '$entryName' not found"
+                    }
+                    $options = Get-CompletionList $entryValue -listKey "options" -language "conf" -maxDepth 1
                     return $options.Keys | ? { $_.startswith($wordToComplete) }
                 }
                 catch {
                     return "ERROR [-value]: $($_.Exception.Message) $($_.ScriptStackTrace)"
                 }
             })]
-        $value = $null,
-        $map = "./.configuration.map.ps1"
+        [string]$value = $null,
+
+        [Parameter(Position = 1, DontShow)]
+        [ArgumentCompleter({
+                param ($commandName, $parameterName, $wordToComplete)
+                @('get', 'set', 'show') | Where-Object { $_.StartsWith($wordToComplete, [StringComparison]::OrdinalIgnoreCase) }
+            })]
+        [string]$action,
+
+        [Parameter(Position = 2, DontShow)]
+        [ArgumentCompleter({
+                param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+                try {
+                    if ($fakeBoundParameters.action -ne 'set') { return @() }
+                    $verbs = @('set', 'get', 'show', 'list', 'help', 'init', '!init', '!complete')
+                    $entryName = if ($fakeBoundParameters.entry) {
+                        [string]$fakeBoundParameters.entry
+                    }
+                    elseif ($fakeBoundParameters.command -notin $verbs) {
+                        [string]$fakeBoundParameters.command
+                    }
+                    if (-not $entryName) { return @() }
+
+                    $map = Import-ConfigMap -Map $fakeBoundParameters.map -Fallback ".configuration.map.ps1" | Assert-ConfigMap
+                    $entryValue = Get-MapEntry $map $entryName -language conf
+                    if (-not $entryValue) { return @() }
+                    $options = Get-CompletionList $entryValue -listKey "options" -language "conf" -maxDepth 1
+                    return @($options.Keys | Where-Object { "$_".StartsWith($wordToComplete, [StringComparison]::OrdinalIgnoreCase) })
+                }
+                catch {
+                    return @()
+                }
+            })]
+        [string]$option,
+
+        [Parameter(DontShow)]
+        [string]$Word,
+        [Parameter(DontShow)]
+        [switch]$Params,
+
+        $map = "./.configuration.map.ps1",
+
+        [Parameter(ValueFromRemainingArguments = $true, DontShow = $true)]
+        [string[]]$RemainingArguments
     )
 
-    ## we need dynamic parameters for commands that have custom parameter list
-    ## this assumes that -entry and -command are already provided
     dynamicparam {
-        # ipmo configmap
         try {
-            if ( !$entry) {
-                return @()
+            $verbs = @('set', 'get', 'show', 'list', 'help', 'init', '!init', '!complete')
+            $dynamicEntry = if ($entry) {
+                $entry
             }
-            $map = Import-ConfigMap -Map $map -Fallback ".configuration.map.ps1" | Assert-ConfigMap
-            $skip = switch ($command) {
-                "set" { 3 }
-                default { 0 }
+            elseif ($command -and $command -notin $verbs) {
+                [string]$command
             }
+            else {
+                $null
+            }
+            if (-not $dynamicEntry) { return }
 
-            return Get-EntryDynamicParam $map "$entry.$command" -skip $skip -bound $PSBoundParameters
+            $map = Import-ConfigMap -Map $map -Fallback ".configuration.map.ps1" | Assert-ConfigMap
+            $dynamicOperation = if ($command -eq 'set' -or $action -eq 'set' -or $PSBoundParameters.ContainsKey('value')) { 'set' } else { 'get' }
+            $skip = if ($dynamicOperation -eq 'set') { 3 } else { 0 }
+
+            return Get-EntryDynamicParam $map "$dynamicEntry.$dynamicOperation" -skip $skip -bound $PSBoundParameters
         }
         catch {
             return "ERROR [dynamic]: $($_.Exception.Message) $($_.ScriptStackTrace)"
@@ -71,15 +122,70 @@ function Invoke-QConf {
     }
 
     process {
-        if ($command -eq "help") {
+        $verbs = @('set', 'get', 'show', 'list', 'help', 'init', '!init', '!complete')
+        $verb = $null
+        $confEntry = $entry
+
+        if ($command -in $verbs) {
+            $verb = [string]$command
+        }
+        elseif ($command) {
+            if (-not $confEntry) {
+                $confEntry = [string]$command
+            }
+        }
+
+        if ($verb -in @('get', 'set', 'show', 'list') -and -not $confEntry -and $action) {
+            $confEntry = $action
+            if ($verb -eq 'set' -and -not $PSBoundParameters.ContainsKey('value') -and $option) {
+                $value = $option
+            }
+        }
+        elseif (-not $verb -and $confEntry -and $action -in @('get', 'set', 'show')) {
+            $verb = $action
+            if ($verb -eq 'set' -and -not $PSBoundParameters.ContainsKey('value') -and $option) {
+                $value = $option
+            }
+        }
+
+        $operationArgs = @($RemainingArguments | Where-Object { $null -ne $_ -and "$_" -ne '' })
+        if (-not $verb -and $confEntry -and $operationArgs.Count -gt 0) {
+            switch ($operationArgs[0]) {
+                'get' {
+                    $verb = 'get'
+                    $operationArgs = @($operationArgs | Select-Object -Skip 1)
+                }
+                'set' {
+                    $verb = 'set'
+                    if (-not $PSBoundParameters.ContainsKey('value') -and $operationArgs.Count -gt 1) {
+                        $value = $operationArgs[1]
+                    }
+                    $operationArgs = @($operationArgs | Select-Object -Skip 2)
+                }
+                'show' {
+                    $verb = 'show'
+                    $operationArgs = @($operationArgs | Select-Object -Skip 1)
+                }
+            }
+        }
+
+        if (-not $verb -and $confEntry) {
+            $verb = if ($PSBoundParameters.ContainsKey('value')) { 'set' } else { 'get' }
+        }
+
+        if ($verb -eq "help") {
             Write-Host "QCONF"
             Write-Host "A command line tool to manage configuration maps"
             Write-Host ""
             Write-Host "Usage:"
-            Write-Host "qconf -entry <entry> -command <command> -value <value>"
+            Write-Host "qconf <entry> get"
+            Write-Host "qconf <entry> set <option>"
+            Write-Host "qconf <entry> show"
+            Write-Host "qconf <entry> [-value <option>]  # shorthand"
+            Write-Host "qconf list [<entry>]"
             return
         }
-        if ($entry -eq "!init") {
+        if ($verb -in @('init', '!init') -or $confEntry -eq "!init") {
             # Only check current directory - create new map regardless of parent configs
             if (Test-Path $map) {
                 throw "map file '$map' already exists"
@@ -88,40 +194,152 @@ function Invoke-QConf {
             return
         }
 
+        if ($verb -eq '!complete') {
+            $completeMap = Import-ConfigMap -Map $map -Fallback ".configuration.map.ps1" -ErrorAction Ignore
+            if (-not $completeMap) {
+                $global:LASTEXITCODE = 2
+                return
+            }
+
+            $mode = if ($Params) { 'params' } elseif ($PSBoundParameters.ContainsKey('Word')) { 'word' } else { $null }
+            $completeEntry = $confEntry
+            $tokens = @($RemainingArguments | Where-Object { $null -ne $_ -and "$_" -ne '' })
+            for ($index = 0; $index -lt $tokens.Count; $index++) {
+                switch ($tokens[$index]) {
+                    '-params' { $mode = 'params' }
+                    '-word' {
+                        if ($index + 1 -lt $tokens.Count) {
+                            $Word = $tokens[++$index]
+                            $mode = 'word'
+                        }
+                    }
+                    '-entry' {
+                        if ($index + 1 -lt $tokens.Count) {
+                            $completeEntry = $tokens[++$index]
+                        }
+                    }
+                    default {
+                        if (-not $completeEntry) { $completeEntry = $tokens[$index] }
+                    }
+                }
+            }
+
+            if ($mode -eq 'params' -and $completeEntry) {
+                $names = [System.Collections.Generic.List[string]]::new()
+                $names.Add('value') | Out-Null
+                $dynamic = Get-EntryDynamicParam $completeMap "$completeEntry.set" -skip 3 -bound @{}
+                if ($dynamic) {
+                    foreach ($name in @($dynamic.Keys)) {
+                        if (-not $names.Contains($name)) { $names.Add($name) | Out-Null }
+                    }
+                }
+                $names | ForEach-Object { $_ }
+                $global:LASTEXITCODE = 0
+                return
+            }
+
+            if ($mode -eq 'word') {
+                $prefix = if ($null -eq $Word) { '' } else { [string]$Word }
+                if ($completeEntry) {
+                    if ($tokens.Count -eq 0) {
+                        @('get', 'set', 'show') |
+                            Where-Object { $_.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) }
+                    }
+                    elseif ($tokens[0] -eq 'set') {
+                        $entryValue = Get-MapEntry $completeMap $completeEntry -language conf
+                        if ($entryValue) {
+                            $options = Get-CompletionList $entryValue -listKey 'options' -language conf -maxDepth 1
+                            $options.Keys |
+                                Where-Object { "$_".StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) }
+                        }
+                    }
+                }
+                else {
+                    Get-EntryCompletion -map $completeMap -language conf -wordToComplete $prefix
+                }
+                $global:LASTEXITCODE = 0
+                return
+            }
+
+            $global:LASTEXITCODE = 2
+            return
+        }
+
         $map = Import-ConfigMap -Map $map | Assert-ConfigMap
 
-        if (-not $entry -and -not $command) {
+        if ($verb -in @('list', 'show')) {
+            $listEntry = if ($confEntry) {
+                $confEntry
+            }
+            else {
+                @($RemainingArguments | Where-Object { $_ } | Select-Object -First 1)
+            }
+
+            if (-not $listEntry -or @($listEntry).Count -eq 0) {
+                if ($verb -eq 'show') {
+                    throw "The show command requires an entry. Example: qconf <entry> show"
+                }
+                Write-MapHelp -map $map -invocation $MyInvocation -language "conf"
+                return
+            }
+
+            $entryName = [string]@($listEntry)[0]
+            $operationContext = New-ConfigMapOperationContext
+            $subEntry = Get-MapEntry $map $entryName -language "conf" -OperationContext $operationContext
+            if (-not $subEntry) {
+                throw "Entry '$entryName' not found. Run 'qconf list' to see all available entries."
+            }
+
+            Invoke-WithEntrySettings -Map $map -EntryKey $entryName -Entry $subEntry -OperationContext $operationContext -ScriptBlock {
+                $options = Get-CompletionList $subEntry -listKey "options" -language "conf" -maxDepth 1
+                $current = Invoke-Get $subEntry -bound @{ options = $options }
+                $result = ConvertTo-MapResult $current $entryName $subEntry $options
+                Write-QConfStatus `
+                    -EntryName $entryName `
+                    -Result $result `
+                    -Description $subEntry.description `
+                    -HasValidation ([bool]$subEntry.validate)
+            }
+            return
+        }
+
+        if (-not $verb) {
             Write-MapHelp -map $map -invocation $MyInvocation -language "conf"
             return
         }
 
-        if ($command -and -not $entry) {
-
-        }
-
-        Write-Verbose "entry=$entry command=$command"
+        Write-Verbose "entry=$confEntry command=$verb"
         $operationContext = New-ConfigMapOperationContext
 
-        switch ($command) {
+        switch ($verb) {
             "set" {
-                $subEntry = Get-MapEntry $map $entry -language "conf" -OperationContext $operationContext
+                if (-not $confEntry) {
+                    throw "The set command requires an entry."
+                }
+                $subEntry = Get-MapEntry $map $confEntry -language "conf" -OperationContext $operationContext
                 if (!$subEntry) {
-                    throw "Entry '$entry' not found. Run 'qconf list' to see all available entries."
+                    throw "Entry '$confEntry' not found. Run 'qconf list' to see all available entries."
                 }
 
                 $optionKey = $value
                 $options = Get-CompletionList $subEntry -listKey "options" -language "conf" -maxDepth 1
-                $optionValue = $options.$optionKey
+                if ([string]::IsNullOrWhiteSpace($optionKey) -or -not $options.Contains($optionKey)) {
+                    throw "Unknown option '$optionKey' for entry '$confEntry'. Available options: $($options.Keys -join ', ')."
+                }
+                $optionValue = $options[$optionKey]
 
-                $bound = $PSBoundParameters
+                $bound = @{}
+                foreach ($boundKey in $PSBoundParameters.Keys) {
+                    $bound[$boundKey] = $PSBoundParameters[$boundKey]
+                }
                 $bound.key = $optionKey
                 $bound.value = $optionValue
-                Invoke-WithEntrySettings -Map $map -EntryKey "$entry" -Entry $subEntry -OperationContext $operationContext -ScriptBlock {
-                    Invoke-Set $subEntry -ordered @("", $optionValue, $optionKey) -bound $bound
+                Invoke-WithEntrySettings -Map $map -EntryKey "$confEntry" -Entry $subEntry -OperationContext $operationContext -ScriptBlock {
+                    Invoke-Set $subEntry -bound $bound
                 }
             }
             "get" {
-                $entries = $entry
+                $entries = $confEntry
                 if (!$entries) {
                     # not passing -listKey "options" here, as we don't want to expand options - we just need top-level keys
                     $entries = (Get-CompletionList $map -language "conf").Keys
@@ -158,11 +376,84 @@ function Invoke-QConf {
                 }
             }
             default {
-                throw "command '$command' not supported"
+                throw "command '$verb' not supported"
             }
         }
 
     }
+}
+
+function Write-QConfStatus {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$EntryName,
+        [Parameter(Mandatory = $true)]
+        $Result,
+        [string]$Description,
+        [bool]$HasValidation
+    )
+
+    Write-Host ""
+    Write-Host "    " -NoNewline
+    Write-Host $EntryName -NoNewline -ForegroundColor Green
+    if ($Description) {
+        Write-Host "  $Description" -ForegroundColor White
+    }
+    else {
+        Write-Host ""
+    }
+
+    $active = @($Result.Active) -join ', '
+    if (-not $active) { $active = '<none>' }
+
+    $value = if ($Result.Value -is [System.Collections.IDictionary] -or $Result.Value -is [array]) {
+        $Result.Value | ConvertTo-Json -Compress -Depth 4
+    }
+    elseif ($null -eq $Result.Value) {
+        '<none>'
+    }
+    else {
+        [string]$Result.Value
+    }
+
+    $rows = [System.Collections.Generic.List[object]]::new()
+    $rows.Add([pscustomobject]@{
+            Label = 'Active'
+            Value = $active
+            Glyph = if ($active -eq '<none>') { [char]0x25CB } else { [char]0x25CF }
+            Color = if ($active -eq '<none>') { 'Yellow' } else { 'Green' }
+        })
+    $rows.Add([pscustomobject]@{
+            Label = 'Value'
+            Value = $value
+            Glyph = ' '
+            Color = 'White'
+        })
+    $rows.Add([pscustomobject]@{
+            Label = 'Options'
+            Value = @($Result.Options) -join ', '
+            Glyph = ' '
+            Color = 'White'
+        })
+
+    if ($HasValidation) {
+        $rows.Add([pscustomobject]@{
+                Label = 'Valid'
+                Value = if ($Result.IsValid -eq $true) { 'yes' } elseif ($Result.IsValid -eq $false) { 'no' } else { 'unknown' }
+                Glyph = if ($Result.IsValid -eq $true) { [char]0x2713 } elseif ($Result.IsValid -eq $false) { [char]0x2717 } else { [char]0x25CB }
+                Color = if ($Result.IsValid -eq $true) { 'Green' } elseif ($Result.IsValid -eq $false) { 'Red' } else { 'Yellow' }
+            })
+    }
+
+    for ($index = 0; $index -lt $rows.Count; $index++) {
+        $row = $rows[$index]
+        $branch = if ($index -eq $rows.Count - 1) { [char]0x2514 } else { [char]0x251C }
+        Write-Host "    $branch─ " -NoNewline -ForegroundColor DarkGray
+        Write-Host "$($row.Glyph) " -NoNewline -ForegroundColor $row.Color
+        Write-Host ("{0,-8}" -f $row.Label) -NoNewline -ForegroundColor DarkGray
+        Write-Host $row.Value -ForegroundColor $row.Color
+    }
+    Write-Host ""
 }
 
 function ConvertTo-MapResult($value, $entryName, $entry, $options, $validate = $true) {

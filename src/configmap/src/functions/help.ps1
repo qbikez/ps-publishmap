@@ -1,3 +1,24 @@
+function Get-RelativeMapDisplayPath {
+    param($Map)
+
+    $mapPath = Resolve-MapPath -Map $Map
+    if (-not $mapPath) {
+        return $null
+    }
+
+    $full = [System.IO.Path]::GetFullPath($mapPath)
+    $cwd = [System.IO.Path]::GetFullPath((Get-Location).Path)
+    $relative = [System.IO.Path]::GetRelativePath($cwd, $full)
+    if ([string]::IsNullOrWhiteSpace($relative) -or $relative -eq '.') {
+        $relative = [System.IO.Path]::GetFileName($full)
+    }
+    $relative = $relative -replace '\\', '/'
+    if ($relative -notmatch '^\.\.?/' -and $relative -notmatch '^[A-Za-z]:' -and $relative -notmatch '^/') {
+        $relative = "./$relative"
+    }
+    return $relative
+}
+
 function Write-CommandHelpLine {
     param($name, $description, $paramInfo, $maxNameLength)
     $paddedName = $name.PadRight($maxNameLength)
@@ -62,6 +83,21 @@ function Write-MapHelp {
     param([System.Collections.IDictionary]$map, $invocation, [ValidateSet("build", "conf")]$language = "build")
     $commandName = $invocation.InvocationName
     $operationContext = New-ConfigMapOperationContext
+    $relativeMapPath = Get-RelativeMapDisplayPath -Map $map
+
+    $writeHeader = {
+        Write-Host ""
+        Write-Host "$($commandName.ToUpper())" -ForegroundColor Cyan
+        Write-Host "A command line tool to manage $language scripts" -ForegroundColor Gray
+        if ($relativeMapPath) {
+            Write-Host "Map: $relativeMapPath" -ForegroundColor DarkGray
+        }
+        Write-Host ""
+        Write-Host "USAGE:" -ForegroundColor Yellow
+        Write-Host "    $commandName <COMMAND> [OPTIONS]" -ForegroundColor White
+        Write-Host ""
+        Write-Host "COMMANDS:" -ForegroundColor Yellow
+    }
 
     $tryWriteProcessListEntry = {
         param($name, $entryValue)
@@ -104,14 +140,7 @@ function Write-MapHelp {
         if ($null -eq $maxNameLength) { $maxNameLength = 0 }
         $maxNameLength = [Math]::Max($maxNameLength, 12)
 
-        Write-Host ""
-        Write-Host "$($commandName.ToUpper())" -ForegroundColor Cyan
-        Write-Host "A command line tool to manage $language scripts" -ForegroundColor Gray
-        Write-Host ""
-        Write-Host "USAGE:" -ForegroundColor Yellow
-        Write-Host "    $commandName <COMMAND> [OPTIONS]" -ForegroundColor White
-        Write-Host ""
-        Write-Host "COMMANDS:" -ForegroundColor Yellow
+        & $writeHeader
 
         foreach ($item in $scriptItems) {
             $name = [string]$item.key
@@ -134,14 +163,7 @@ function Write-MapHelp {
     $maxNameLength = ($scripts.Keys | Measure-Object -Property Length -Maximum).Maximum
     $maxNameLength = [Math]::Max($maxNameLength, 12) # Minimum width
 
-    Write-Host ""
-    Write-Host "$($commandName.ToUpper())" -ForegroundColor Cyan
-    Write-Host "A command line tool to manage $language scripts" -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "USAGE:" -ForegroundColor Yellow
-    Write-Host "    $commandName <COMMAND> [OPTIONS]" -ForegroundColor White
-    Write-Host ""
-    Write-Host "COMMANDS:" -ForegroundColor Yellow
+    & $writeHeader
 
     # Keep definition order for [ordered] maps; sort alphabetically otherwise
     $scriptItems = if ($map -is [System.Collections.Specialized.OrderedDictionary]) {

@@ -1,6 +1,7 @@
 # Process CLI
 
-`qrun` exposes a small CLI surface that other tools (e.g. future `qbuild` delegation) can call with the PowerShell call operator (`&`). Flags are single-dash only.
+Process commands such as `qrun` and `qconf` expose a small CLI surface that
+qbuild calls with the PowerShell call operator (`&`). Flags are single-dash only.
 
 Map handoff is **path-only**: callers pass `-map <file>`. The process command loads that file itself.
 
@@ -11,6 +12,14 @@ qrun [-map <path>] [-entry <entry>] [opaque-args...]
 qrun [-map <path>] list [<entry>]
 qrun [-map <path>] !complete -word <prefix> [-entry <entry>]
 qrun [-map <path>] !complete -params -entry <entry>
+
+qconf [-map <path>] <entry> get
+qconf [-map <path>] <entry> set <option-key>
+qconf [-map <path>] <entry> show
+qconf [-map <path>] [-entry <entry>] [-value <option-key>] [opaque-args...]
+qconf [-map <path>] list [<entry>]
+qconf [-map <path>] !complete -word <prefix> [-entry <entry>]
+qconf [-map <path>] !complete -params -entry <entry>
 ```
 
 | Form | Behavior |
@@ -22,6 +31,11 @@ qrun [-map <path>] !complete -params -entry <entry>
 | `!complete -params` | One parameter name per line (no leading `-`); exit `2` if unsupported |
 
 Success is exit `0` / no throw. Failure is non-zero exit or a terminating error.
+
+For qconf, `get` reads the entry and `set <option-key>` applies a named option.
+`show` prints the same host-formatted status block used by `list <entry>`.
+A bare entry still performs a get, and `-value <option-key>` remains a set
+shorthand. qbuild forwards these as opaque, process-owned arguments.
 
 ## Process-owned (not part of the shared handoff)
 
