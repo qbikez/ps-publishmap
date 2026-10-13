@@ -8,6 +8,8 @@
 #   qbuild bootstrap.prepare
 #   qbuild storage
 #   qbuild storage -value prod
+#   qbuild set env -tenant abc
+#   qbuild env get
 #   qbuild list
 #   qbuild !state
 
@@ -83,6 +85,31 @@
             New-Item -ItemType Directory -Path $workspace -Force | Out-Null
             $key | Set-Content (Join-Path $workspace 'storage.txt')
             Write-Host "  storage=$key ($value)" -ForegroundColor Green
+        }
+    }
+
+    "env" = [ordered]@{
+        _settings   = @{ process = "qconf" }
+        description = "Environment / tenant selection (opaque -tenant)"
+        get         = {
+            param($ctx, $options)
+            $stateFile = Join-Path (Get-Location) 'workspace/env.txt'
+            if (Test-Path $stateFile) {
+                (Get-Content $stateFile -Raw).Trim()
+            }
+            else {
+                ''
+            }
+        }
+        set         = {
+            param($ctx, $key, $value, [string]$tenant)
+            if ([string]::IsNullOrWhiteSpace($tenant)) {
+                throw "Set env requires -tenant <name>."
+            }
+            $workspace = Join-Path (Get-Location) 'workspace'
+            New-Item -ItemType Directory -Path $workspace -Force | Out-Null
+            $tenant | Set-Content (Join-Path $workspace 'env.txt')
+            Write-Host "  env tenant=$tenant" -ForegroundColor Green
         }
     }
 }
