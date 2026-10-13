@@ -1455,7 +1455,9 @@ Describe "qbuild with no map file" {
             }
             
             $errorOutput | Should -BeNullOrEmpty
-            $output | Should -Match "QBUILD"
+            $output | Should -Match "No build map file found"
+            $output | Should -Match "qbuild !init"
+            $output | Should -Not -Match "qbuild anything !init"
         }
         finally {
             popd
@@ -1476,7 +1478,24 @@ Describe "qbuild with no map file" {
             }
             
             $errorOutput | Should -BeNullOrEmpty
-            $output | Should -Match "QBUILD"
+            $output | Should -Match "No build map file found"
+            $output | Should -Match "qbuild !init"
+            $output | Should -Not -Match "qbuild list !init"
+        }
+        finally {
+            popd
+        }
+    }
+
+    It "should suggest qbuild !init when list is run without a map file" {
+        pushd $testDir
+        try {
+            $output = qbuild list 6>&1 5>&1 4>&1 3>&1 2>&1 | Out-String
+
+            $output | Should -Match "No build map file found"
+            $output | Should -Match "qbuild !init"
+            $output | Should -Not -Match "qbuild list !init"
+            $output | Should -Not -Match "qbuild list init"
         }
         finally {
             popd

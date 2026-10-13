@@ -136,14 +136,15 @@ function Write-MapHelp {
 
 function Write-Help {
     param($invocation, [string]$mapPath)
-    $commandName = $invocation.Statement
+    $commandName = $invocation.InvocationName
+    $mapKind = if ($mapPath -match 'process') { 'process' } else { 'build' }
 
-    Write-Host "No build map file found at '$mapPath'"
+    Write-Host "No $mapKind map file found at '$mapPath'"
     Write-Host ""
-    Write-Host "To create a new build map file, run:"
-    Write-Host "  $commandName init"
+    Write-Host "To create a new $mapKind map file, run:"
+    Write-Host "  $commandName !init"
     Write-Host ""
-    Write-Host "This will create a sample $mapPath file with basic build scripts."
+    Write-Host "This will create a sample $mapPath file with basic $mapKind scripts."
 }
 
 function Write-ChooseSubcommand {
