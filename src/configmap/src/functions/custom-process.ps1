@@ -1,9 +1,11 @@
 #requires -version 7.0
 
 # Handler names are matched ordinal-ignore-case.
-# A registered handler stays in-process. Null GetDynamicParam or WriteListEntry
-# keeps the normal qbuild behavior for that slot. Only an unregistered name
-# is handed to an external process command.
+# 'exec' is the built-in default process (normal map entry exec). It is never
+# handed to an external CLI. Other registered handlers stay in-process.
+# Null GetDynamicParam or WriteListEntry keeps the host fallback for that slot.
+# Only an unregistered, non-builtin name is handed to an external process command.
+$script:ConfigMapDefaultProcessName = 'exec'
 $script:ConfigMapProcessHandlers = [System.Collections.Generic.Dictionary[string, hashtable]]::new(
     [StringComparer]::OrdinalIgnoreCase
 )
@@ -109,6 +111,20 @@ function Get-ConfigMapProcessPassthrough {
     ) | Where-Object { $null -ne $_ -and "$_" -ne '' }
 }
 
+function Test-ConfigMapProcessIsBuiltin {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$ProcessName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ProcessName)) {
+        return $true
+    }
+
+    return $ProcessName -eq $script:ConfigMapDefaultProcessName
+}
+
 function Test-ConfigMapProcessResolvesToHost {
     param(
         [Parameter(Mandatory = $true)]
@@ -123,6 +139,25 @@ function Test-ConfigMapProcessResolvesToHost {
         $cmd = $cmd.ResolvedCommand
     }
     return $cmd.Name -eq 'Invoke-QBuild'
+}
+
+function Test-ConfigMapProcessCannotDelegate {
+    <#
+    .SYNOPSIS
+        True when a process name must not be handed to an external CLI.
+        Covers the builtin 'exec' default and names that resolve to the qbuild host.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$ProcessName
+    )
+
+    if (Test-ConfigMapProcessIsBuiltin -ProcessName $ProcessName) {
+        return $true
+    }
+
+    return Test-ConfigMapProcessResolvesToHost -ProcessName $ProcessName
 }
 
 function Invoke-ConfigMapExternalProcess {
@@ -144,7 +179,7 @@ function Invoke-ConfigMapExternalProcess {
     if (-not $resolvedMapPath) {
         throw "Cannot delegate process '$ProcessName' for entry '$Entry': the map has no _sourceFile."
     }
-    if (Test-ConfigMapProcessResolvesToHost -ProcessName $ProcessName) {
+    if (Test-ConfigMapProcessCannotDelegate -ProcessName $ProcessName) {
         throw "Cannot delegate process '$ProcessName' for entry '$Entry': no in-process handler is registered."
     }
 
@@ -164,7 +199,7 @@ function Invoke-ConfigMapExternalProcess {
 function Get-EntryProcess {
     param(
         $Entry,
-        [string]$Default = 'qbuild'
+        [string]$Default = 'exec'
     )
 
     if (
@@ -283,7 +318,7 @@ function Get-QBuildProcessArgumentCompletion {
 
     $processMap = Import-ConfigMap -Map $context.MapInput -Fallback "./.build.map.ps1" | Assert-ConfigMap
     $settings = Get-ConfigMapSettingsForPath -Map $processMap -Path $context.Entry
-    if ($settings.Process -eq 'qbuild') { return @() }
+    if (Test-ConfigMapProcessIsBuiltin -ProcessName $settings.Process) { return @() }
 
     $mapPath = Resolve-MapPath -Map $processMap
     if (-not $mapPath) { return @() }
@@ -314,7 +349,7 @@ function Invoke-ConfigMapProcessComplete {
         [hashtable]$CompleteArgs
     )
 
-    if (Test-ConfigMapProcessResolvesToHost -ProcessName $ProcessName) {
+    if (Test-ConfigMapProcessCannotDelegate -ProcessName $ProcessName) {
         return $null
     }
 
@@ -438,7 +473,7 @@ function Invoke-ConfigMapProcessCli {
         [hashtable]$Splat
     )
 
-    if (Test-ConfigMapProcessResolvesToHost -ProcessName $ProcessName) {
+    if (Test-ConfigMapProcessCannotDelegate -ProcessName $ProcessName) {
         throw "Cannot delegate process '$ProcessName': no in-process handler is registered."
     }
 
@@ -454,6 +489,7 @@ function Get-ConfigMapProcessNamesInMap {
     <#
     .SYNOPSIS
         Distinct process names declared on top-level entries that have no in-process handler.
+        Skips the builtin 'exec' default and names that resolve to the qbuild host.
     #>
     param(
         [Parameter(Mandatory = $true)]
@@ -469,8 +505,12 @@ function Get-ConfigMapProcessNamesInMap {
     foreach ($key in @($Map.Keys)) {
         if ([string]$key -like '_*') { continue }
         $resolved = Get-MapEntry $Map $key -language 'build' -OperationContext $OperationContext
-        $proc = Get-EntryProcess $resolved -Default 'qbuild'
-        if ($proc -and -not (Get-ConfigMapProcessHandler -Name $proc)) {
+        $proc = Get-EntryProcess $resolved
+        if (
+            $proc -and
+            -not (Get-ConfigMapProcessHandler -Name $proc) -and
+            -not (Test-ConfigMapProcessCannotDelegate -ProcessName $proc)
+        ) {
             [void]$names.Add($proc)
         }
     }

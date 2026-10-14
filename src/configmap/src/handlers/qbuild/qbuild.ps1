@@ -29,13 +29,13 @@ function Invoke-QBuild {
                         }
                     }
 
-                    $qbuildModule = (Get-Command Invoke-QBuild).Module
-                    $internalCommands = & $qbuildModule { Get-ConfigMapInternalCommands -Language build }
+                    $configMapModule = (Get-Command Invoke-QBuild).Module
+                    $internalCommands = & $configMapModule { Get-ConfigMapInternalCommands -Language build }
                     foreach ($item in $internalCommands.GetEnumerator()) {
                         if (-not ([string]$item.Key).StartsWith($wordToComplete)) {
                             continue
                         }
-                        $includeCompletion = & $qbuildModule {
+                        $includeCompletion = & $configMapModule {
                             param($commandEntry, $mapExists)
                             Test-ConfigMapCommandCompletion -Entry $commandEntry -LocalMapExists $mapExists
                         } $item.Value $localMapExists
@@ -196,7 +196,7 @@ function Invoke-QBuild {
                 }
                 return Get-EntryDynamicParam $dynMap $entry $command -skip 0 -bound $PSBoundParameters
             }
-            if (Test-ConfigMapProcessResolvesToHost -ProcessName $settings.Process) {
+            if (Test-ConfigMapProcessCannotDelegate -ProcessName $settings.Process) {
                 return Get-EntryDynamicParam $dynMap $entry $command -skip 0 -bound $PSBoundParameters
             }
 
@@ -389,8 +389,8 @@ function Invoke-QBuildProcess {
     }
 }
 
-function Register-QBuildDefaultProcess {
-    Register-ConfigMapProcess -Name 'qbuild' -Invoke {
+function Register-ConfigMapExecProcess {
+    Register-ConfigMapProcess -Name $script:ConfigMapDefaultProcessName -Invoke {
         param($Context)
         Invoke-QBuildProcess -Context $Context
     } -GetDynamicParam {
@@ -400,4 +400,4 @@ function Register-QBuildDefaultProcess {
 }
 
 Set-Alias -Name "qbuild" -Value "Invoke-QBuild" -Force
-Register-QBuildDefaultProcess
+Register-ConfigMapExecProcess
