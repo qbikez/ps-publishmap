@@ -92,10 +92,7 @@
 
     "endpoint"  = [ordered]@{
         _settings   = @{ process = "qconf" }
-        _template   = @{
-            type = "appconfig"
-            file = "appsettings.Development.json"
-        }
+        _template   = "appsettings:appsettings.Development.json"
         description = "Appsettings storage endpoint (appconfig template)"
         options     = [ordered]@{
             local = [ordered]@{

@@ -9,8 +9,27 @@ function Get-ConfigEntryTemplate {
     if (-not $Entry.Contains('_template')) { return $null }
 
     $template = $Entry._template
-    if ($template -isnot [System.Collections.IDictionary]) { return $null }
-    return $template
+    if ($template -is [System.Collections.IDictionary]) {
+        return $template
+    }
+
+    if ($template -is [string]) {
+        # Short form: "appsettings:{filepath}" → @{ type = 'appconfig'; file = ... }
+        if ($template -match '^(?i)appsettings:(.+)$') {
+            $file = $Matches[1].Trim()
+            if ([string]::IsNullOrWhiteSpace($file)) {
+                throw "Config entry template 'appsettings:' requires a file path."
+            }
+            return @{
+                type = 'appconfig'
+                file = $file
+            }
+        }
+
+        throw "Unknown config entry template '$template'."
+    }
+
+    return $null
 }
 
 function Resolve-ConfigEntryFile {
@@ -102,8 +121,8 @@ function Add-ConfigEntryTypeCommands {
         Fill in get and set from Entry._template when the map did not supply them.
 
     .DESCRIPTION
-        Reads `_template.type` (and type-specific keys such as `file` for appconfig).
-        Leaves an author-supplied get or set scriptblock in place.
+        Accepts `_template` as a hashtable (`type`/`file`) or short string
+        (`appsettings:{filepath}`). Leaves an author-supplied get or set in place.
     #>
     param(
         $Entry

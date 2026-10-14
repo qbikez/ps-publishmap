@@ -283,6 +283,35 @@ Describe 'qconf appconfig _template' {
         $settings.Storage.Account | Should -Be $script:prodAccount
     }
 
+    It 'accepts the appsettings short-form _template string' {
+        Write-ConfigMapFile $script:mapFile @'
+@{
+    storage = @{
+        _template = 'appsettings:appsettings.Development.json'
+        description = 'Storage endpoint'
+        options = @{
+            local = @{
+                'Storage:BaseUrl' = 'https://127.0.0.1:10000/devstoreaccount1'
+                'Storage:Account' = 'devstore'
+            }
+            prod = @{
+                'Storage:BaseUrl' = 'https://prod.example'
+                'Storage:Account' = 'prodstore'
+            }
+        }
+    }
+}
+'@
+
+        $result = qconf -map $script:mapFile storage -ErrorAction Stop
+        @($result.Active) | Should -Contain 'local'
+
+        qconf -map $script:mapFile storage -value prod -ErrorAction Stop
+        $settings = Read-AppSettings $script:settingsFile
+        $settings.Storage.BaseUrl | Should -Be $script:prodBaseUrl
+        $settings.Storage.Account | Should -Be $script:prodAccount
+    }
+
     It 'rejects an unknown _template type' {
         Write-ConfigMapFile $script:mapFile @'
 @{
@@ -299,6 +328,21 @@ Describe 'qconf appconfig _template' {
 '@
 
         { qconf -map $script:mapFile broken -ErrorAction Stop } | Should -Throw "*type*nope*"
+    }
+
+    It 'rejects an unknown short-form _template' {
+        Write-ConfigMapFile $script:mapFile @'
+@{
+    broken = @{
+        _template = 'nope:appsettings.Development.json'
+        options = @{
+            local = @{ 'Storage:BaseUrl' = 'https://127.0.0.1:10000/devstoreaccount1' }
+        }
+    }
+}
+'@
+
+        { qconf -map $script:mapFile broken -ErrorAction Stop } | Should -Throw "*template*nope*"
     }
 
     It 'rejects an unknown option key' {

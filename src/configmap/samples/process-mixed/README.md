@@ -28,7 +28,7 @@ qbuild !state clean bootstrap
 Entries without `_settings.process` use the default qbuild runner. Entries with
 `_settings = @{ process = "qrun" }` are forwarded to the qrun step runner
 (same map). The `storage`, `endpoint`, and `env` entries use `_settings = @{ process = "qconf" }`.
-`endpoint` uses `_template = @{ type = "appconfig"; file = "..." }` so qconf fills in get/set against `appsettings.Development.json`; option values are the setting keys.
+`endpoint` uses `_template = "appsettings:appsettings.Development.json"` (or the long `_template = @{ type = "appconfig"; file = "..." }` form) so qconf fills in get/set; option values are the setting keys.
 `storage` and `env` supply their own get and set. qbuild forwards the process-owned `get`/`set` arguments and opaque parameters
 (such as `-tenant`) without knowing qconf's semantics. The shorter
 `qbuild storage` and `qbuild storage -value prod` forms remain supported.

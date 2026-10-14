@@ -81,10 +81,8 @@ Settings management with get/set/validate operations, or a built-in `_template`:
     }
 
     "storage" = @{
-        _template = @{
-            type = "appconfig"
-            file = "src/appsettings.Development.json"
-        }
+        # Short form; long form is _template = @{ type = "appconfig"; file = "..." }
+        _template = "appsettings:src/appsettings.Development.json"
         options = @{
             local = @{ "Storage:BaseUrl" = "https://127.0.0.1:10000/devstoreaccount1" }
             prod  = @{ "Storage:BaseUrl" = "https://prod.example" }
@@ -103,7 +101,7 @@ ConfigMap automatically discovers parameters from script blocks using AST parsin
 ### Reserved Keys
 - `exec` - Default execution command for qbuild
 - `get/set/validate` - Configuration operations for qconf  
-- `_template` - Built-in entry type (`type`/`file` and related type params) that fills get/set
+- `_template` - Built-in entry type: hashtable (`type`/`file`) or short string (`appsettings:{filepath}`) that fills get/set
 - `list` - Nested entry container
 - `options` - Available configuration values
 - `description` - Command documentation

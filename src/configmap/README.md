@@ -338,12 +338,10 @@ Creates a `.configuration.map.ps1` file with sample configuration entries.
     }
 
     # Built-in appconfig template: no hand-written get/set needed
+    # Short form below; long form is _template = @{ type = "appconfig"; file = "..." }
     "storage" = @{
         description = "Storage endpoint in appsettings JSON"
-        _template   = @{
-            type = "appconfig"
-            file = "src/appsettings.Development.json"
-        }
+        _template   = "appsettings:src/appsettings.Development.json"
         options = @{
             local = @{ "Storage:BaseUrl" = "https://127.0.0.1:10000/devstoreaccount1" }
             prod  = @{ "Storage:BaseUrl" = "https://prod.example" }
@@ -456,7 +454,7 @@ The following keys have special meaning in map files:
 - `get` - Get configuration value (for qconf)
 - `set` - Set configuration value (for qconf)
 - `validate` - Validation function (for qconf)
-- `_template` - Built-in entry type (`type`, `file`, …) that fills get/set when omitted
+- `_template` - Built-in entry type: `@{ type; file }` or `"appsettings:{filepath}"` that fills get/set when omitted
 - `description` - Command description
 - `completions` - Custom tab completion values
 
