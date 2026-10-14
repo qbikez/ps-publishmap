@@ -8,18 +8,20 @@
 #   qbuild bootstrap.prepare
 #   qbuild storage
 #   qbuild storage -value prod
+#   qbuild endpoint
+#   qbuild endpoint -value prod
 #   qbuild env set dev -tenant abc
 #   qbuild env get
 #   qbuild list
 #   qbuild !state
 
 [ordered]@{
-    "clean" = {
+    "clean"     = {
         Remove-Item -Recurse -Force ./out, ./workspace -ErrorAction Ignore
         Write-Host "cleaned out/ and workspace/" -ForegroundColor Gray
     }
 
-    "build" = {
+    "build"     = {
         param(
             [ValidateSet('Debug', 'Release')]
             [string]$Configuration = 'Debug'
@@ -66,7 +68,7 @@
         }
     }
 
-    "storage" = [ordered]@{
+    "storage"   = [ordered]@{
         _settings   = @{ process = "qconf" }
         description = "Storage endpoint configuration"
         options     = [ordered]@{
@@ -88,7 +90,21 @@
         }
     }
 
-    "env" = [ordered]@{
+    "endpoint"  = [ordered]@{
+        _settings   = @{ process = "qconf" }
+        _template   = "appsettings:appsettings.Development.json"
+        description = "Appsettings storage endpoint (appconfig template)"
+        options     = [ordered]@{
+            local = [ordered]@{
+                "Storage:BaseUrl" = "https://127.0.0.1:10000/devstoreaccount1"
+            }
+            prod  = [ordered]@{
+                "Storage:BaseUrl" = "https://storage.example"
+            }
+        }
+    }
+
+    "env"       = [ordered]@{
         _settings   = @{ process = "qconf" }
         description = "Environment / tenant selection (opaque -tenant)"
         options     = [ordered]@{

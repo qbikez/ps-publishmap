@@ -1,3 +1,10 @@
+. "$PSScriptRoot\entry-types.ps1"
+. "$PSScriptRoot\..\.config-utils.ps1"
+
+$script:languages.conf = @{
+    reservedKeys = @("exec", "list", "options", "#include", "_baseDir", "_sourceFile", "_settings", "_dependsOn", "_internal", "_template", "description", "validate", "get", "set")
+}
+
 function Invoke-QConf {
     [CmdletBinding()]
     param(
@@ -319,6 +326,7 @@ function Invoke-QConf {
             }
 
             Invoke-WithEntrySettings -Map $map -EntryKey $entryName -Entry $subEntry -OperationContext $operationContext -ScriptBlock {
+                Add-ConfigEntryTypeCommands -Entry $subEntry
                 $options = Get-CompletionList $subEntry -listKey "options" -language "conf" -maxDepth 1
                 $current = Invoke-Get $subEntry -bound @{ options = $options }
                 $result = ConvertTo-MapResult $current $entryName $subEntry $options
@@ -372,6 +380,7 @@ function Invoke-QConf {
                 $bound.value = $optionValue
                 $setExtras = @($operationArgs | Where-Object { $null -ne $_ -and "$_" -ne '' })
                 Invoke-WithEntrySettings -Map $map -EntryKey "$confEntry" -Entry $subEntry -OperationContext $operationContext -ScriptBlock {
+                    Add-ConfigEntryTypeCommands -Entry $subEntry
                     Invoke-Set $subEntry -bound $bound -extra $setExtras
                 }
             }
@@ -397,6 +406,7 @@ function Invoke-QConf {
 
                             $options = Get-CompletionList $subEntry -listKey "options" -language "conf" -maxDepth 1
                             $bound.options = $options
+                            Add-ConfigEntryTypeCommands -Entry $subEntry
 
                             $value = Invoke-Get $subEntry -bound $bound
 
