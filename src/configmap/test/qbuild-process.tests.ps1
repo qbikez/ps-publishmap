@@ -195,6 +195,61 @@ Describe 'qbuild _settings.process=qrun forwarding' {
         Should -Invoke Write-Host -ModuleName ConfigMap -ParameterFilter { "$Object" -match 'prepare' }
     }
 
+    It 'runs an entry that explicitly selects the qbuild process' {
+        @'
+[ordered]@{
+    task = @{
+        _settings = @{ process = 'qbuild' }
+        exec = { 'ran' | Set-Content 'qbuild-process.txt' }
+    }
+}
+'@ | Set-Content -LiteralPath $script:mapFile -Encoding utf8
+
+        qbuild -map $script:mapFile task
+        Get-Content 'qbuild-process.txt' -Raw | Should -Match 'ran'
+    }
+
+    It 'registers qbuild as the default in-process handler' {
+        InModuleScope ConfigMap {
+            $handler = Get-ConfigMapProcessHandler -Name 'qbuild'
+            $handler.Name | Should -Be 'qbuild'
+            $handler.Invoke | Should -Not -BeNullOrEmpty
+            $handler.GetDynamicParam | Should -Not -BeNullOrEmpty
+            $handler.WriteListEntry | Should -BeNullOrEmpty
+        }
+    }
+
+    It 'dispatches a registered in-process handler without a source file' {
+        $probeFile = Join-Path $script:workDir 'probed.txt'
+        InModuleScope ConfigMap {
+            param($ProbeFile)
+            $script:QProbeFile = $ProbeFile
+            Register-ConfigMapProcess -Name 'qprobe' -Invoke {
+                param($Context)
+                "probed:$($Context.Entry)" | Set-Content -LiteralPath $script:QProbeFile
+            }
+        } -Parameters @{ ProbeFile = $probeFile }
+
+        try {
+            $map = @{
+                task = @{
+                    _settings = @{ process = 'qprobe' }
+                    exec      = { 'should-not-run' | Set-Content 'ran.txt' }
+                }
+            }
+
+            qbuild -map $map task
+            Get-Content -LiteralPath $probeFile -Raw | Should -Match 'probed:task'
+            Test-Path 'ran.txt' | Should -BeFalse
+        }
+        finally {
+            InModuleScope ConfigMap {
+                Unregister-ConfigMapProcess -Name 'qprobe'
+                Remove-Variable -Name QProbeFile -Scope Script -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
     It 'smoke-loads the process-mixed sample map' {
         $sampleDir = Join-Path $PSScriptRoot '..' 'samples' 'process-mixed'
         $sampleFile = Join-Path $sampleDir '.build.map.ps1'
