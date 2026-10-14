@@ -124,7 +124,7 @@ VSCode tasks are configured for running individual test files with Pester integr
 #### Naming
 - Name functions with an approved PowerShell `Verb-SingularNoun` pair, using verbs according to their standard semantics
 - Use intention-revealing domain names and otherwise follow the established casing in the surrounding file
-- Preserve externally visible names and schema keys such as `exec`, `_settings`, and `_context`
+- Preserve externally visible names and schema keys such as `exec`, `_settings`, `_template`, and `_context`
 
 #### Module Organization
 - Keep module entry points focused on dependency-ordered imports, exports, and initialization

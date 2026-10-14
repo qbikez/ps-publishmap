@@ -1,7 +1,7 @@
 # Mixed qbuild process sample
 
-This `.build.map.ps1` mixes normal qbuild commands with an
-`_settings.process=qrun` entry and an `_settings.process=qconf` entry.
+This `.build.map.ps1` mixes normal qbuild commands with qrun steps,
+hand-written qconf entries, and an appconfig `_template` entry.
 
 ```powershell
 Import-Module ../../configmap.psm1 -Force
@@ -28,7 +28,7 @@ qbuild !state clean bootstrap
 Entries without `_settings.process` use the default qbuild runner. Entries with
 `_settings = @{ process = "qrun" }` are forwarded to the qrun step runner
 (same map). The `storage`, `endpoint`, and `env` entries use `_settings = @{ process = "qconf" }`.
-`endpoint` is an `appconfig` entry: it reads and writes `appsettings.Development.json`, and the option values are the setting keys.
+`endpoint` uses `_template = @{ type = "appconfig"; file = "..." }` so qconf fills in get/set against `appsettings.Development.json`; option values are the setting keys.
 `storage` and `env` supply their own get and set. qbuild forwards the process-owned `get`/`set` arguments and opaque parameters
 (such as `-tenant`) without knowing qconf's semantics. The shorter
 `qbuild storage` and `qbuild storage -value prod` forms remain supported.

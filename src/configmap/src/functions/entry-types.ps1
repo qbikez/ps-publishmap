@@ -1,13 +1,28 @@
 #requires -version 7.0
 
+function Get-ConfigEntryTemplate {
+    param(
+        $Entry
+    )
+
+    if ($Entry -isnot [System.Collections.IDictionary]) { return $null }
+    if (-not $Entry.Contains('_template')) { return $null }
+
+    $template = $Entry._template
+    if ($template -isnot [System.Collections.IDictionary]) { return $null }
+    return $template
+}
+
 function Resolve-ConfigEntryFile {
     param(
         $Entry,
         [Parameter(Mandatory = $true)]
+        [System.Collections.IDictionary]$Template,
+        [Parameter(Mandatory = $true)]
         [string]$TypeName
     )
 
-    $file = $Entry.file
+    $file = $Template.file
     if ($file -isnot [string] -or [string]::IsNullOrWhiteSpace($file)) {
         throw "Config entry type '$TypeName' requires a file path."
     }
@@ -58,11 +73,13 @@ function Add-AppConfigCommands {
     param(
         [Parameter(Mandatory = $true)]
         $Entry,
+        [Parameter(Mandatory = $true)]
+        [System.Collections.IDictionary]$Template,
         [switch]$NeedsGet,
         [switch]$NeedsSet
     )
 
-    $settingsFile = Resolve-ConfigEntryFile -Entry $Entry -TypeName 'appconfig'
+    $settingsFile = Resolve-ConfigEntryFile -Entry $Entry -Template $Template -TypeName 'appconfig'
 
     if ($NeedsGet) {
         $Entry.get = New-BoundTypeCommand -File $settingsFile -Body @'
@@ -82,23 +99,29 @@ Set-AppConfigOption -File '{file}' -Values $value
 function Add-ConfigEntryTypeCommands {
     <#
     .SYNOPSIS
-        Fill in get and set from a built-in entry type when the map did not supply them.
+        Fill in get and set from Entry._template when the map did not supply them.
+
+    .DESCRIPTION
+        Reads `_template.type` (and type-specific keys such as `file` for appconfig).
+        Leaves an author-supplied get or set scriptblock in place.
     #>
     param(
         $Entry
     )
 
     if ($Entry -isnot [System.Collections.IDictionary]) { return }
-    if (-not $Entry.Contains('type') -or -not $Entry.type) { return }
+
+    $template = Get-ConfigEntryTemplate -Entry $Entry
+    if ($null -eq $template -or -not $template.Contains('type') -or -not $template.type) { return }
 
     $needsGet = $Entry.get -isnot [scriptblock]
     $needsSet = $Entry.set -isnot [scriptblock]
     if (-not $needsGet -and -not $needsSet) { return }
 
-    $typeName = [string]$Entry.type
+    $typeName = [string]$template.type
     switch ($typeName) {
         'appconfig' {
-            Add-AppConfigCommands -Entry $Entry -NeedsGet:$needsGet -NeedsSet:$needsSet
+            Add-AppConfigCommands -Entry $Entry -Template $template -NeedsGet:$needsGet -NeedsSet:$needsSet
         }
         default {
             throw "Unknown config entry type '$typeName'."

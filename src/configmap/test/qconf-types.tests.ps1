@@ -22,7 +22,7 @@ BeforeAll {
     }
 }
 
-Describe 'qconf appconfig type' {
+Describe 'qconf appconfig _template' {
     BeforeEach {
         $script:workDir = Join-Path $TestDrive ("appconfig-" + [guid]::NewGuid().ToString('n'))
         $script:projectDir = Join-Path $script:workDir 'project'
@@ -41,8 +41,10 @@ Describe 'qconf appconfig type' {
         Write-ConfigMapFile $script:mapFile @'
 @{
     storage = @{
-        type = 'appconfig'
-        file = 'appsettings.Development.json'
+        _template = @{
+            type = 'appconfig'
+            file = 'appsettings.Development.json'
+        }
         description = 'Storage endpoint'
         options = @{
             local = @{
@@ -106,12 +108,14 @@ Describe 'qconf appconfig type' {
         $result.Value['Storage:Account'] | Should -Be $script:prodAccount
     }
 
-    It 'uses an explicit get instead of the appconfig type' {
+    It 'uses an explicit get instead of the appconfig template' {
         Write-ConfigMapFile $script:mapFile @'
 @{
     storage = @{
-        type = 'appconfig'
-        file = 'missing.json'
+        _template = @{
+            type = 'appconfig'
+            file = 'missing.json'
+        }
         get = { param($ctx, $options) 'custom-get' }
         options = @{
             local = @{ 'Storage:BaseUrl' = 'x' }
@@ -126,12 +130,14 @@ Describe 'qconf appconfig type' {
         Test-Path (Join-Path $script:projectDir 'missing.json') | Should -BeFalse
     }
 
-    It 'uses an explicit set instead of the appconfig type' {
+    It 'uses an explicit set instead of the appconfig template' {
         Write-ConfigMapFile $script:mapFile @'
 @{
     storage = @{
-        type = 'appconfig'
-        file = 'appsettings.Development.json'
+        _template = @{
+            type = 'appconfig'
+            file = 'appsettings.Development.json'
+        }
         set = {
             param($ctx, $key, $value)
             'custom-set' | Set-Content 'custom-set.txt'
@@ -158,23 +164,25 @@ Describe 'qconf appconfig type' {
         $settings.Storage.Account | Should -Be $script:localAccount
     }
 
-    It 'leaves an entry without a type on its own get' {
+    It 'leaves an entry without a _template on its own get' {
         $result = qconf -map $script:mapFile note -ErrorAction Stop
 
         $result.Value | Should -Be 'from-note'
     }
 
-    It 'does not expose type or file as commands' {
+    It 'does not expose _template as a command' {
         $map = Import-ConfigMap -Map $script:mapFile
         $entry = Get-MapEntry $map 'storage' -language conf
         $childNames = @((Get-CompletionList $entry -language conf).Keys)
 
+        $childNames | Should -Not -Contain '_template'
         $childNames | Should -Not -Contain 'type'
         $childNames | Should -Not -Contain 'file'
 
         $words = @(qconf -map $script:mapFile '!complete' -Word '')
         $words | Should -Contain 'storage'
         $words | Should -Contain 'note'
+        $words | Should -Not -Contain '_template'
         $words | Should -Not -Contain 'type'
         $words | Should -Not -Contain 'file'
     }
@@ -183,8 +191,10 @@ Describe 'qconf appconfig type' {
         Write-ConfigMapFile $script:mapFile @'
 @{
     storage = @{
-        type = 'appconfig'
-        file = 'appsettings.Development.json'
+        _template = @{
+            type = 'appconfig'
+            file = 'appsettings.Development.json'
+        }
         options = {
             param($path)
             @{
@@ -212,8 +222,10 @@ Describe 'qconf appconfig type' {
         Write-ConfigMapFile $script:mapFile @'
 @{
     storage = @{
-        type = 'appconfig'
-        file = 'appsettings.Development.json'
+        _template = @{
+            type = 'appconfig'
+            file = 'appsettings.Development.json'
+        }
         validate = { param($path, $value, $key) $key -eq 'local' }
         options = @{
             local = @{
@@ -237,15 +249,17 @@ Describe 'qconf appconfig type' {
         $prod.IsValid | Should -BeFalse
     }
 
-    It 'gets and sets an appconfig entry through qbuild' {
+    It 'gets and sets an appconfig _template entry through qbuild' {
         $buildMap = Join-Path $script:projectDir '.build.map.ps1'
         Write-ConfigMapFile $buildMap @'
 [ordered]@{
     storage = [ordered]@{
         _settings   = @{ process = 'qconf' }
         description = 'Storage endpoint'
-        type        = 'appconfig'
-        file        = 'appsettings.Development.json'
+        _template   = @{
+            type = 'appconfig'
+            file = 'appsettings.Development.json'
+        }
         options     = @{
             local = @{
                 'Storage:BaseUrl' = 'https://127.0.0.1:10000/devstoreaccount1'
@@ -269,12 +283,14 @@ Describe 'qconf appconfig type' {
         $settings.Storage.Account | Should -Be $script:prodAccount
     }
 
-    It 'rejects an unknown entry type' {
+    It 'rejects an unknown _template type' {
         Write-ConfigMapFile $script:mapFile @'
 @{
     broken = @{
-        type = 'nope'
-        file = 'appsettings.Development.json'
+        _template = @{
+            type = 'nope'
+            file = 'appsettings.Development.json'
+        }
         options = @{
             local = @{ 'Storage:BaseUrl' = 'https://127.0.0.1:10000/devstoreaccount1' }
         }
