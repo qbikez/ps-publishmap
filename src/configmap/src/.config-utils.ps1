@@ -252,10 +252,10 @@ function Find-ActiveOption(
 
             Write-Verbose "checking key $key=$currentValue"
 
-            if ($currentValue -is [string] -and $currentValue -ne $optionValue -and !(test-isSpecialValue $optionValue)) {
+            # Keep walking after a mismatch so Value still contains every key read from the file.
+            if ($isMatch -and $currentValue -is [string] -and $currentValue -ne $optionValue -and !(test-isSpecialValue $optionValue)) {
                 Write-Verbose "key $key=$currentValue does not match option '$optionSet' value: $optionValue"
                 $isMatch = $false
-                break
             }
         }
         if ($isMatch) {

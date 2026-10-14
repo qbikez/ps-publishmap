@@ -16,6 +16,8 @@ $helpersPath = (Split-Path -Parent $MyInvocation.MyCommand.Definition)
 . "$helpersPath\functions\map-entries.ps1"
 . "$helpersPath\functions\discovery-cache.ps1"
 . "$helpersPath\functions\command-catalog.ps1"
+. "$helpersPath\.config-utils.ps1"
+. "$helpersPath\functions\entry-types.ps1"
 . "$helpersPath\functions\invoke-entry.ps1"
 . "$helpersPath\functions\help.ps1"
 . "$helpersPath\functions\initialize.ps1"

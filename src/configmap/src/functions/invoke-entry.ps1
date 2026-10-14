@@ -123,6 +123,8 @@ function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}
 # }
 
 function Invoke-Set($entry, $bound = @{}, $extra = @()) {
+    Add-ConfigEntryTypeCommands -Entry $entry
+
     # use ordered parameters, just in case the handler has different parameter names
     # Nameless leftovers after the option key (e.g. `set local tenant_1`) bind by name to
     # set params beyond ctx/key/value. Prefer already-bound names (e.g. -tenant).
@@ -146,6 +148,8 @@ function Invoke-Set($entry, $bound = @{}, $extra = @()) {
 }
 
 function Invoke-Get($entry, $bound = @{}) {
+    Add-ConfigEntryTypeCommands -Entry $entry
+
     # use ordered parameters, just in case the handler has different parameter names
     Invoke-EntryCommand $entry "get" -ordered @("", $bound.options) -bound $bound
 }
