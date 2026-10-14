@@ -347,6 +347,17 @@ Creates a `.configuration.map.ps1` file with sample configuration entries.
             prod  = @{ "Storage:BaseUrl" = "https://prod.example" }
         }
     }
+
+    # Built-in dotenv template for .env files
+    # Short form below; long form is _template = @{ type = "dotenv"; file = "..." }
+    "api" = @{
+        description = "API settings in .env"
+        _template   = "dotenv:.env"
+        options = @{
+            local = @{ "API_URL" = "http://localhost:5000"; "API_KEY" = "dev-key" }
+            prod  = @{ "API_URL" = "https://api.example.com"; "API_KEY" = "prod-key" }
+        }
+    }
 }
 ```
 
@@ -454,7 +465,7 @@ The following keys have special meaning in map files:
 - `get` - Get configuration value (for qconf)
 - `set` - Set configuration value (for qconf)
 - `validate` - Validation function (for qconf)
-- `_template` - Built-in entry type: `@{ type; file }` or `"appsettings:{filepath}"` that fills get/set when omitted
+- `_template` - Built-in entry type: `@{ type; file }` or `"appsettings:{filepath}"` / `"dotenv:{filepath}"` that fills get/set when omitted
 - `description` - Command description
 - `completions` - Custom tab completion values
 

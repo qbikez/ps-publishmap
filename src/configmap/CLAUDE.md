@@ -88,6 +88,15 @@ Settings management with get/set/validate operations, or a built-in `_template`:
             prod  = @{ "Storage:BaseUrl" = "https://prod.example" }
         }
     }
+
+    "api" = @{
+        # Short form; long form is _template = @{ type = "dotenv"; file = "..." }
+        _template = "dotenv:.env"
+        options = @{
+            local = @{ "API_URL" = "http://localhost:5000" }
+            prod  = @{ "API_URL" = "https://api.example.com" }
+        }
+    }
 }
 ```
 
@@ -101,7 +110,7 @@ ConfigMap automatically discovers parameters from script blocks using AST parsin
 ### Reserved Keys
 - `exec` - Default execution command for qbuild
 - `get/set/validate` - Configuration operations for qconf  
-- `_template` - Built-in entry type: hashtable (`type`/`file`) or short string (`appsettings:{filepath}`) that fills get/set
+- `_template` - Built-in entry type: hashtable (`type`/`file`) or short string (`appsettings:{filepath}` / `dotenv:{filepath}`) that fills get/set
 - `list` - Nested entry container
 - `options` - Available configuration values
 - `description` - Command documentation
