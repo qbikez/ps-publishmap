@@ -195,11 +195,11 @@ Describe 'qbuild _settings.process=qrun forwarding' {
         Should -Invoke Write-Host -ModuleName ConfigMap -ParameterFilter { "$Object" -match 'prepare' }
     }
 
-    It 'runs an entry that explicitly selects the qbuild process' {
+    It 'runs an entry that explicitly selects the exec process' {
         @'
 [ordered]@{
     task = @{
-        _settings = @{ process = 'qbuild' }
+        _settings = @{ process = 'exec' }
         exec = { 'ran' | Set-Content 'qbuild-process.txt' }
     }
 }
@@ -209,10 +209,10 @@ Describe 'qbuild _settings.process=qrun forwarding' {
         Get-Content 'qbuild-process.txt' -Raw | Should -Match 'ran'
     }
 
-    It 'registers qbuild as the default in-process handler' {
+    It 'registers exec as the default in-process handler' {
         InModuleScope ConfigMap {
-            $handler = Get-ConfigMapProcessHandler -Name 'qbuild'
-            $handler.Name | Should -Be 'qbuild'
+            $handler = Get-ConfigMapProcessHandler -Name 'exec'
+            $handler.Name | Should -Be 'exec'
             $handler.Invoke | Should -Not -BeNullOrEmpty
             $handler.GetDynamicParam | Should -Not -BeNullOrEmpty
             $handler.WriteListEntry | Should -BeNullOrEmpty
@@ -264,5 +264,108 @@ Describe 'qbuild _settings.process=qrun forwarding' {
         qbuild -map $localMap clean
         qbuild -map $localMap bootstrap.prepare
         Test-Path (Join-Path $script:workDir 'workspace' 'prepare.txt') | Should -BeTrue
+    }
+}
+
+Describe 'qbuild in-process process handlers' {
+    BeforeEach {
+        $script:workDir = Join-Path $TestDrive ("qbuild-handler-" + [guid]::NewGuid().ToString('n'))
+        New-Item -ItemType Directory -Path $script:workDir -Force | Out-Null
+        Push-Location $script:workDir
+    }
+
+    AfterEach {
+        Pop-Location
+    }
+
+    It 'runs an entry when process is explicitly exec' {
+        $mapFile = Join-Path $script:workDir '.build.map.ps1'
+        @'
+@{
+    build = @{
+        _settings = @{ process = 'exec' }
+        exec = { 'explicit-exec' | Set-Content 'explicit.txt' }
+    }
+}
+'@ | Set-Content -LiteralPath $mapFile -Encoding utf8
+
+        qbuild -map $mapFile build
+        Get-Content 'explicit.txt' -Raw | Should -Match 'explicit-exec'
+    }
+
+    It 'registers exec with Invoke and GetDynamicParam and no WriteListEntry' {
+        InModuleScope ConfigMap {
+            $handler = Get-ConfigMapProcessHandler -Name exec
+            $null -ne $handler.Invoke | Should -BeTrue
+            $null -ne $handler.GetDynamicParam | Should -BeTrue
+            $null -eq $handler.WriteListEntry | Should -BeTrue
+            (Get-ConfigMapProcessHandler -Name Exec).Name | Should -Be 'exec'
+        }
+    }
+
+    It 'runs a registered handler from an in-memory map without exec' {
+        InModuleScope ConfigMap {
+            Register-ConfigMapProcess -Name qprobe -Invoke {
+                param($Context)
+                $Context.Entry | Set-Content 'probe-entry.txt'
+            }
+            try {
+                $map = @{
+                    job = @{
+                        _settings = @{ process = 'qprobe' }
+                        exec = { 'exec-ran' | Set-Content 'exec.txt' }
+                    }
+                }
+
+                qbuild -map $map job
+
+                Get-Content 'probe-entry.txt' -Raw | Should -Match 'job'
+                Test-Path 'exec.txt' | Should -BeFalse
+            }
+            finally {
+                Unregister-ConfigMapProcess -Name qprobe
+            }
+        }
+    }
+
+    It 'does not delegate a missing exec handler to an external command' {
+        $mapFile = Join-Path $script:workDir '.build.map.ps1'
+        @'
+@{
+    build = { 'ran' | Set-Content 'ran.txt' }
+}
+'@ | Set-Content -LiteralPath $mapFile -Encoding utf8
+
+        InModuleScope ConfigMap {
+            param($MapFile)
+            Unregister-ConfigMapProcess -Name exec
+            Mock Invoke-ConfigMapProcessCli { throw 'cli-was-called' }
+            try {
+                { qbuild -map $MapFile build } | Should -Throw '*no in-process handler*'
+                Test-Path 'ran.txt' | Should -BeFalse
+            }
+            finally {
+                Register-ConfigMapExecProcess
+            }
+        } -Parameters @{ MapFile = $mapFile }
+    }
+
+    It 'does not delegate process=qbuild back to the qbuild host alias' {
+        $mapFile = Join-Path $script:workDir '.build.map.ps1'
+        @'
+@{
+    build = @{
+        _settings = @{ process = 'qbuild' }
+        exec = { 'ran' | Set-Content 'ran.txt' }
+    }
+}
+'@ | Set-Content -LiteralPath $mapFile -Encoding utf8
+
+        InModuleScope ConfigMap {
+            param($MapFile)
+            Mock Invoke-ConfigMapProcessCli { throw 'cli-was-called' }
+            { qbuild -map $MapFile build } | Should -Throw '*no in-process handler*'
+            Test-Path 'ran.txt' | Should -BeFalse
+        } -Parameters @{ MapFile = $mapFile }
     }
 }

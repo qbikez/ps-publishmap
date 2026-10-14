@@ -29,13 +29,13 @@ function Invoke-QBuild {
                         }
                     }
 
-                    $qbuildModule = (Get-Command Invoke-QBuild).Module
-                    $internalCommands = & $qbuildModule { Get-ConfigMapInternalCommands -Language build }
+                    $configMapModule = (Get-Command Invoke-QBuild).Module
+                    $internalCommands = & $configMapModule { Get-ConfigMapInternalCommands -Language build }
                     foreach ($item in $internalCommands.GetEnumerator()) {
                         if (-not ([string]$item.Key).StartsWith($wordToComplete)) {
                             continue
                         }
-                        $includeCompletion = & $qbuildModule {
+                        $includeCompletion = & $configMapModule {
                             param($commandEntry, $mapExists)
                             Test-ConfigMapCommandCompletion -Entry $commandEntry -LocalMapExists $mapExists
                         } $item.Value $localMapExists
@@ -178,25 +178,42 @@ function Invoke-QBuild {
             }
 
             $settings = Get-ConfigMapSettingsForPath -Map $dynMap -Path $entry
-            if ($settings.Process -ne 'qbuild') {
-                $mapPath = Resolve-MapPath -Map $dynMap
-                $followHint = [bool]$PSBoundParameters['Follow']
-                if (-not $mapPath) {
-                    return Get-ProcessDynamicParam -Map $dynMap -ProcessKey $entry -Follow:$followHint
+            $handler = Get-ConfigMapProcessHandler -Name $settings.Process
+            if ($null -ne $handler) {
+                if ($null -ne $handler.GetDynamicParam) {
+                    $context = New-ConfigMapProcessContext `
+                        -Map $dynMap `
+                        -UserMap $dynUserMap `
+                        -MapArgument $map `
+                        -Entry $entry `
+                        -Command $command `
+                        -Invocation $MyInvocation `
+                        -BoundParameters $PSBoundParameters `
+                        -ProcessAction $ProcessAction `
+                        -ProcessValue $ProcessValue `
+                        -RemainingArguments $RemainingArguments
+                    return & $handler.GetDynamicParam $context
                 }
-                return New-ConfigMapProcessDynamicParam `
-                    -ProcessName $settings.Process `
-                    -MapPath $mapPath `
-                    -Map $dynMap `
-                    -Entry $entry `
-                    -Follow:$followHint `
-                    -ProcessAction $ProcessAction `
-                    -ProcessValue $ProcessValue `
-                    -RemainingArguments $RemainingArguments
+                return Get-EntryDynamicParam $dynMap $entry $command -skip 0 -bound $PSBoundParameters
             }
-            $result = Get-EntryDynamicParam $dynMap $entry $command -skip 0 -bound $PSBoundParameters
-            Write-Debug "Dynamic parameters for entry '$entry': $($result.Keys -join ', ')"
-            return $result
+            if (Test-ConfigMapProcessCannotDelegate -ProcessName $settings.Process) {
+                return Get-EntryDynamicParam $dynMap $entry $command -skip 0 -bound $PSBoundParameters
+            }
+
+            $mapPath = Resolve-MapPath -Map $dynMap
+            $followHint = [bool]$PSBoundParameters['Follow']
+            if (-not $mapPath) {
+                return Get-ProcessDynamicParam -Map $dynMap -ProcessKey $entry -Follow:$followHint
+            }
+            return New-ConfigMapProcessDynamicParam `
+                -ProcessName $settings.Process `
+                -MapPath $mapPath `
+                -Map $dynMap `
+                -Entry $entry `
+                -Follow:$followHint `
+                -ProcessAction $ProcessAction `
+                -ProcessValue $ProcessValue `
+                -RemainingArguments $RemainingArguments
         }
         catch {
             return "ERROR [dynamic]: $($_.Exception.Message) $($_.ScriptStackTrace)"
@@ -229,109 +246,42 @@ function Invoke-QBuild {
         }
 
         $operationContext = New-ConfigMapOperationContext
-        if (!$isInternalCommand) {
+        $context = New-ConfigMapProcessContext `
+            -Map $map `
+            -UserMap $userMap `
+            -MapArgument $mapPath `
+            -Entry $entry `
+            -Command $command `
+            -Invocation $MyInvocation `
+            -OperationContext $operationContext `
+            -BoundParameters $PSBoundParameters `
+            -ProcessAction $ProcessAction `
+            -ProcessValue $ProcessValue `
+            -RemainingArguments $RemainingArguments
+
+        if (-not $isInternalCommand) {
             $processSettings = Get-ConfigMapSettingsForPath -Map $map -Path $entry -OperationContext $operationContext
-
-            if ($processSettings.Process -ne 'qbuild') {
-                $resolvedMapPath = Resolve-MapPath -Map $map
-                if (-not $resolvedMapPath) {
-                    throw "Cannot delegate process '$($processSettings.Process)' for entry '$entry': the map has no _sourceFile."
+            $handler = Get-ConfigMapProcessHandler -Name $processSettings.Process
+            if ($null -ne $handler) {
+                if ($null -eq $handler.Invoke) {
+                    throw "Process handler '$($processSettings.Process)' has no Invoke implementation."
                 }
-                $processArguments = @(
-                    $ProcessAction
-                    $ProcessValue
-                    $RemainingArguments
-                ) | Where-Object { $null -ne $_ -and "$_" -ne '' }
-                $splat = ConvertTo-ConfigMapProcessSplat `
-                    -MapPath $resolvedMapPath `
-                    -Entry $entry `
-                    -BoundParameters $PSBoundParameters `
-                    -RemainingArguments $processArguments
-
-                Invoke-ConfigMapProcessCli -ProcessName $processSettings.Process -Splat $splat
-                return
-            }
-        }
-
-        $targets = Get-MapEntries $map $entry -language "build" -OperationContext $operationContext
-        
-        # Validate that the entry exists
-        if (!$targets -or $targets.Count -eq 0) {
-            throw "Entry '$entry' not found. Run 'qbuild list' to see all available commands."
-        }
-        
-        Write-Verbose "running targets: $($targets.Key)"
-
-        $bound = @{}
-        foreach ($item in $PSBoundParameters.GetEnumerator()) {
-            if ($item.Key -notin @('entry', 'ProcessAction', 'ProcessValue', 'RemainingArguments')) {
-                $bound[$item.Key] = $item.Value
-            }
-        }
-        $passthrough = @(
-            $ProcessAction
-            $ProcessValue
-            $RemainingArguments
-        ) | Where-Object { $null -ne $_ -and "$_" -ne '' }
-        if ($isInternalCommand) {
-            $bound._context = @{
-                Map                = $map
-                UserMap            = $userMap
-                MapArgument        = $mapPath
-                Invocation         = $MyInvocation
-                RemainingArguments = @($passthrough)
-            }
-        }
-        elseif ($passthrough.Count -gt 0) {
-            $bound._context = @{}
-            $bound._context['additionalArgs'] = @($passthrough)
-        }
-
-        $hookContext = @{
-            MainCommand        = 'qbuild'
-            Entry              = $entry
-            Targets            = @($targets)
-            Map                = $map
-            MapPath            = $mapPath
-            Command            = $command
-            Bound              = $bound
-            RemainingArguments = $passthrough
-        }
-
-        $hookEntryKey = if ($entry -match '^(.*)\.all$') { $Matches[1] } else { [string]$entry }
-        $hookEntry = $map
-        if ($hookEntryKey) {
-            $resolvedHookEntry = Get-MapEntry $map $hookEntryKey -language "build" -OperationContext $operationContext
-            if ($null -ne $resolvedHookEntry) {
-                $hookEntry = $resolvedHookEntry
-            }
-        }
-
-        $hookResult = Invoke-WithEntrySettings -Map $map -EntryKey $hookEntryKey -Entry $hookEntry -OperationContext $operationContext -ScriptBlock {
-            Invoke-ConfigMapPluginHooks -HookName 'InvokeQBuildTargets' -Context $hookContext
-        }
-        if ($hookResult.Handled) {
-            return $hookResult.Result
-        }
-
-        foreach ($_ in $targets) {
-            $targetKey = $_.key
-            $targetEntry = $_.value
-            Write-Verbose "running entry '$targetKey'"
-
-            if ($command -eq "exec" `
-                    -and $targetEntry -is [System.Collections.IDictionary] `
-                    -and -not (Get-EntryHasExec $targetEntry) `
-                    -and (Test-IsParentEntry $targetEntry)) {
-                Write-ChooseSubcommand -parentKey $targetKey -parentEntry $targetEntry -invocation $MyInvocation -language "build"
+                & $handler.Invoke $context
                 return
             }
 
-            Invoke-WithEntrySettings -Map $map -EntryKey $targetKey -Entry $targetEntry -OperationContext $operationContext -ScriptBlock {
-                Invoke-EntryWrapper -MainCommand 'qbuild' -TargetKey $targetKey -TargetEntry $targetEntry -Command $command -Bound $bound -RemainingArguments $passthrough
-            }
+            Invoke-ConfigMapExternalProcess `
+                -ProcessName $processSettings.Process `
+                -Entry $entry `
+                -Map $map `
+                -BoundParameters $PSBoundParameters `
+                -ProcessAction $ProcessAction `
+                -ProcessValue $ProcessValue `
+                -RemainingArguments $RemainingArguments
+            return
         }
 
+        Invoke-ConfigMapExecProcess -Context $context
     }
 }
 

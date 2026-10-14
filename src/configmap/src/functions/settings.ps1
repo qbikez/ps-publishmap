@@ -12,7 +12,7 @@ function New-ConfigMapSettings {
         TmuxAutoWindow         = $false
         DiscoveryCache         = $true
         DiscoveryCacheLocation = 'local'
-        Process                = 'qbuild'
+        Process                = $script:ConfigMapDefaultProcessName
     }
 
     foreach ($propertyName in @($settings.Keys)) {
