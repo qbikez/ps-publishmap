@@ -4,9 +4,6 @@ $script:languages = @{
     "build" = @{
         reservedKeys = @("exec", "list", "options", "#include", "_baseDir", "_sourceFile", "_settings", "_dependsOn", "_internal", "description", "validate", "get", "set")
     }
-    "conf"  = @{
-        reservedKeys = @("exec", "list", "options", "#include", "_baseDir", "_sourceFile", "_settings", "_dependsOn", "_internal", "description", "validate", "get", "set", "type", "file")
-    }
 }
 
 function Get-MapLanguage {

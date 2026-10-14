@@ -1,6 +1,10 @@
 . "$PSScriptRoot\entry-types.ps1"
 . "$PSScriptRoot\..\.config-utils.ps1"
 
+$script:languages.conf = @{
+    reservedKeys = @("exec", "list", "options", "#include", "_baseDir", "_sourceFile", "_settings", "_dependsOn", "_internal", "description", "validate", "get", "set", "type", "file")
+}
+
 function Invoke-QConf {
     [CmdletBinding()]
     param(

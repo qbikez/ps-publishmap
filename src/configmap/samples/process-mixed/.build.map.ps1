@@ -8,6 +8,8 @@
 #   qbuild bootstrap.prepare
 #   qbuild storage
 #   qbuild storage -value prod
+#   qbuild endpoint
+#   qbuild endpoint -value prod
 #   qbuild env set dev -tenant abc
 #   qbuild env get
 #   qbuild list
@@ -85,6 +87,21 @@
             New-Item -ItemType Directory -Path $workspace -Force | Out-Null
             $key | Set-Content (Join-Path $workspace 'storage.txt')
             Write-Host "  storage=$key ($value)" -ForegroundColor Green
+        }
+    }
+
+    "endpoint" = [ordered]@{
+        _settings   = @{ process = "qconf" }
+        description = "Storage endpoint in appsettings JSON"
+        type        = "appconfig"
+        file        = "appsettings.Development.json"
+        options     = [ordered]@{
+            local = [ordered]@{
+                "Storage:BaseUrl" = "https://127.0.0.1:10000/devstoreaccount1"
+            }
+            prod  = [ordered]@{
+                "Storage:BaseUrl" = "https://storage.example"
+            }
         }
     }
 
