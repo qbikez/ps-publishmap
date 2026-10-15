@@ -1,5 +1,5 @@
 . "$PSScriptRoot\entry-types.ps1"
-. "$PSScriptRoot\..\.config-utils.ps1"
+. "$PSScriptRoot\..\..\.config-utils.ps1"
 
 $script:languages.conf = @{
     reservedKeys = @("exec", "list", "options", "#include", "_baseDir", "_sourceFile", "_settings", "_dependsOn", "_internal", "_template", "description", "validate", "get", "set")

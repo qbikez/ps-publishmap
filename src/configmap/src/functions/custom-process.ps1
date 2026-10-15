@@ -1,9 +1,205 @@
 #requires -version 7.0
 
+# Handler names are matched ordinal-ignore-case.
+# 'exec' is the built-in default process (normal map entry exec). It is never
+# handed to an external CLI. Other registered handlers stay in-process.
+# Null GetDynamicParam or WriteListEntry keeps the host fallback for that slot.
+# Only an unregistered, non-builtin name is handed to an external process command.
+$script:ConfigMapDefaultProcessName = 'exec'
+$script:ConfigMapProcessHandlers = [System.Collections.Generic.Dictionary[string, hashtable]]::new(
+    [StringComparer]::OrdinalIgnoreCase
+)
+
+function Register-ConfigMapProcess {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+        [scriptblock]$Invoke,
+        [scriptblock]$GetDynamicParam,
+        [scriptblock]$WriteListEntry
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Name)) {
+        throw 'Process handler name is required.'
+    }
+
+    $script:ConfigMapProcessHandlers[$Name] = @{
+        Name            = $Name
+        Invoke          = $Invoke
+        GetDynamicParam = $GetDynamicParam
+        WriteListEntry  = $WriteListEntry
+    }
+}
+
+function Get-ConfigMapProcessHandler {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$Name
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Name) -or -not $script:ConfigMapProcessHandlers.ContainsKey($Name)) {
+        return $null
+    }
+
+    return $script:ConfigMapProcessHandlers[$Name]
+}
+
+function Unregister-ConfigMapProcess {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
+
+    [void]$script:ConfigMapProcessHandlers.Remove($Name)
+}
+
+function New-ConfigMapProcessContext {
+    <#
+    .SYNOPSIS
+        Context passed to an in-process handler.
+
+        dynamicparam leaves OperationContext empty. process fills every field.
+    #>
+    param(
+        $Map,
+        $UserMap,
+        $MapArgument,
+        $Entry,
+        $Command,
+        $Invocation,
+        $OperationContext,
+        $BoundParameters,
+        [AllowEmptyString()]
+        [string]$ProcessAction,
+        [AllowEmptyString()]
+        [string]$ProcessValue,
+        [AllowNull()]
+        [string[]]$RemainingArguments
+    )
+
+    $passthrough = @($RemainingArguments | Where-Object { $null -ne $_ })
+    return @{
+        Map                = $Map
+        UserMap            = $UserMap
+        MapArgument        = $MapArgument
+        Entry              = $Entry
+        Command            = $Command
+        Invocation         = $Invocation
+        OperationContext   = $OperationContext
+        BoundParameters    = $BoundParameters
+        ProcessAction      = $ProcessAction
+        ProcessValue       = $ProcessValue
+        RemainingArguments = $passthrough
+    }
+}
+
+function Get-ConfigMapProcessPassthrough {
+    param(
+        [AllowEmptyString()]
+        [string]$ProcessAction,
+        [AllowEmptyString()]
+        [string]$ProcessValue,
+        [AllowNull()]
+        [string[]]$RemainingArguments
+    )
+
+    return @(
+        $ProcessAction
+        $ProcessValue
+        $RemainingArguments
+    ) | Where-Object { $null -ne $_ -and "$_" -ne '' }
+}
+
+function Test-ConfigMapProcessIsBuiltin {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$ProcessName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ProcessName)) {
+        return $true
+    }
+
+    return $ProcessName -eq $script:ConfigMapDefaultProcessName
+}
+
+function Test-ConfigMapProcessResolvesToHost {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ProcessName
+    )
+
+    $cmd = Get-Command $ProcessName -ErrorAction SilentlyContinue
+    if (-not $cmd) {
+        return $false
+    }
+    if ($cmd.CommandType -eq 'Alias') {
+        $cmd = $cmd.ResolvedCommand
+    }
+    return $cmd.Name -eq 'Invoke-QBuild'
+}
+
+function Test-ConfigMapProcessCannotDelegate {
+    <#
+    .SYNOPSIS
+        True when a process name must not be handed to an external CLI.
+        Covers the builtin 'exec' default and names that resolve to the qbuild host.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$ProcessName
+    )
+
+    if (Test-ConfigMapProcessIsBuiltin -ProcessName $ProcessName) {
+        return $true
+    }
+
+    return Test-ConfigMapProcessResolvesToHost -ProcessName $ProcessName
+}
+
+function Invoke-ConfigMapExternalProcess {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ProcessName,
+        [Parameter(Mandatory = $true)]
+        [string]$Entry,
+        $Map,
+        [hashtable]$BoundParameters,
+        [AllowEmptyString()]
+        [string]$ProcessAction,
+        [AllowEmptyString()]
+        [string]$ProcessValue,
+        [string[]]$RemainingArguments
+    )
+
+    $resolvedMapPath = Resolve-MapPath -Map $Map
+    if (-not $resolvedMapPath) {
+        throw "Cannot delegate process '$ProcessName' for entry '$Entry': the map has no _sourceFile."
+    }
+    if (Test-ConfigMapProcessCannotDelegate -ProcessName $ProcessName) {
+        throw "Cannot delegate process '$ProcessName' for entry '$Entry': no in-process handler is registered."
+    }
+
+    $passthrough = Get-ConfigMapProcessPassthrough `
+        -ProcessAction $ProcessAction `
+        -ProcessValue $ProcessValue `
+        -RemainingArguments $RemainingArguments
+    $splat = ConvertTo-ConfigMapProcessSplat `
+        -MapPath $resolvedMapPath `
+        -Entry $Entry `
+        -BoundParameters $BoundParameters `
+        -RemainingArguments $passthrough
+
+    Invoke-ConfigMapProcessCli -ProcessName $ProcessName -Splat $splat
+}
+
 function Get-EntryProcess {
     param(
         $Entry,
-        [string]$Default = 'qbuild'
+        [string]$Default = 'exec'
     )
 
     if (
@@ -122,7 +318,7 @@ function Get-QBuildProcessArgumentCompletion {
 
     $processMap = Import-ConfigMap -Map $context.MapInput -Fallback "./.build.map.ps1" | Assert-ConfigMap
     $settings = Get-ConfigMapSettingsForPath -Map $processMap -Path $context.Entry
-    if ($settings.Process -eq 'qbuild') { return @() }
+    if (Test-ConfigMapProcessIsBuiltin -ProcessName $settings.Process) { return @() }
 
     $mapPath = Resolve-MapPath -Map $processMap
     if (-not $mapPath) { return @() }
@@ -152,6 +348,10 @@ function Invoke-ConfigMapProcessComplete {
         [Parameter(Mandatory = $true)]
         [hashtable]$CompleteArgs
     )
+
+    if (Test-ConfigMapProcessCannotDelegate -ProcessName $ProcessName) {
+        return $null
+    }
 
     try {
         $cmd = Resolve-ConfigMapProcessCommand -ProcessName $ProcessName
@@ -273,6 +473,10 @@ function Invoke-ConfigMapProcessCli {
         [hashtable]$Splat
     )
 
+    if (Test-ConfigMapProcessCannotDelegate -ProcessName $ProcessName) {
+        throw "Cannot delegate process '$ProcessName': no in-process handler is registered."
+    }
+
     $cmd = Resolve-ConfigMapProcessCommand -ProcessName $ProcessName
     $global:LASTEXITCODE = 0
     & $cmd @Splat
@@ -284,7 +488,8 @@ function Invoke-ConfigMapProcessCli {
 function Get-ConfigMapProcessNamesInMap {
     <#
     .SYNOPSIS
-        Distinct non-qbuild process names declared in top-level entry settings.
+        Distinct process names declared on top-level entries that have no in-process handler.
+        Skips the builtin 'exec' default and names that resolve to the qbuild host.
     #>
     param(
         [Parameter(Mandatory = $true)]
@@ -300,8 +505,12 @@ function Get-ConfigMapProcessNamesInMap {
     foreach ($key in @($Map.Keys)) {
         if ([string]$key -like '_*') { continue }
         $resolved = Get-MapEntry $Map $key -language 'build' -OperationContext $OperationContext
-        $proc = Get-EntryProcess $resolved -Default 'qbuild'
-        if ($proc -and $proc -ne 'qbuild') {
+        $proc = Get-EntryProcess $resolved
+        if (
+            $proc -and
+            -not (Get-ConfigMapProcessHandler -Name $proc) -and
+            -not (Test-ConfigMapProcessCannotDelegate -ProcessName $proc)
+        ) {
             [void]$names.Add($proc)
         }
     }

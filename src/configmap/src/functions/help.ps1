@@ -106,11 +106,23 @@ function Write-MapHelp {
         }
 
         $settings = Get-ConfigMapSettingsForPath -Map $map -Path $name -OperationContext $operationContext
-        if ($settings.Process -eq 'qbuild') {
+        $handler = Get-ConfigMapProcessHandler -Name $settings.Process
+        if ($null -ne $handler) {
+            if ($null -ne $handler.WriteListEntry) {
+                & $handler.WriteListEntry @{
+                    Name             = $name
+                    Entry            = $entryValue
+                    Map              = $map
+                    Invocation       = $invocation
+                    Language         = $language
+                    OperationContext = $operationContext
+                } | Out-Null
+                return $true
+            }
             return $false
         }
 
-        # Nested step paths under a process entry are shown inside the status tree
+        # Nested step paths under an external process entry are shown inside the status tree
         if ($name -match '\.' -and -not (Get-EntryProcess $entryValue -Default '')) {
             return $true
         }
