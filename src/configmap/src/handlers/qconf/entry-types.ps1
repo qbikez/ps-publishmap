@@ -26,6 +26,18 @@ function Get-ConfigEntryTemplate {
             }
         }
 
+        # Short form: "dotenv:{filepath}" → @{ type = 'dotenv'; file = ... }
+        if ($template -match '^(?i)dotenv:(.+)$') {
+            $file = $Matches[1].Trim()
+            if ([string]::IsNullOrWhiteSpace($file)) {
+                throw "Config entry template 'dotenv:' requires a file path."
+            }
+            return @{
+                type = 'dotenv'
+                file = $file
+            }
+        }
+
         throw "Unknown config entry template '$template'."
     }
 
@@ -54,6 +66,22 @@ function Resolve-ConfigEntryFile {
     return [System.IO.Path]::GetFullPath((Join-Path $baseDir $file))
 }
 
+function Get-ConfigEntryTemplateFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Entry,
+        [Parameter(Mandatory = $true)]
+        [string]$TypeName
+    )
+
+    $template = Get-ConfigEntryTemplate -Entry $Entry
+    if ($null -eq $template) {
+        throw "Config entry has no _template."
+    }
+
+    return Resolve-ConfigEntryFile -Entry $Entry -Template $template -TypeName $TypeName
+}
+
 function Set-AppConfigOption {
     param(
         [Parameter(Mandatory = $true)]
@@ -74,44 +102,100 @@ function Set-AppConfigOption {
     }
 }
 
-function New-BoundTypeCommand {
+function Find-ActiveEnvOption {
     param(
         [Parameter(Mandatory = $true)]
         [string]$File,
         [Parameter(Mandatory = $true)]
-        [string]$Body
+        $Options
     )
 
-    # Unbound scriptblocks run in the caller's module scope, so they can see
-    # the private type helpers. GetNewClosure would hide those functions.
-    $literal = $File.Replace("'", "''")
-    [scriptblock]::Create(($Body -replace '\{file\}', $literal))
-}
+    $active = $null
+    $valueObject = [ordered]@{}
 
-function Add-AppConfigCommands {
-    param(
-        [Parameter(Mandatory = $true)]
-        $Entry,
-        [Parameter(Mandatory = $true)]
-        [System.Collections.IDictionary]$Template,
-        [switch]$NeedsGet,
-        [switch]$NeedsSet
-    )
+    foreach ($optionSet in $Options.Keys) {
+        $option = $Options[$optionSet]
+        if ($option -isnot [System.Collections.IDictionary]) { continue }
 
-    $settingsFile = Resolve-ConfigEntryFile -Entry $Entry -Template $Template -TypeName 'appconfig'
+        $isMatch = $true
+        foreach ($key in @($option.Keys)) {
+            if ("$key".StartsWith('__')) { continue }
 
-    if ($NeedsGet) {
-        $Entry.get = New-BoundTypeCommand -File $settingsFile -Body @'
-param($ctx, $options)
-Find-ActiveOption -file '{file}' -options $options
-'@
+            if (-not $valueObject.Contains($key)) {
+                $valueObject[$key] = get-envsetting $key $File
+            }
+            $currentValue = $valueObject[$key]
+            $optionValue = $option[$key]
+
+            if ($null -eq $currentValue) {
+                $isMatch = $false
+                continue
+            }
+
+            if ($isMatch -and $currentValue -is [string] -and $currentValue -ne $optionValue -and -not (test-isSpecialValue $optionValue)) {
+                $isMatch = $false
+            }
+        }
+
+        if ($isMatch) {
+            $active = $optionSet
+            break
+        }
     }
 
-    if ($NeedsSet) {
-        $Entry.set = New-BoundTypeCommand -File $settingsFile -Body @'
-param($ctx, $key, $value)
-Set-AppConfigOption -File '{file}' -Values $value
-'@
+    return @{ Value = $valueObject; Active = $active }
+}
+
+function Set-DotEnvOption {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$File,
+        $Values
+    )
+
+    if ($Values -isnot [System.Collections.IDictionary]) {
+        throw "dotenv option value must be a hashtable of environment variable keys."
+    }
+
+    $directory = Split-Path -Parent $File
+    foreach ($key in @($Values.Keys)) {
+        if ("$key".StartsWith('__')) { continue }
+
+        $settingValue = resolve-value $Values[$key] -dir $directory
+        set-envsetting $key $settingValue $File
+    }
+}
+
+function Get-ConfigEntryTypeCommands {
+    <#
+    .SYNOPSIS
+        Built-in get/set implementations for Entry._template types.
+    #>
+    return [ordered]@{
+        appconfig = @{
+            get = {
+                param($ctx, $options, $_context)
+                $file = Get-ConfigEntryTemplateFile -Entry $_context.self -TypeName 'appconfig'
+                Find-ActiveOption -file $file -options $options
+            }
+            set = {
+                param($ctx, $key, $value, $_context)
+                $file = Get-ConfigEntryTemplateFile -Entry $_context.self -TypeName 'appconfig'
+                Set-AppConfigOption -File $file -Values $value
+            }
+        }
+        dotenv = @{
+            get = {
+                param($ctx, $options, $_context)
+                $file = Get-ConfigEntryTemplateFile -Entry $_context.self -TypeName 'dotenv'
+                Find-ActiveEnvOption -File $file -Options $options
+            }
+            set = {
+                param($ctx, $key, $value, $_context)
+                $file = Get-ConfigEntryTemplateFile -Entry $_context.self -TypeName 'dotenv'
+                Set-DotEnvOption -File $file -Values $value
+            }
+        }
     }
 }
 
@@ -122,7 +206,8 @@ function Add-ConfigEntryTypeCommands {
 
     .DESCRIPTION
         Accepts `_template` as a hashtable (`type`/`file`) or short string
-        (`appsettings:{filepath}`). Leaves an author-supplied get or set in place.
+        (`appsettings:{filepath}` or `dotenv:{filepath}`). Leaves an author-supplied
+        get or set in place.
     #>
     param(
         $Entry
@@ -138,12 +223,18 @@ function Add-ConfigEntryTypeCommands {
     if (-not $needsGet -and -not $needsSet) { return }
 
     $typeName = [string]$template.type
-    switch ($typeName) {
-        'appconfig' {
-            Add-AppConfigCommands -Entry $Entry -Template $template -NeedsGet:$needsGet -NeedsSet:$needsSet
-        }
-        default {
-            throw "Unknown config entry type '$typeName'."
-        }
+    $typeCommands = Get-ConfigEntryTypeCommands
+    if (-not $typeCommands.Contains($typeName)) {
+        throw "Unknown config entry type '$typeName'."
+    }
+
+    $null = Resolve-ConfigEntryFile -Entry $Entry -Template $template -TypeName $typeName
+    $commands = $typeCommands[$typeName]
+
+    if ($needsGet) {
+        $Entry.get = $commands.get
+    }
+    if ($needsSet) {
+        $Entry.set = $commands.set
     }
 }

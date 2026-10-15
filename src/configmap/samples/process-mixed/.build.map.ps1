@@ -104,6 +104,22 @@
         }
     }
 
+    "api"       = [ordered]@{
+        _settings   = @{ process = "qconf" }
+        _template   = "dotenv:.env"
+        description = "API settings in .env (dotenv template)"
+        options     = [ordered]@{
+            local = [ordered]@{
+                "API_URL" = "http://localhost:5000"
+                "API_KEY" = "dev-key"
+            }
+            prod  = [ordered]@{
+                "API_URL" = "https://api.example.com"
+                "API_KEY" = "prod-key"
+            }
+        }
+    }
+
     "env"       = [ordered]@{
         _settings   = @{ process = "qconf" }
         description = "Environment / tenant selection (opaque -tenant)"
