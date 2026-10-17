@@ -94,7 +94,7 @@ Describe 'qconf appconfig _template' {
     }
 
     It 'reads the active preset from the appsettings file next to the map' {
-        $result = qconf -map $script:mapFile storage -ErrorAction Stop
+        $result = qconf -map $script:mapFile storage -porcelain -ErrorAction Stop
 
         $result.Path | Should -Be 'storage/'
         @($result.Active) | Should -Contain 'local'
@@ -111,7 +111,7 @@ Describe 'qconf appconfig _template' {
             }
         } | ConvertTo-Json | Set-Content -LiteralPath $script:settingsFile -Encoding utf8
 
-        $result = qconf -map $script:mapFile storage -ErrorAction Stop
+        $result = qconf -map $script:mapFile storage -porcelain -ErrorAction Stop
 
         $result.Active | Should -BeNullOrEmpty
         $result.Value['Storage:BaseUrl'] | Should -Be $script:localBaseUrl
@@ -126,7 +126,7 @@ Describe 'qconf appconfig _template' {
         $settings.Storage.Account | Should -Be $script:prodAccount
         Test-Path (Join-Path $script:workDir 'appsettings.Development.json') | Should -BeFalse
 
-        $result = qconf -map $script:mapFile storage -ErrorAction Stop
+        $result = qconf -map $script:mapFile storage -porcelain -ErrorAction Stop
         @($result.Active) | Should -Contain 'prod'
         $result.Value['Storage:BaseUrl'] | Should -Be $script:prodBaseUrl
         $result.Value['Storage:Account'] | Should -Be $script:prodAccount
@@ -148,7 +148,7 @@ Describe 'qconf appconfig _template' {
 }
 '@
 
-        $result = qconf -map $script:mapFile storage -ErrorAction Stop
+        $result = qconf -map $script:mapFile storage -porcelain -ErrorAction Stop
 
         $result.Value | Should -Be 'custom-get'
         Test-Path (Join-Path $script:projectDir 'missing.json') | Should -BeFalse
@@ -189,7 +189,7 @@ Describe 'qconf appconfig _template' {
     }
 
     It 'leaves an entry without a _template on its own get' {
-        $result = qconf -map $script:mapFile note -ErrorAction Stop
+        $result = qconf -map $script:mapFile note -porcelain -ErrorAction Stop
 
         $result.Value | Should -Be 'from-note'
     }
@@ -236,7 +236,7 @@ Describe 'qconf appconfig _template' {
 }
 '@
 
-        $result = qconf -map $script:mapFile storage -ErrorAction Stop
+        $result = qconf -map $script:mapFile storage -porcelain -ErrorAction Stop
 
         @($result.Active) | Should -Contain 'local'
         @($result.Options) | Should -Contain 'prod'
@@ -265,11 +265,11 @@ Describe 'qconf appconfig _template' {
 }
 '@
 
-        $local = qconf -map $script:mapFile storage -ErrorAction Stop
+        $local = qconf -map $script:mapFile storage -porcelain -ErrorAction Stop
         $local.IsValid | Should -BeTrue
 
         qconf -map $script:mapFile storage -value prod -ErrorAction Stop
-        $prod = qconf -map $script:mapFile storage -ErrorAction Stop
+        $prod = qconf -map $script:mapFile storage -porcelain -ErrorAction Stop
         $prod.IsValid | Should -BeFalse
     }
 
@@ -298,7 +298,7 @@ Describe 'qconf appconfig _template' {
 }
 '@
 
-        $result = qbuild -map $buildMap storage -ErrorAction Stop
+        $result = qbuild -map $buildMap storage -porcelain -ErrorAction Stop
         @($result.Active) | Should -Contain 'local'
 
         qbuild -map $buildMap storage -value prod -ErrorAction Stop
@@ -327,7 +327,7 @@ Describe 'qconf appconfig _template' {
 }
 '@
 
-        $result = qconf -map $script:mapFile storage -ErrorAction Stop
+        $result = qconf -map $script:mapFile storage -porcelain -ErrorAction Stop
         @($result.Active) | Should -Contain 'local'
 
         qconf -map $script:mapFile storage -value prod -ErrorAction Stop
@@ -426,7 +426,7 @@ Describe 'qconf dotenv _template' {
     }
 
     It 'reads the active preset from the .env file next to the map' {
-        $result = qconf -map $script:mapFile api -ErrorAction Stop
+        $result = qconf -map $script:mapFile api -porcelain -ErrorAction Stop
 
         $result.Path | Should -Be 'api/'
         @($result.Active) | Should -Contain 'local'
@@ -441,7 +441,7 @@ Describe 'qconf dotenv _template' {
             API_KEY = 'other'
         }
 
-        $result = qconf -map $script:mapFile api -ErrorAction Stop
+        $result = qconf -map $script:mapFile api -porcelain -ErrorAction Stop
 
         $result.Active | Should -BeNullOrEmpty
         $result.Value['API_URL'] | Should -Be $script:localApiUrl
@@ -456,7 +456,7 @@ Describe 'qconf dotenv _template' {
         $envValues['API_KEY'] | Should -Be $script:prodApiKey
         Test-Path (Join-Path $script:workDir '.env') | Should -BeFalse
 
-        $result = qconf -map $script:mapFile api -ErrorAction Stop
+        $result = qconf -map $script:mapFile api -porcelain -ErrorAction Stop
         @($result.Active) | Should -Contain 'prod'
         $result.Value['API_URL'] | Should -Be $script:prodApiUrl
         $result.Value['API_KEY'] | Should -Be $script:prodApiKey
@@ -493,7 +493,7 @@ Describe 'qconf dotenv _template' {
 }
 '@
 
-        $result = qconf -map $script:mapFile api -ErrorAction Stop
+        $result = qconf -map $script:mapFile api -porcelain -ErrorAction Stop
 
         $result.Value | Should -Be 'custom-get'
         Test-Path (Join-Path $script:projectDir 'missing.env') | Should -BeFalse
@@ -558,7 +558,7 @@ Describe 'qconf dotenv _template' {
 }
 '@
 
-        $result = qbuild -map $buildMap api -ErrorAction Stop
+        $result = qbuild -map $buildMap api -porcelain -ErrorAction Stop
         @($result.Active) | Should -Contain 'local'
 
         qbuild -map $buildMap api -value prod -ErrorAction Stop
@@ -587,7 +587,7 @@ Describe 'qconf dotenv _template' {
 }
 '@
 
-        $result = qconf -map $script:mapFile api -ErrorAction Stop
+        $result = qconf -map $script:mapFile api -porcelain -ErrorAction Stop
         @($result.Active) | Should -Contain 'local'
 
         qconf -map $script:mapFile api -value prod -ErrorAction Stop

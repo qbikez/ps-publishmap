@@ -63,8 +63,49 @@ Describe 'qconf as a qbuild process' {
         Test-Path 'storage-set.txt' | Should -BeFalse
     }
 
+    It 'formats get like list by default through qbuild' {
+        $output = (qbuild -map $script:mapFile storage 6>&1 | Out-String)
+
+        $output | Should -Match 'storage'
+        $output | Should -Match 'App storage endpoint'
+        $output | Should -Match 'Active'
+        $output | Should -Match 'local'
+        $output | Should -Match 'Options'
+        $output | Should -Match '├'
+        $output | Should -Match '└'
+    }
+
+    It 'formats explicit get like list by default through qbuild' {
+        $output = (qbuild -map $script:mapFile storage get 6>&1 | Out-String)
+
+        $output | Should -Match 'storage'
+        $output | Should -Match 'App storage endpoint'
+        $output | Should -Match 'Active'
+        $output | Should -Match 'local'
+        $output | Should -Match 'Options'
+        $output | Should -Match '├'
+        $output | Should -Match '└'
+    }
+
+    It 'returns a structured object from get with -porcelain through qbuild' {
+        $result = qbuild -map $script:mapFile storage get -porcelain
+
+        $result.Path | Should -Be 'storage/'
+        $result.Value | Should -Be 'L'
+        @($result.Active) | Should -Contain 'local'
+        @($result.Options) | Should -Contain 'prod'
+    }
+
+    It 'returns a structured object from bare get with -porcelain through qconf' {
+        $result = qconf -map $script:mapFile storage -porcelain
+
+        $result.Path | Should -Be 'storage/'
+        $result.Value | Should -Be 'L'
+        @($result.Active) | Should -Contain 'local'
+    }
+
     It 'has the same default get behavior when qconf is called directly' {
-        $result = qconf -map $script:mapFile storage
+        $result = qconf -map $script:mapFile storage -porcelain
 
         $result.Path | Should -Be 'storage/'
         $result.Value | Should -Be 'L'
@@ -84,7 +125,7 @@ Describe 'qconf as a qbuild process' {
         qbuild -map $script:mapFile storage set prod
         Get-Content 'storage-set.txt' -Raw | Should -Match 'prod=P'
 
-        $result = qbuild -map $script:mapFile storage get
+        $result = qbuild -map $script:mapFile storage get -porcelain
         Get-Content 'storage-get.txt' -Raw | Should -Match 'get:prod'
         $result.Path | Should -Be 'storage/'
         $result.Value | Should -Be 'P'
@@ -93,7 +134,7 @@ Describe 'qconf as a qbuild process' {
 
     It 'supports explicit get and set verbs through qconf directly' {
         qconf -map $script:mapFile storage set local
-        $result = qconf -map $script:mapFile storage get
+        $result = qconf -map $script:mapFile storage get -porcelain
 
         Get-Content 'storage-set.txt' -Raw | Should -Match 'local=L'
         @($result.Active) | Should -Contain 'local'
@@ -157,6 +198,14 @@ Describe 'qconf as a qbuild process' {
         $params = @(qconf -map $script:mapFile '!complete' -Params -entry storage)
 
         $params | Should -Contain 'value'
+        $params | Should -Contain 'porcelain'
+    }
+
+    It 'completes -porcelain through qbuild for options entries' {
+        $line = "qbuild -map '$script:mapFile' storage get -"
+        $completions = @(TabExpansion2 $line $line.Length).CompletionMatches.CompletionText
+
+        $completions | Should -Contain '-porcelain'
     }
 
     It 'completes entry words through the process protocol' {
@@ -228,7 +277,7 @@ Describe 'qconf as a qbuild process' {
 
     It 'keeps legacy named get and set commands working' {
         qconf -map $script:mapFile -command set -entry storage -value local
-        $result = qconf -map $script:mapFile -command get -entry storage
+        $result = qconf -map $script:mapFile -command get -entry storage -porcelain
 
         Get-Content 'storage-set.txt' -Raw | Should -Match 'local=L'
         @($result.Active) | Should -Contain 'local'
@@ -266,7 +315,7 @@ Describe 'qconf as a qbuild process' {
         Get-Content 'env.txt' -Raw | Should -Match 'abc'
         Get-Content 'env-set.txt' -Raw | Should -Match 'dev\|abc'
 
-        $result = qbuild -map $script:mapFile env get
+        $result = qbuild -map $script:mapFile env get -porcelain
         $result.Value | Should -Be 'abc'
     }
 

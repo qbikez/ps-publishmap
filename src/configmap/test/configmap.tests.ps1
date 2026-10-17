@@ -351,7 +351,7 @@ Describe "qconf" {
             Should -Invoke Set-Conf -ParameterFilter { $key -eq "key1" -and $value -eq "value2" }
         }
         It "qconf get without entry should return list of all values" {
-            $result = qconf -map $targets "get"
+            $result = qconf -map $targets "get" -porcelain
             $result | Should -Not -BeNullOrEmpty
             $result | Should -HaveCount 2
             $result[0].Path | Should -Be "db/"
