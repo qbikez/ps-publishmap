@@ -182,7 +182,8 @@ function Add-ConfigEntryTypeCommands {
     .DESCRIPTION
         Accepts `_template` as a hashtable (`type`/`file`) or short string
         (`appsettings:{filepath}` or `dotenv:{filepath}`). Leaves an author-supplied
-        get or set in place.
+        get or set in place. Always stashes the template get/set on
+        Entry._internal.base so overrides can call them via $_context.base.
     #>
     param(
         $Entry
@@ -193,10 +194,6 @@ function Add-ConfigEntryTypeCommands {
     $template = Get-ConfigEntryTemplate -Entry $Entry
     if ($null -eq $template -or -not $template.Contains('type') -or -not $template.type) { return }
 
-    $needsGet = $Entry.get -isnot [scriptblock]
-    $needsSet = $Entry.set -isnot [scriptblock]
-    if (-not $needsGet -and -not $needsSet) { return }
-
     $typeName = [string]$template.type
     $typeCommands = Get-ConfigEntryTypeCommands
     if (-not $typeCommands.Contains($typeName)) {
@@ -206,10 +203,18 @@ function Add-ConfigEntryTypeCommands {
     $null = Resolve-ConfigEntryFile -Entry $Entry -Template $template -TypeName $typeName
     $commands = $typeCommands[$typeName]
 
-    if ($needsGet) {
+    if (-not $Entry.Contains('_internal') -or $Entry._internal -isnot [System.Collections.IDictionary]) {
+        $Entry._internal = @{}
+    }
+    $Entry._internal.base = @{
+        get = $commands.get
+        set = $commands.set
+    }
+
+    if ($Entry.get -isnot [scriptblock]) {
         $Entry.get = $commands.get
     }
-    if ($needsSet) {
+    if ($Entry.set -isnot [scriptblock]) {
         $Entry.set = $commands.set
     }
 }

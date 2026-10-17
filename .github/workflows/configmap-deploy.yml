@@ -68,4 +68,4 @@ jobs:
           $tag = "configmap-v$version"
           git tag $tag
           git push origin $tag
-          gh release create $tag --title "configmap $version" --generate-notes
+          gh release create $tag --title "configmap v$version" --generate-notes

@@ -68,6 +68,15 @@ function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}
     if (!$bound) { $bound = @{} }
     if (!$bound._context) { $bound._context = @{} }
     if (!$bound._context.self) { $bound._context.self = $entry }
+    if (
+        -not $bound._context.base `
+            -and $entry -is [System.Collections.IDictionary] `
+            -and $entry.Contains('_internal') `
+            -and $entry._internal -is [System.Collections.IDictionary] `
+            -and $entry._internal.Contains('base')
+    ) {
+        $bound._context.base = $entry._internal.base
+    }
 
     $baseDir = $null
     if ($entry -is [System.Collections.IDictionary] -and $entry._baseDir) {

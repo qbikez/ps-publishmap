@@ -16,12 +16,12 @@
 #   qbuild !state
 
 [ordered]@{
-    "clean"     = {
+    "clean"             = {
         Remove-Item -Recurse -Force ./out, ./workspace -ErrorAction Ignore
         Write-Host "cleaned out/ and workspace/" -ForegroundColor Gray
     }
 
-    "build"     = {
+    "build"             = {
         param(
             [ValidateSet('Debug', 'Release')]
             [string]$Configuration = 'Debug'
@@ -33,7 +33,7 @@
         Write-Host "wrote out/build.txt ($Configuration)" -ForegroundColor Green
     }
 
-    "bootstrap" = [ordered]@{
+    "bootstrap"         = [ordered]@{
         _settings   = @{ process = "steps" }
         description = "Multi-step bootstrap with durable step state"
 
@@ -68,7 +68,7 @@
         }
     }
 
-    "storage"   = [ordered]@{
+    "storage"           = [ordered]@{
         _settings   = @{ process = "options" }
         description = "Storage endpoint configuration"
         options     = [ordered]@{
@@ -90,7 +90,7 @@
         }
     }
 
-    "endpoint"  = [ordered]@{
+    "endpoint"          = [ordered]@{
         _settings   = @{ process = "options" }
         _template   = "appsettings:appsettings.Development.json"
         description = "Appsettings storage endpoint (appconfig template)"
@@ -104,7 +104,30 @@
         }
     }
 
-    "api"       = [ordered]@{
+    "endpoint_override" = [ordered]@{
+        _settings   = @{ process = "options" }
+        _template   = "appsettings:appsettings.Development.json"
+        description = "Appsettings storage endpoint (appconfig template)"
+        options     = [ordered]@{
+            local = [ordered]@{
+                "Storage:BaseUrl" = "https://127.0.0.1:10000/devstoreaccount1"
+            }
+            prod  = [ordered]@{
+                "Storage:BaseUrl" = "https://storage.example"
+            }
+        }
+
+        set         = {
+            param($ctx, $key, $value, $_context)
+
+            # Call the inherited appsettings template set, then do extra work.
+            & $_context.base.set $ctx $key $value $_context
+
+            Write-Host "additional something"
+        }
+    }
+
+    "api"               = [ordered]@{
         _settings   = @{ process = "options" }
         _template   = "dotenv:.env"
         description = "API settings in .env (dotenv template)"
@@ -120,7 +143,7 @@
         }
     }
 
-    "env"       = [ordered]@{
+    "env"               = [ordered]@{
         _settings   = @{ process = "options" }
         description = "Environment / tenant selection (opaque -tenant)"
         options     = [ordered]@{
