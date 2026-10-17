@@ -54,9 +54,9 @@ Get-ConfigMapCommandCatalog -Map $map -Path build -Language build
 
 Each catalog object includes `Name`, `Description`, `IsParent`, and `Parameters` (`Name`, `Type`, `IsSwitch`, `ValidateSet`, `DefaultValue`).
 
-### Agent skill
+### Agent skills
 
-Install the shipped discovery skill for your coding agent:
+Install all shipped ConfigMap agent skills (`qbuild-discover`, `qconf-templates`, …):
 
 ```powershell
 qbuild !agent.init                         # Cursor, project scope (default)
@@ -65,11 +65,18 @@ qbuild !agent.init -Agent copilot          # GitHub Copilot (.github/skills)
 qbuild !agent.init -Scope user -Agent cursor
 ```
 
-| Agent | Project path | User path |
-|-------|--------------|-----------|
-| `cursor` | `.cursor/skills/qbuild-discover` | `~/.cursor/skills/qbuild-discover` |
-| `claude` | `.claude/skills/qbuild-discover` | `~/.claude/skills/qbuild-discover` |
-| `copilot` | `.github/skills/qbuild-discover` | `~/.copilot/skills/qbuild-discover` |
+Print skill markdown without installing (useful for agents in-session):
+
+```powershell
+qbuild !agent.skills                       # all shipped skills
+qbuild !agent.skills qconf-templates       # one skill by name
+```
+
+| Agent | Project skills parent | User skills parent |
+|-------|----------------------|--------------------|
+| `cursor` | `.cursor/skills/` | `~/.cursor/skills/` |
+| `claude` | `.claude/skills/` | `~/.claude/skills/` |
+| `copilot` | `.github/skills/` | `~/.copilot/skills/` |
 
 ## Sample Map File
 

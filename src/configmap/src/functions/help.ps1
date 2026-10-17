@@ -47,6 +47,20 @@ function Get-CommandHelpParamInfo {
     return (($args.Keys | ForEach-Object { "-$_" }) -join " ")
 }
 
+function Get-ConfigMapModuleVersion {
+    $module = (Get-Command Invoke-QBuild -ErrorAction Stop).Module
+    if ($module.Version -and $module.Version -ne [version]'0.0') {
+        return $module.Version.ToString()
+    }
+
+    $psd1Path = Join-Path (Split-Path -Parent $module.Path) 'configmap.psd1'
+    if (Test-Path $psd1Path) {
+        return [string](Import-PowerShellDataFile $psd1Path).ModuleVersion
+    }
+
+    return $module.Version.ToString()
+}
+
 function Write-InternalHelp {
     param($invocation)
 
@@ -64,6 +78,7 @@ function Write-InternalHelp {
     Write-Host "USAGE:" -ForegroundColor Yellow
     Write-Host "    $commandName <COMMAND> [OPTIONS]" -ForegroundColor White
     Write-Host "    $commandName <process>[.<step>] [process options]  # when _settings.process=<name> (e.g. steps)" -ForegroundColor White
+    Write-Host "    $commandName -Version" -ForegroundColor White
     Write-Host ""
     Write-Host "INTERNAL COMMANDS:" -ForegroundColor Yellow
 

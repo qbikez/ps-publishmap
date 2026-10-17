@@ -13,6 +13,7 @@ Describe 'qbuild internal commands' {
                 'list'
                 '!init'
                 '!agent.init'
+                '!agent.skills'
                 '!settings'
                 '!describe'
                 '!cache'
@@ -53,9 +54,11 @@ Describe 'qbuild internal commands' {
         $output | Should -Match 'list'
         $output | Should -Match '!init'
         $output | Should -Match '!agent.init'
+        $output | Should -Match '!agent.skills'
         $output | Should -Match '!settings'
         $output | Should -Match '!describe'
         $output | Should -Match '!cache'
+        $output | Should -Match '-Version'
         $output | Should -Match '-Scope'
         $output | Should -Match '-Agent'
         $output | Should -Match '-Action'
@@ -76,5 +79,17 @@ Describe 'qbuild internal commands' {
             $merged._baseDir | Should -Be $map._baseDir
             $merged._settings.DiscoveryCache | Should -BeFalse
         }
+    }
+}
+
+Describe 'qbuild -version' {
+    BeforeAll {
+        $script:moduleVersion = [string](Import-PowerShellDataFile (Join-Path $PSScriptRoot '..\configmap.psd1')).ModuleVersion
+    }
+
+    It 'prints the ConfigMap module version without requiring a map' {
+        $result = qbuild -Version
+
+        $result | Should -Be "qbuild $script:moduleVersion"
     }
 }
