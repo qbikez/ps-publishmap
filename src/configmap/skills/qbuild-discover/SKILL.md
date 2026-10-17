@@ -40,6 +40,18 @@ From the project directory:
 4. If tab completion or `list` looks stale after map edits, use `qbuild !cache status` / `qbuild !cache clear` / `qbuild !cache rebuild`. Do not delete cache files by guessing paths.
 5. Prefer the catalog over reading the whole map file when **running** commands.
 
+## Process types
+
+Entry `_settings.process` (when set) is one of:
+
+| Process | Meaning | Notes |
+|---------|---------|-------|
+| `exec` (default) | Run entry `exec` | — |
+| `steps` | Multi-step run + state | Prefer `qbuild`; standalone `qrun` is deprecated |
+| `options` | Config get/set/show | Prefer `qbuild`; standalone `qconf` is deprecated |
+
+Legacy map values `qrun` / `qconf` still normalize to `steps` / `options`. Prefer the unified `qbuild` CLI.
+
 ## Edit scripts
 
 Entry script bodies live in the project's map (or maps it `#include`s):

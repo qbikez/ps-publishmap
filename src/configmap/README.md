@@ -463,12 +463,25 @@ ConfigMap provides detailed error messages for:
 - Parameter validation errors
 - Type validation errors
 
+## Process types
+
+Build-map entries can set `_settings.process` to select a runner:
+
+| Process | Role | Standalone CLI |
+|---------|------|----------------|
+| `exec` (default) | Run the entry `exec` scriptblock | — |
+| `steps` | Multi-step process with persisted state | `qrun` |
+| `options` | Configuration get/set/show | `qconf` |
+
+Legacy map values `qrun` and `qconf` still normalize to `steps` / `options`.
+Standalone `qrun` / `qconf` CLIs are **deprecated** — prefer unified `qbuild` with the process types above. See [docs/process-cli.md](docs/process-cli.md).
+
 ## Reserved Keys
 
 The following keys have special meaning in map files:
 - `exec` - Default execution command
 - `list` - Nested entry container
-- `options` - Configuration options list (for qconf)
+- `options` - Configuration options list (for qconf; also the process type name above)
 - `get` - Get configuration value (for qconf)
 - `set` - Set configuration value (for qconf)
 - `validate` - Validation function (for qconf)

@@ -5,10 +5,118 @@
 # handed to an external CLI. Other registered handlers stay in-process.
 # Null GetDynamicParam or WriteListEntry keeps the host fallback for that slot.
 # Only an unregistered, non-builtin name is handed to an external process command.
+#
+# Process-type aliases (legacy → canonical): qrun→steps, qconf→options.
+# Canonical names are what maps should declare; legacy values still normalize.
 $script:ConfigMapDefaultProcessName = 'exec'
 $script:ConfigMapProcessHandlers = [System.Collections.Generic.Dictionary[string, hashtable]]::new(
     [StringComparer]::OrdinalIgnoreCase
 )
+$script:ConfigMapProcessNameAliases = [System.Collections.Generic.Dictionary[string, string]]::new(
+    [StringComparer]::OrdinalIgnoreCase
+)
+$script:ConfigMapProcessNameAliases['qrun'] = 'steps'
+$script:ConfigMapProcessNameAliases['qconf'] = 'options'
+
+# Canonical process type → standalone CLI command (unchanged public aliases).
+$script:ConfigMapProcessCliNames = [System.Collections.Generic.Dictionary[string, string]]::new(
+    [StringComparer]::OrdinalIgnoreCase
+)
+$script:ConfigMapProcessCliNames['steps'] = 'qrun'
+$script:ConfigMapProcessCliNames['options'] = 'qconf'
+
+# When set, Invoke-QRun / Invoke-QConf skip their deprecation warning (qbuild host calls).
+$script:ConfigMapSuppressProcessCliDeprecation = $false
+
+function Write-ConfigMapDeprecatedProcessCliWarning {
+    <#
+    .SYNOPSIS
+        Warn that standalone qrun/qconf CLIs are deprecated in favor of qbuild process types.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$CliName,
+        [Parameter(Mandatory = $true)]
+        [string]$ProcessType
+    )
+
+    if ($script:ConfigMapSuppressProcessCliDeprecation) {
+        return
+    }
+
+    Write-Warning ("'{0}' is deprecated. Prefer qbuild with _settings.process = '{1}'. See docs/process-cli.md." -f $CliName, $ProcessType)
+}
+
+function Invoke-WithConfigMapProcessCliHostCall {
+    <#
+    .SYNOPSIS
+        Run a scriptblock with process-CLI deprecation warnings suppressed (qbuild → qrun/qconf).
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [scriptblock]$ScriptBlock
+    )
+
+    $previous = $script:ConfigMapSuppressProcessCliDeprecation
+    $script:ConfigMapSuppressProcessCliDeprecation = $true
+    try {
+        & $ScriptBlock
+    }
+    finally {
+        $script:ConfigMapSuppressProcessCliDeprecation = $previous
+    }
+}
+
+function Get-ConfigMapProcessCanonicalName {
+    param(
+        [AllowEmptyString()]
+        [string]$ProcessName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ProcessName)) {
+        return $ProcessName
+    }
+
+    if ($script:ConfigMapProcessNameAliases.ContainsKey($ProcessName)) {
+        return $script:ConfigMapProcessNameAliases[$ProcessName]
+    }
+
+    return $ProcessName
+}
+
+function Test-ConfigMapProcessNameMatch {
+    param(
+        [AllowEmptyString()]
+        [string]$Left,
+        [AllowEmptyString()]
+        [string]$Right
+    )
+
+    return (Get-ConfigMapProcessCanonicalName -ProcessName $Left) -eq (Get-ConfigMapProcessCanonicalName -ProcessName $Right)
+}
+
+function Get-ConfigMapProcessCliName {
+    <#
+    .SYNOPSIS
+        CLI command for a process type (steps→qrun, options→qconf). Identity otherwise.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$ProcessName
+    )
+
+    $canonical = Get-ConfigMapProcessCanonicalName -ProcessName $ProcessName
+    if ([string]::IsNullOrWhiteSpace($canonical)) {
+        return $canonical
+    }
+
+    if ($script:ConfigMapProcessCliNames.ContainsKey($canonical)) {
+        return $script:ConfigMapProcessCliNames[$canonical]
+    }
+
+    return $canonical
+}
 
 function Register-ConfigMapProcess {
     param(
@@ -38,11 +146,16 @@ function Get-ConfigMapProcessHandler {
         [string]$Name
     )
 
-    if ([string]::IsNullOrWhiteSpace($Name) -or -not $script:ConfigMapProcessHandlers.ContainsKey($Name)) {
+    if ([string]::IsNullOrWhiteSpace($Name)) {
         return $null
     }
 
-    return $script:ConfigMapProcessHandlers[$Name]
+    $canonical = Get-ConfigMapProcessCanonicalName -ProcessName $Name
+    if (-not $script:ConfigMapProcessHandlers.ContainsKey($canonical)) {
+        return $null
+    }
+
+    return $script:ConfigMapProcessHandlers[$canonical]
 }
 
 function Unregister-ConfigMapProcess {
@@ -122,7 +235,8 @@ function Test-ConfigMapProcessIsBuiltin {
         return $true
     }
 
-    return $ProcessName -eq $script:ConfigMapDefaultProcessName
+    $canonical = Get-ConfigMapProcessCanonicalName -ProcessName $ProcessName
+    return $canonical -eq $script:ConfigMapDefaultProcessName
 }
 
 function Test-ConfigMapProcessResolvesToHost {
@@ -193,7 +307,9 @@ function Invoke-ConfigMapExternalProcess {
         -BoundParameters $BoundParameters `
         -RemainingArguments $passthrough
 
-    Invoke-ConfigMapProcessCli -ProcessName $ProcessName -Splat $splat
+    Invoke-ConfigMapProcessCli `
+        -ProcessName (Get-ConfigMapProcessCliName -ProcessName $ProcessName) `
+        -Splat $splat
 }
 
 function Get-EntryProcess {
@@ -208,9 +324,128 @@ function Get-EntryProcess {
         $Entry._settings.Contains('process') -and
         $Entry._settings.process
     ) {
-        return [string]$Entry._settings.process
+        return Get-ConfigMapProcessCanonicalName -ProcessName ([string]$Entry._settings.process)
     }
-    return $Default
+    return Get-ConfigMapProcessCanonicalName -ProcessName $Default
+}
+
+function Invoke-ConfigMapProcessFromContext {
+    <#
+    .SYNOPSIS
+        Run a process CLI (qrun/qconf) from an in-process handler context via path-only -map.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        $Context,
+        [Parameter(Mandatory = $true)]
+        [string]$CliName
+    )
+
+    $mapPath = Resolve-MapPath -Map $Context.Map
+    if (-not $mapPath) {
+        throw "Cannot delegate process '$CliName' for entry '$($Context.Entry)': the map has no _sourceFile."
+    }
+
+    $passthrough = Get-ConfigMapProcessPassthrough `
+        -ProcessAction $Context.ProcessAction `
+        -ProcessValue $Context.ProcessValue `
+        -RemainingArguments $Context.RemainingArguments
+    $splat = ConvertTo-ConfigMapProcessSplat `
+        -MapPath $mapPath `
+        -Entry $Context.Entry `
+        -BoundParameters $Context.BoundParameters `
+        -RemainingArguments $passthrough
+
+    $cmd = Resolve-ConfigMapProcessCommand -ProcessName $CliName
+    Invoke-WithConfigMapProcessCliHostCall {
+        $global:LASTEXITCODE = 0
+        & $cmd @splat
+        if ($global:LASTEXITCODE -ne 0) {
+            throw "Process command '$CliName' exited with code $global:LASTEXITCODE."
+        }
+    }
+}
+
+function Get-ConfigMapProcessDynamicParamFromCli {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Context,
+        [Parameter(Mandatory = $true)]
+        [string]$CliName
+    )
+
+    $mapPath = Resolve-MapPath -Map $Context.Map
+    $followHint = [bool]($Context.BoundParameters -and $Context.BoundParameters['Follow'])
+    if (-not $mapPath) {
+        return Get-ProcessDynamicParam -Map $Context.Map -ProcessKey $Context.Entry -Follow:$followHint
+    }
+    return New-ConfigMapProcessDynamicParam `
+        -ProcessName $CliName `
+        -MapPath $mapPath `
+        -Map $Context.Map `
+        -Entry $Context.Entry `
+        -Follow:$followHint `
+        -ProcessAction $Context.ProcessAction `
+        -ProcessValue $Context.ProcessValue `
+        -RemainingArguments $Context.RemainingArguments
+}
+
+function Write-ConfigMapProcessListEntryFromCli {
+    param(
+        [Parameter(Mandatory = $true)]
+        $ListContext,
+        [Parameter(Mandatory = $true)]
+        [string]$CliName
+    )
+
+    $mapPath = Resolve-MapPath -Map $ListContext.Map
+    if (-not $mapPath) {
+        return
+    }
+    $splat = ConvertTo-ConfigMapProcessSplat `
+        -MapPath $mapPath `
+        -Command 'list' `
+        -RemainingArguments @($ListContext.Name)
+    $cmd = Resolve-ConfigMapProcessCommand -ProcessName $CliName
+    Invoke-WithConfigMapProcessCliHostCall {
+        & $cmd @splat
+    }
+}
+
+function Register-ConfigMapCliProcess {
+    <#
+    .SYNOPSIS
+        Register an in-process handler that forwards to a standalone process CLI.
+        Scriptblocks call helpers by name (no GetNewClosure) so they stay in module scope.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+        [Parameter(Mandatory = $true)]
+        [string]$CliName
+    )
+
+    $script:ConfigMapProcessCliNames[$Name] = $CliName
+
+    Register-ConfigMapProcess -Name $Name -Invoke {
+        param($Context)
+        $cli = Get-ConfigMapProcessCliName -ProcessName (
+            Get-ConfigMapSettingsForPath -Map $Context.Map -Path $Context.Entry -OperationContext $Context.OperationContext
+        ).Process
+        Invoke-ConfigMapProcessFromContext -Context $Context -CliName $cli
+    } -GetDynamicParam {
+        param($Context)
+        $cli = Get-ConfigMapProcessCliName -ProcessName (
+            Get-ConfigMapSettingsForPath -Map $Context.Map -Path $Context.Entry
+        ).Process
+        Get-ConfigMapProcessDynamicParamFromCli -Context $Context -CliName $cli
+    } -WriteListEntry {
+        param($ListContext)
+        $cli = Get-ConfigMapProcessCliName -ProcessName (
+            Get-ConfigMapSettingsForPath -Map $ListContext.Map -Path $ListContext.Name -OperationContext $ListContext.OperationContext
+        ).Process
+        Write-ConfigMapProcessListEntryFromCli -ListContext $ListContext -CliName $cli
+    }
 }
 
 function Resolve-MapPath {
@@ -324,7 +559,7 @@ function Get-QBuildProcessArgumentCompletion {
     if (-not $mapPath) { return @() }
 
     $complete = @{
-        ProcessName = $settings.Process
+        ProcessName = Get-ConfigMapProcessCliName -ProcessName $settings.Process
         MapPath     = $mapPath
         Entry       = $context.Entry
         Word        = $Word
@@ -360,8 +595,10 @@ function Invoke-ConfigMapProcessComplete {
         return $null
     }
 
-    $global:LASTEXITCODE = 0
-    $output = & $cmd -map $MapPath '!complete' @CompleteArgs 2>$null
+    $output = Invoke-WithConfigMapProcessCliHostCall {
+        $global:LASTEXITCODE = 0
+        & $cmd -map $MapPath '!complete' @CompleteArgs 2>$null
+    }
     if ($global:LASTEXITCODE -eq 2) {
         return $null
     }
@@ -478,10 +715,12 @@ function Invoke-ConfigMapProcessCli {
     }
 
     $cmd = Resolve-ConfigMapProcessCommand -ProcessName $ProcessName
-    $global:LASTEXITCODE = 0
-    & $cmd @Splat
-    if ($global:LASTEXITCODE -ne 0) {
-        throw "Process command '$ProcessName' exited with code $global:LASTEXITCODE."
+    Invoke-WithConfigMapProcessCliHostCall {
+        $global:LASTEXITCODE = 0
+        & $cmd @Splat
+        if ($global:LASTEXITCODE -ne 0) {
+            throw "Process command '$ProcessName' exited with code $global:LASTEXITCODE."
+        }
     }
 }
 
@@ -511,7 +750,7 @@ function Get-ConfigMapProcessNamesInMap {
             -not (Get-ConfigMapProcessHandler -Name $proc) -and
             -not (Test-ConfigMapProcessCannotDelegate -ProcessName $proc)
         ) {
-            [void]$names.Add($proc)
+            [void]$names.Add((Get-ConfigMapProcessCanonicalName -ProcessName $proc))
         }
     }
     return @($names | Sort-Object)
@@ -614,7 +853,7 @@ function New-ConfigMapProcessDynamicParam {
         $typed = New-Object System.Management.Automation.RuntimeDefinedParameterDictionary
     }
 
-    # Conf-style set scripts (process=qconf) expose opaque params after ctx/key/value.
+    # Conf-style set scripts (process=options) expose opaque params after ctx/key/value.
     $setParams = Get-EntryDynamicParam $Map "$Entry.set" -skip 3 -bound @{}
     if ($setParams) {
         foreach ($name in @($setParams.Keys)) {

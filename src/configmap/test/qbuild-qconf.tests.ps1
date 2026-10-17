@@ -17,7 +17,7 @@ Describe 'qconf as a qbuild process' {
     }
 
     storage = [ordered]@{
-        _settings   = @{ process = 'qconf' }
+        _settings   = @{ process = 'options' }
         description = 'App storage endpoint'
         options     = [ordered]@{
             local = 'L'
@@ -211,7 +211,7 @@ Describe 'qconf as a qbuild process' {
         @'
 [ordered]@{
     env = [ordered]@{
-        _settings = @{ process = 'qconf' }
+        _settings = @{ process = 'options' }
         options   = [ordered]@{ local = 'L'; dev = 'D' }
         get       = { param($ctx, $options) '' }
         set       = { param($ctx, $key, $value, [string]$tenant) }
@@ -238,7 +238,7 @@ Describe 'qconf as a qbuild process' {
         @'
 [ordered]@{
     env = [ordered]@{
-        _settings   = @{ process = 'qconf' }
+        _settings   = @{ process = 'options' }
         description = 'Environment / tenant selection'
         get         = {
             param($ctx, $options)
@@ -274,7 +274,7 @@ Describe 'qconf as a qbuild process' {
         @'
 [ordered]@{
     env = [ordered]@{
-        _settings = @{ process = 'qconf' }
+        _settings = @{ process = 'options' }
         get       = {
             param($ctx, $options)
             if (Test-Path 'env.txt') { (Get-Content 'env.txt' -Raw).Trim() } else { '' }
@@ -301,7 +301,7 @@ Describe 'qconf as a qbuild process' {
         @'
 [ordered]@{
     env = [ordered]@{
-        _settings = @{ process = 'qconf' }
+        _settings = @{ process = 'options' }
         get       = { param($ctx, $options) '' }
         set       = { param($ctx, $key, $value, [string]$tenant) }
     }
@@ -312,6 +312,28 @@ Describe 'qconf as a qbuild process' {
 
         $params | Should -Contain 'value'
         $params | Should -Contain 'tenant'
+    }
+
+    It 'accepts legacy process=qconf as an alias for options' {
+        @'
+[ordered]@{
+    storage = [ordered]@{
+        _settings = @{ process = 'qconf' }
+        options   = [ordered]@{ local = 'L'; prod = 'P' }
+        get       = {
+            param($ctx, $options)
+            if (Test-Path 'active.txt') { Get-Content 'active.txt' -Raw }
+        }
+        set       = {
+            param($ctx, $key, $value)
+            $key | Set-Content 'active.txt'
+        }
+    }
+}
+'@ | Set-Content -LiteralPath $script:mapFile -Encoding utf8
+
+        qbuild -map $script:mapFile storage set prod
+        Get-Content 'active.txt' -Raw | Should -Match 'prod'
     }
 
     It 'smoke-runs the mixed process sample' {

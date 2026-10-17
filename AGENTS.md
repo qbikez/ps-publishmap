@@ -64,8 +64,10 @@ npm run install
 - `Add-InheritedProperties` - Handle property inheritance between levels
 - `Convert-Vars` - Variable substitution and expansion
 
-### Key Functions (configmap)  
-- `qbuild`, `qconf`, `qrun` - Shorthand commands for build/configure/run operations
+### Key Functions (configmap) 
+- `qbuild` - Unified build/configure/run CLI; prefer this over standalone process CLIs
+- `qconf`, `qrun` - Deprecated standalone CLIs (still work; warn on direct use)
+- Process types (`_settings.process`): `exec` (default), `steps` (legacy map `qrun`), `options` (legacy map `qconf`)
 - `Get-MapModules` - Discover available map modules
 - `Invoke-ModuleCommand` - Execute commands defined in map configurations
 

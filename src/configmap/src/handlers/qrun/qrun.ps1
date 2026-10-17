@@ -101,9 +101,15 @@ function Invoke-QRun {
             $processEntry = [string]$command
         }
 
+        # Skip noise during tab-completion protocol calls.
+        if ($verb -ne '!complete') {
+            Write-ConfigMapDeprecatedProcessCliWarning -CliName 'qrun' -ProcessType 'steps'
+        }
+
         if ($verb -eq "help") {
             Write-Host ""
-            Write-Host "QRUN" -ForegroundColor Cyan
+            Write-Host "QRUN (deprecated)" -ForegroundColor Cyan
+            Write-Host "Prefer qbuild with _settings.process = 'steps' in .build.map.ps1" -ForegroundColor Yellow
             Write-Host "Run multi-step processes with durable step state" -ForegroundColor Gray
             Write-Host ""
             Write-Host "USAGE:" -ForegroundColor Yellow
@@ -451,3 +457,6 @@ function Invoke-QRun {
 }
 
 Set-Alias -Name "qrun" -Value "Invoke-QRun" -Force
+
+# Canonical process type for qbuild maps; CLI alias remains qrun.
+Register-ConfigMapCliProcess -Name 'steps' -CliName 'qrun'

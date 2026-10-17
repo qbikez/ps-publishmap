@@ -278,7 +278,7 @@ Describe 'qconf appconfig _template' {
         Write-ConfigMapFile $buildMap @'
 [ordered]@{
     storage = [ordered]@{
-        _settings   = @{ process = 'qconf' }
+        _settings   = @{ process = 'options' }
         description = 'Storage endpoint'
         _template   = @{
             type = 'appconfig'
@@ -538,7 +538,7 @@ Describe 'qconf dotenv _template' {
         Write-ConfigMapFile $buildMap @'
 [ordered]@{
     api = [ordered]@{
-        _settings   = @{ process = 'qconf' }
+        _settings   = @{ process = 'options' }
         description = 'API settings'
         _template   = @{
             type = 'dotenv'

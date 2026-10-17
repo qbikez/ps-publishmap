@@ -176,8 +176,9 @@ function Get-ProcessMapCatalog {
         [Parameter(Mandatory = $true)]
         [System.Collections.IDictionary]$Map,
         $OperationContext,
-        # When set, only entries with _settings.process=<name>. When IncludeImplicit,
-        # also entries without that setting (standalone .process.map.ps1 via qrun).
+        # When set, only entries with _settings.process=<name> (aliases match:
+        # qrun↔steps). When IncludeImplicit, also entries without that setting
+        # (standalone .process.map.ps1 via qrun).
         [string]$ProcessName,
         [switch]$IncludeImplicit
     )
@@ -193,7 +194,7 @@ function Get-ProcessMapCatalog {
 
         if ($ProcessName) {
             $entryProcess = Get-EntryProcess $kvp.Value -Default ''
-            $matchesExplicit = ($entryProcess -eq $ProcessName)
+            $matchesExplicit = Test-ConfigMapProcessNameMatch -Left $entryProcess -Right $ProcessName
             $matchesImplicit = ($IncludeImplicit -and -not $entryProcess)
             if (-not $matchesExplicit -and -not $matchesImplicit) {
                 continue
