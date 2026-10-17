@@ -1,6 +1,11 @@
 version: 1.0.{build}
 image: Visual Studio 2022
 
+# Push builds only on master; PR builds into master still run
+branches:
+  only:
+    - master
+
 install:
 - git submodule update --init --recursive
 - pwsh: scripts/lib/init.ps1
