@@ -392,7 +392,7 @@ Describe 'ConfigMap settings' {
                 }
             }
 
-            $result = qconf -command get -entry sample -map $map
+            $result = qconf -command get -entry sample -map $map -porcelain
 
             $result.Value | Should -Be 'map-debug'
             Get-ConfigMapSetting -Name Debug | Should -Be $false
@@ -471,7 +471,7 @@ Describe 'ConfigMap settings' {
                 }
             }
 
-            $result = qconf -command get -entry group.sample -map $map
+            $result = qconf -command get -entry group.sample -map $map -porcelain
 
             $result.Value | Should -Be 'group|False'
             Get-ConfigMapSetting -Name Debug | Should -Be $false

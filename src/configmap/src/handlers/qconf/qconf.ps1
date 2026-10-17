@@ -97,6 +97,9 @@ function Invoke-QConf {
         [Parameter(DontShow)]
         [switch]$Params,
 
+        # Script/tool-readable MapResult object instead of host-formatted status.
+        [switch]$porcelain,
+
         $map = "./.configuration.map.ps1",
 
         [Parameter(ValueFromRemainingArguments = $true, DontShow = $true)]
@@ -220,6 +223,7 @@ function Invoke-QConf {
             Write-Host ""
             Write-Host "Usage:"
             Write-Host "qconf <entry> get"
+            Write-Host "qconf <entry> get -porcelain"
             Write-Host "qconf <entry> set <option>"
             Write-Host "qconf <entry> show"
             Write-Host "qconf <entry> [-value <option>]  # shorthand"
@@ -268,6 +272,7 @@ function Invoke-QConf {
             if ($mode -eq 'params' -and $completeEntry) {
                 $names = [System.Collections.Generic.List[string]]::new()
                 $names.Add('value') | Out-Null
+                $names.Add('porcelain') | Out-Null
                 $dynamic = Get-EntryDynamicParam $completeMap "$completeEntry.set" -skip 3 -bound @{}
                 if ($dynamic) {
                     foreach ($name in @($dynamic.Keys)) {
@@ -417,7 +422,16 @@ function Invoke-QConf {
                             $value = Invoke-Get $subEntry -bound $bound
 
                             $result = ConvertTo-MapResult $value $entryName $subEntry $options
-                            $result | Write-Output
+                            if ($porcelain) {
+                                $result | Write-Output
+                            }
+                            else {
+                                Write-QConfStatus `
+                                    -EntryName $entryName `
+                                    -Result $result `
+                                    -Description $subEntry.description `
+                                    -HasValidation ([bool]$subEntry.validate)
+                            }
                         }
                         catch {
                             if ((Get-ConfigMapSetting -Name Debug) -eq '1') {
