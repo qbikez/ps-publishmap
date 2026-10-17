@@ -154,7 +154,17 @@ function Invoke-QBuild {
     )
     dynamicparam {
         if (-not $entry) {
-            return
+            # Host-only switch so entry scriptblocks may still declare their own -Version.
+            # No -v alias: PowerShell binds -v to common -Verbose.
+            $dict = [System.Management.Automation.RuntimeDefinedParameterDictionary]::new()
+            $attr = [System.Management.Automation.ParameterAttribute]::new()
+            $param = [System.Management.Automation.RuntimeDefinedParameter]::new(
+                'Version',
+                [switch],
+                [System.Attribute[]]@($attr)
+            )
+            $dict.Add('Version', $param)
+            return $dict
         }
         try {
             $dynUserMap = try {
@@ -221,6 +231,11 @@ function Invoke-QBuild {
     }
 
     process {
+        if (-not $entry -and $PSBoundParameters['Version']) {
+            $commandName = if ($MyInvocation.InvocationName) { $MyInvocation.InvocationName } else { 'qbuild' }
+            return "$commandName $(Get-ConfigMapModuleVersion)"
+        }
+
         $mapPath = $map
         $userMap = try {
             . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" | Assert-ConfigMap
