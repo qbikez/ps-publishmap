@@ -466,7 +466,8 @@ Build-map entries can set `_settings.process` to select a runner:
 | `steps` | Multi-step process with persisted state | `qrun` |
 | `options` | Configuration get/set/show | `qconf` |
 
-Legacy values `qrun` and `qconf` still work and normalize to `steps` / `options`. See [docs/process-cli.md](docs/process-cli.md).
+Legacy map values `qrun` and `qconf` still normalize to `steps` / `options`.
+Standalone `qrun` / `qconf` CLIs are **deprecated** — prefer unified `qbuild` with the process types above. See [docs/process-cli.md](docs/process-cli.md).
 
 ## Reserved Keys
 

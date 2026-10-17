@@ -109,8 +109,8 @@ ConfigMap automatically discovers parameters from script blocks using AST parsin
 
 ### Process types (`_settings.process`)
 - `exec` - Default; runs the entry `exec` scriptblock (omit `_settings.process` for the same)
-- `steps` - Multi-step runner with persisted state (standalone CLI: `qrun`; legacy map value `qrun` still works)
-- `options` - Configuration get/set/show (standalone CLI: `qconf`; legacy map value `qconf` still works)
+- `steps` - Multi-step runner with persisted state (prefer via `qbuild`; standalone `qrun` is deprecated; legacy map value `qrun` still works)
+- `options` - Configuration get/set/show (prefer via `qbuild`; standalone `qconf` is deprecated; legacy map value `qconf` still works)
 
 ### Reserved Keys
 - `exec` - Default execution command for qbuild

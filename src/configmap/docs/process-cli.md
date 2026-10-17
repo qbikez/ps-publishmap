@@ -3,8 +3,21 @@
 qbuild process types (`_settings.process`) are **`exec`** (default), **`steps`**, and **`options`**.
 Legacy map values `qrun` and `qconf` still normalize to `steps` and `options`.
 
-Standalone CLI aliases remain **`qrun`** (steps runner) and **`qconf`** (options/config).
-They expose a small CLI surface that in-process handlers call with the PowerShell
+## Preferred entry point
+
+Use **`qbuild`** with process types in `.build.map.ps1`:
+
+```powershell
+_settings = @{ process = 'steps' }    # multi-step runner
+_settings = @{ process = 'options' }  # config get/set/show
+```
+
+## Deprecated standalone CLIs
+
+Standalone **`qrun`** and **`qconf`** remain available for compatibility but are **deprecated**.
+Direct use emits a warning. Prefer the unified `qbuild` surface above.
+
+They still expose a small CLI surface that in-process handlers call with the PowerShell
 call operator (`&`). Flags are single-dash only.
 
 Map handoff is **path-only**: callers pass `-map <file>`. The process command loads that file itself.
@@ -44,10 +57,10 @@ shorthand. qbuild forwards these as opaque, process-owned arguments.
 ## Map declaration
 
 ```powershell
-# Step runner (CLI: qrun)
+# Step runner (prefer via qbuild; standalone qrun is deprecated)
 _settings = @{ process = 'steps' }
 
-# Config get/set (CLI: qconf)
+# Config get/set (prefer via qbuild; standalone qconf is deprecated)
 _settings = @{ process = 'options' }
 
 # Still accepted (normalized to steps / options)

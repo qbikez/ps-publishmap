@@ -288,6 +288,69 @@ Describe 'qbuild _settings.process=steps forwarding' {
     }
 }
 
+Describe 'deprecated standalone process CLIs' {
+    BeforeEach {
+        $script:workDir = Join-Path $TestDrive ("deprecated-cli-" + [guid]::NewGuid().ToString('n'))
+        New-Item -ItemType Directory -Path $script:workDir -Force | Out-Null
+        Push-Location $script:workDir
+    }
+
+    AfterEach {
+        Pop-Location
+    }
+
+    It 'warns when qrun is invoked directly' {
+        $mapFile = Join-Path $script:workDir '.process.map.ps1'
+        @'
+[ordered]@{
+    setup = [ordered]@{
+        a = { 'a' | Set-Content 'a.txt' }
+    }
+}
+'@ | Set-Content -LiteralPath $mapFile -Encoding utf8
+
+        $warnings = $null
+        qrun -map $mapFile setup.a -WarningVariable warnings -WarningAction SilentlyContinue
+        "$warnings" | Should -Match "qrun' is deprecated"
+        "$warnings" | Should -Match "process = 'steps'"
+    }
+
+    It 'warns when qconf is invoked directly' {
+        $mapFile = Join-Path $script:workDir '.configuration.map.ps1'
+        @'
+[ordered]@{
+    storage = [ordered]@{
+        options = @{ local = 'L' }
+        get     = { param($ctx, $options) 'L' }
+        set     = { param($ctx, $key, $value) }
+    }
+}
+'@ | Set-Content -LiteralPath $mapFile -Encoding utf8
+
+        $warnings = $null
+        qconf -map $mapFile storage get -WarningVariable warnings -WarningAction SilentlyContinue
+        "$warnings" | Should -Match "qconf' is deprecated"
+        "$warnings" | Should -Match "process = 'options'"
+    }
+
+    It 'does not warn when qbuild runs a steps entry' {
+        $mapFile = Join-Path $script:workDir '.build.map.ps1'
+        @'
+[ordered]@{
+    setup = [ordered]@{
+        _settings = @{ process = 'steps' }
+        a         = { 'a' | Set-Content 'a.txt' }
+    }
+}
+'@ | Set-Content -LiteralPath $mapFile -Encoding utf8
+
+        $warnings = $null
+        qbuild -map $mapFile setup.a -WarningVariable warnings -WarningAction SilentlyContinue
+        @($warnings).Count | Should -Be 0
+        Test-Path 'a.txt' | Should -BeTrue
+    }
+}
+
 Describe 'qbuild in-process process handlers' {
     BeforeEach {
         $script:workDir = Join-Path $TestDrive ("qbuild-handler-" + [guid]::NewGuid().ToString('n'))

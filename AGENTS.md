@@ -65,8 +65,9 @@ npm run install
 - `Convert-Vars` - Variable substitution and expansion
 
 ### Key Functions (configmap) 
-- `qbuild`, `qconf`, `qrun` - Shorthand commands for build/configure/run operations
-- Process types (`_settings.process`): `exec` (default), `steps` (CLI `qrun`; legacy `qrun`), `options` (CLI `qconf`; legacy `qconf`)
+- `qbuild` - Unified build/configure/run CLI; prefer this over standalone process CLIs
+- `qconf`, `qrun` - Deprecated standalone CLIs (still work; warn on direct use)
+- Process types (`_settings.process`): `exec` (default), `steps` (legacy map `qrun`), `options` (legacy map `qconf`)
 - `Get-MapModules` - Discover available map modules
 - `Invoke-ModuleCommand` - Execute commands defined in map configurations
 

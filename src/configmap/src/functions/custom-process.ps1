@@ -25,6 +25,48 @@ $script:ConfigMapProcessCliNames = [System.Collections.Generic.Dictionary[string
 $script:ConfigMapProcessCliNames['steps'] = 'qrun'
 $script:ConfigMapProcessCliNames['options'] = 'qconf'
 
+# When set, Invoke-QRun / Invoke-QConf skip their deprecation warning (qbuild host calls).
+$script:ConfigMapSuppressProcessCliDeprecation = $false
+
+function Write-ConfigMapDeprecatedProcessCliWarning {
+    <#
+    .SYNOPSIS
+        Warn that standalone qrun/qconf CLIs are deprecated in favor of qbuild process types.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$CliName,
+        [Parameter(Mandatory = $true)]
+        [string]$ProcessType
+    )
+
+    if ($script:ConfigMapSuppressProcessCliDeprecation) {
+        return
+    }
+
+    Write-Warning ("'{0}' is deprecated. Prefer qbuild with _settings.process = '{1}'. See docs/process-cli.md." -f $CliName, $ProcessType)
+}
+
+function Invoke-WithConfigMapProcessCliHostCall {
+    <#
+    .SYNOPSIS
+        Run a scriptblock with process-CLI deprecation warnings suppressed (qbuild → qrun/qconf).
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [scriptblock]$ScriptBlock
+    )
+
+    $previous = $script:ConfigMapSuppressProcessCliDeprecation
+    $script:ConfigMapSuppressProcessCliDeprecation = $true
+    try {
+        & $ScriptBlock
+    }
+    finally {
+        $script:ConfigMapSuppressProcessCliDeprecation = $previous
+    }
+}
+
 function Get-ConfigMapProcessCanonicalName {
     param(
         [AllowEmptyString()]
@@ -315,10 +357,12 @@ function Invoke-ConfigMapProcessFromContext {
         -RemainingArguments $passthrough
 
     $cmd = Resolve-ConfigMapProcessCommand -ProcessName $CliName
-    $global:LASTEXITCODE = 0
-    & $cmd @splat
-    if ($global:LASTEXITCODE -ne 0) {
-        throw "Process command '$CliName' exited with code $global:LASTEXITCODE."
+    Invoke-WithConfigMapProcessCliHostCall {
+        $global:LASTEXITCODE = 0
+        & $cmd @splat
+        if ($global:LASTEXITCODE -ne 0) {
+            throw "Process command '$CliName' exited with code $global:LASTEXITCODE."
+        }
     }
 }
 
@@ -363,7 +407,9 @@ function Write-ConfigMapProcessListEntryFromCli {
         -Command 'list' `
         -RemainingArguments @($ListContext.Name)
     $cmd = Resolve-ConfigMapProcessCommand -ProcessName $CliName
-    & $cmd @splat
+    Invoke-WithConfigMapProcessCliHostCall {
+        & $cmd @splat
+    }
 }
 
 function Register-ConfigMapCliProcess {
@@ -549,8 +595,10 @@ function Invoke-ConfigMapProcessComplete {
         return $null
     }
 
-    $global:LASTEXITCODE = 0
-    $output = & $cmd -map $MapPath '!complete' @CompleteArgs 2>$null
+    $output = Invoke-WithConfigMapProcessCliHostCall {
+        $global:LASTEXITCODE = 0
+        & $cmd -map $MapPath '!complete' @CompleteArgs 2>$null
+    }
     if ($global:LASTEXITCODE -eq 2) {
         return $null
     }
@@ -667,10 +715,12 @@ function Invoke-ConfigMapProcessCli {
     }
 
     $cmd = Resolve-ConfigMapProcessCommand -ProcessName $ProcessName
-    $global:LASTEXITCODE = 0
-    & $cmd @Splat
-    if ($global:LASTEXITCODE -ne 0) {
-        throw "Process command '$ProcessName' exited with code $global:LASTEXITCODE."
+    Invoke-WithConfigMapProcessCliHostCall {
+        $global:LASTEXITCODE = 0
+        & $cmd @Splat
+        if ($global:LASTEXITCODE -ne 0) {
+            throw "Process command '$ProcessName' exited with code $global:LASTEXITCODE."
+        }
     }
 }
 
