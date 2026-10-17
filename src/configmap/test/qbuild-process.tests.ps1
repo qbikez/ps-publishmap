@@ -3,7 +3,7 @@ BeforeAll {
     Import-Module $PSScriptRoot\..\configmap.psm1 -Force
 }
 
-Describe 'qbuild _settings.process=qrun forwarding' {
+Describe 'qbuild _settings.process=steps forwarding' {
     BeforeEach {
         $script:workDir = Join-Path $TestDrive ("qbuild-process-" + [guid]::NewGuid().ToString('n'))
         New-Item -ItemType Directory -Path $script:workDir -Force | Out-Null
@@ -22,7 +22,7 @@ Describe 'qbuild _settings.process=qrun forwarding' {
     }
 
     bootstrap = [ordered]@{
-        _settings   = @{ process = 'qrun' }
+        _settings   = @{ process = 'steps' }
         description = 'test process'
         prepare     = {
             New-Item -ItemType Directory -Path 'marker-a' -Force | Out-Null
@@ -71,7 +71,7 @@ Describe 'qbuild _settings.process=qrun forwarding' {
     It 'does not delegate a process entry when an in-memory map has no source file' {
         $map = @{
             bootstrap = @{
-                _settings = @{ process = 'qrun' }
+                _settings = @{ process = 'steps' }
                 prepare = { 'prepared' | Set-Content 'in-memory-process.txt' }
             }
         }
@@ -134,7 +134,7 @@ Describe 'qbuild _settings.process=qrun forwarding' {
         @'
 [ordered]@{
     setup = [ordered]@{
-        _settings = @{ process = 'qrun' }
+        _settings = @{ process = 'steps' }
         a         = { 'a' | Set-Content 'a.txt' }
         b         = { 'b' | Set-Content 'b.txt' }
         c         = { 'c' | Set-Content 'c.txt' }
@@ -147,7 +147,7 @@ Describe 'qbuild _settings.process=qrun forwarding' {
         Test-Path 'a.txt' | Should -BeFalse
     }
 
-    It 'completes step paths under an _settings.process=qrun entry' {
+    It 'completes step paths under an _settings.process=steps entry' {
         $map = Import-ConfigMap -Map $script:mapFile
         $completions = @(Get-EntryCompletion -map $map -language build -wordToComplete 'bootstrap.')
         $completions | Should -Contain 'bootstrap.prepare'
@@ -155,7 +155,7 @@ Describe 'qbuild _settings.process=qrun forwarding' {
         $completions | Should -Contain 'bootstrap.verify'
     }
 
-    It 'routes entry completion through process !complete -word' {
+    It 'routes entry completion through process !complete -word via the qrun CLI' {
         InModuleScope ConfigMap {
             param($MapFile)
             $words = @(Get-ConfigMapProcessCompleteWord -ProcessName 'qrun' -MapPath $MapFile -Word 'bootstrap.')
@@ -163,9 +163,30 @@ Describe 'qbuild _settings.process=qrun forwarding' {
             $words | Should -Contain 'bootstrap.restore'
             $words | Should -Contain 'bootstrap.verify'
 
+            # steps is an in-process handler; external process-name discovery stays empty
             $names = @(Get-ConfigMapProcessNamesInMap -Map (Import-ConfigMap -Map $MapFile))
-            $names | Should -Contain 'qrun'
+            $names | Should -Not -Contain 'steps'
+            $names | Should -Not -Contain 'qrun'
+
+            (Get-ConfigMapProcessCanonicalName -ProcessName 'qrun') | Should -Be 'steps'
+            (Get-ConfigMapProcessHandler -Name 'qrun').Name | Should -Be 'steps'
+            (Get-ConfigMapProcessHandler -Name 'steps').Name | Should -Be 'steps'
         } -Parameters @{ MapFile = $script:mapFile }
+    }
+
+    It 'accepts legacy process=qrun as an alias for steps' {
+        $legacyFile = Join-Path $script:workDir 'legacy.build.map.ps1'
+        @'
+[ordered]@{
+    bootstrap = [ordered]@{
+        _settings = @{ process = 'qrun' }
+        prepare   = { 'legacy' | Set-Content 'legacy.txt' }
+    }
+}
+'@ | Set-Content -LiteralPath $legacyFile -Encoding utf8
+
+        qbuild -map $legacyFile bootstrap.prepare
+        Get-Content 'legacy.txt' -Raw | Should -Match 'legacy'
     }
 
     It 'delegates run with explicit -entry' {
@@ -186,7 +207,7 @@ Describe 'qbuild _settings.process=qrun forwarding' {
         Get-Content 'marker-b.txt' -Raw | Should -Match 'restored:prod'
     }
 
-    It 'lists _settings.process=qrun entries with status output' {
+    It 'lists _settings.process=steps entries with status output' {
         qbuild -map $script:mapFile bootstrap.prepare
 
         Mock Write-Host -ModuleName ConfigMap
@@ -259,7 +280,7 @@ Describe 'qbuild _settings.process=qrun forwarding' {
         $sampleMap = Import-ConfigMap -Map $localMap
         $sampleMap.Keys | Should -Contain 'build'
         $sampleMap.Keys | Should -Contain 'bootstrap'
-        $sampleMap.bootstrap._settings.process | Should -Be 'qrun'
+        $sampleMap.bootstrap._settings.process | Should -Be 'steps'
 
         qbuild -map $localMap clean
         qbuild -map $localMap bootstrap.prepare

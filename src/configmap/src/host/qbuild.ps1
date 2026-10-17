@@ -52,7 +52,7 @@ function Invoke-QBuild {
                         if ($resolvedMapPath) {
                             foreach ($procName in @(Get-ConfigMapProcessNamesInMap -Map $userMap)) {
                                 $procWords = Get-ConfigMapProcessCompleteWord `
-                                    -ProcessName $procName `
+                                    -ProcessName (Get-ConfigMapProcessCliName -ProcessName $procName) `
                                     -MapPath $resolvedMapPath `
                                     -Word $wordToComplete
                                 if ($null -eq $procWords) { continue }
@@ -206,7 +206,7 @@ function Invoke-QBuild {
                 return Get-ProcessDynamicParam -Map $dynMap -ProcessKey $entry -Follow:$followHint
             }
             return New-ConfigMapProcessDynamicParam `
-                -ProcessName $settings.Process `
+                -ProcessName (Get-ConfigMapProcessCliName -ProcessName $settings.Process) `
                 -MapPath $mapPath `
                 -Map $dynMap `
                 -Entry $entry `

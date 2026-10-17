@@ -41,6 +41,7 @@ function New-ConfigMapSettings {
         throw "DiscoveryCacheLocation must be 'local' or 'user'."
     }
     $settings.DiscoveryCacheLocation = $normalizedLocation
+    $settings.Process = Get-ConfigMapProcessCanonicalName -ProcessName "$($settings.Process)"
 
     $settingsObject = [pscustomobject]$settings
     $settingsObject.PSObject.TypeNames.Insert(0, 'ConfigMap.Settings')

@@ -1,7 +1,11 @@
 # Process CLI
 
-Process commands such as `qrun` and `qconf` expose a small CLI surface that
-qbuild calls with the PowerShell call operator (`&`). Flags are single-dash only.
+qbuild process types (`_settings.process`) are **`exec`** (default), **`steps`**, and **`options`**.
+Legacy map values `qrun` and `qconf` still normalize to `steps` and `options`.
+
+Standalone CLI aliases remain **`qrun`** (steps runner) and **`qconf`** (options/config).
+They expose a small CLI surface that in-process handlers call with the PowerShell
+call operator (`&`). Flags are single-dash only.
 
 Map handoff is **path-only**: callers pass `-map <file>`. The process command loads that file itself.
 
@@ -36,6 +40,20 @@ For qconf, `get` reads the entry and `set <option-key>` applies a named option.
 `show` prints the same host-formatted status block used by `list <entry>`.
 A bare entry still performs a get, and `-value <option-key>` remains a set
 shorthand. qbuild forwards these as opaque, process-owned arguments.
+
+## Map declaration
+
+```powershell
+# Step runner (CLI: qrun)
+_settings = @{ process = 'steps' }
+
+# Config get/set (CLI: qconf)
+_settings = @{ process = 'options' }
+
+# Still accepted (normalized to steps / options)
+_settings = @{ process = 'qrun' }
+_settings = @{ process = 'qconf' }
+```
 
 ## Process-owned (not part of the shared handoff)
 

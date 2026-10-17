@@ -63,7 +63,7 @@ function Write-InternalHelp {
     Write-Host ""
     Write-Host "USAGE:" -ForegroundColor Yellow
     Write-Host "    $commandName <COMMAND> [OPTIONS]" -ForegroundColor White
-    Write-Host "    $commandName <process>[.<step>] [process options]  # when _settings.process=<name> (e.g. qrun)" -ForegroundColor White
+    Write-Host "    $commandName <process>[.<step>] [process options]  # when _settings.process=<name> (e.g. steps)" -ForegroundColor White
     Write-Host ""
     Write-Host "INTERNAL COMMANDS:" -ForegroundColor Yellow
 
@@ -133,7 +133,9 @@ function Write-MapHelp {
                 return $false
             }
             $splat = ConvertTo-ConfigMapProcessSplat -MapPath $mapPath -Command 'list' -RemainingArguments @($name)
-            Invoke-ConfigMapProcessCli -ProcessName $settings.Process -Splat $splat | Out-Null
+            Invoke-ConfigMapProcessCli `
+                -ProcessName (Get-ConfigMapProcessCliName -ProcessName $settings.Process) `
+                -Splat $splat | Out-Null
             return $true
         }
         catch {
