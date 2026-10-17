@@ -53,7 +53,8 @@ Entry script bodies live in the project's map (or maps it `#include`s):
 
 | Goal | Command |
 |------|---------|
-| Install this skill | `qbuild !agent.init [-Scope project\|user] [-Agent cursor\|claude\|copilot]` |
+| Install ConfigMap skills | `qbuild !agent.init [-Scope project\|user] [-Agent cursor\|claude\|copilot]` |
+| Print skill markdown | `qbuild !agent.skills [name]` |
 | Full catalog (objects) | `qbuild !describe` |
 | One command | `qbuild !describe <name>` |
 | Human listing | `qbuild` or `qbuild list` |

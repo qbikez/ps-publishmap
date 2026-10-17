@@ -11,17 +11,25 @@ Describe 'Initialize-QBuildAgent / qbuild !agent.init' {
         New-Item -ItemType Directory -Force -Path $script:userHome | Out-Null
     }
 
-    It 'installs the Cursor skill into the project by default' {
+    It 'installs Cursor skills into the project by default' {
         Push-Location $script:projectRoot
         try {
             $result = Initialize-QBuildAgent
 
             $result.Scope | Should -Be 'project'
             $result.Agent | Should -Be 'cursor'
-            $expected = [System.IO.Path]::GetFullPath((Join-Path $script:projectRoot '.cursor/skills/qbuild-discover'))
-            $result.Destination | Should -Be $expected
-            Test-Path $result.SkillPath | Should -BeTrue
-            (Get-Content $result.SkillPath -Raw) | Should -Match 'qbuild discovery'
+            $expectedParent = [System.IO.Path]::GetFullPath((Join-Path $script:projectRoot '.cursor/skills'))
+            $result.SkillsParent | Should -Be $expectedParent
+            $result.Destination | Should -Be $expectedParent
+            @($result.Skills).Count | Should -BeGreaterOrEqual 2
+            $names = @($result.Skills | ForEach-Object { $_.Name })
+            $names | Should -Contain 'qbuild-discover'
+            $names | Should -Contain 'qconf-templates'
+            foreach ($skill in $result.Skills) {
+                Test-Path $skill.SkillPath | Should -BeTrue
+            }
+            (Get-Content (Join-Path $expectedParent 'qbuild-discover/SKILL.md') -Raw) | Should -Match 'qbuild discovery'
+            (Get-Content (Join-Path $expectedParent 'qconf-templates/SKILL.md') -Raw) | Should -Match '_template'
         }
         finally {
             Pop-Location
@@ -30,16 +38,17 @@ Describe 'Initialize-QBuildAgent / qbuild !agent.init' {
 
     It 'installs into agent-specific project directories' {
         $cases = @(
-            @{ Agent = 'cursor'; Relative = '.cursor/skills/qbuild-discover' }
-            @{ Agent = 'claude'; Relative = '.claude/skills/qbuild-discover' }
-            @{ Agent = 'copilot'; Relative = '.github/skills/qbuild-discover' }
+            @{ Agent = 'cursor'; Relative = '.cursor/skills' }
+            @{ Agent = 'claude'; Relative = '.claude/skills' }
+            @{ Agent = 'copilot'; Relative = '.github/skills' }
         )
 
         foreach ($case in $cases) {
             $result = Initialize-QBuildAgent -Scope project -Agent $case.Agent -ProjectRoot $script:projectRoot
             $expected = [System.IO.Path]::GetFullPath((Join-Path $script:projectRoot $case.Relative))
-            $result.Destination | Should -Be $expected
-            Test-Path $result.SkillPath | Should -BeTrue
+            $result.SkillsParent | Should -Be $expected
+            Test-Path (Join-Path $expected 'qbuild-discover/SKILL.md') | Should -BeTrue
+            Test-Path (Join-Path $expected 'qconf-templates/SKILL.md') | Should -BeTrue
         }
     }
 
@@ -49,15 +58,16 @@ Describe 'Initialize-QBuildAgent / qbuild !agent.init' {
             $env:HOME = $script:userHome
 
             $cases = @(
-                @{ Agent = 'cursor'; Relative = '.cursor/skills/qbuild-discover' }
-                @{ Agent = 'claude'; Relative = '.claude/skills/qbuild-discover' }
-                @{ Agent = 'copilot'; Relative = '.copilot/skills/qbuild-discover' }
+                @{ Agent = 'cursor'; Relative = '.cursor/skills' }
+                @{ Agent = 'claude'; Relative = '.claude/skills' }
+                @{ Agent = 'copilot'; Relative = '.copilot/skills' }
             )
             foreach ($case in $cases) {
                 $result = Initialize-QBuildAgent -Scope user -Agent $case.Agent -ProjectRoot $script:projectRoot
                 $expected = [System.IO.Path]::GetFullPath((Join-Path $script:userHome $case.Relative))
-                $result.Destination | Should -Be $expected
-                Test-Path $result.SkillPath | Should -BeTrue
+                $result.SkillsParent | Should -Be $expected
+                Test-Path (Join-Path $expected 'qbuild-discover/SKILL.md') | Should -BeTrue
+                Test-Path (Join-Path $expected 'qconf-templates/SKILL.md') | Should -BeTrue
             }
         }
         finally {
@@ -93,6 +103,7 @@ Describe 'Initialize-QBuildAgent / qbuild !agent.init' {
             $result.Agent | Should -Be 'cursor'
             $result.Scope | Should -Be 'project'
             Test-Path (Join-Path $script:projectRoot '.cursor/skills/qbuild-discover/SKILL.md') | Should -BeTrue
+            Test-Path (Join-Path $script:projectRoot '.cursor/skills/qconf-templates/SKILL.md') | Should -BeTrue
         }
         finally {
             Pop-Location
@@ -109,6 +120,7 @@ Describe 'Initialize-QBuildAgent / qbuild !agent.init' {
                 $result.Scope | Should -Be 'user'
                 $result.Agent | Should -Be 'claude'
                 Test-Path (Join-Path $script:userHome '.claude/skills/qbuild-discover/SKILL.md') | Should -BeTrue
+                Test-Path (Join-Path $script:userHome '.claude/skills/qconf-templates/SKILL.md') | Should -BeTrue
             }
             finally {
                 Pop-Location
@@ -133,9 +145,56 @@ Describe 'Initialize-QBuildAgent / qbuild !agent.init' {
 
             $completions = & $completer.ScriptBlock 'qbuild' 'entry' '!agent' $null @{}
             $completions | Should -Contain '!agent.init'
+            $completions | Should -Contain '!agent.skills'
         }
         finally {
             Pop-Location
+        }
+    }
+}
+
+Describe 'Show-QBuildAgentSkills / qbuild !agent.skills' {
+    It 'prints all shipped skills with headers' {
+        $output = qbuild '!agent.skills'
+        $text = if ($output -is [array]) { $output -join "`n" } else { [string]$output }
+
+        $text | Should -Match '# skill: qbuild-discover'
+        $text | Should -Match '# skill: qconf-templates'
+        $text | Should -Match 'qbuild discovery'
+        $text | Should -Match '_template'
+        $text | Should -Match 'appsettings'
+        $text | Should -Match 'dotenv'
+    }
+
+    It 'prints a single skill by name' {
+        $output = qbuild '!agent.skills' qconf-templates
+        $text = if ($output -is [array]) { $output -join "`n" } else { [string]$output }
+
+        $text | Should -Match 'qconf-templates'
+        $text | Should -Match '_template'
+        $text | Should -Not -Match '# skill: qbuild-discover'
+        $text | Should -Not -Match 'qbuild discovery'
+    }
+
+    It 'prints a single skill via -Name' {
+        $output = qbuild '!agent.skills' -Name qbuild-discover
+        $text = if ($output -is [array]) { $output -join "`n" } else { [string]$output }
+
+        $text | Should -Match 'qbuild discovery'
+        $text | Should -Not -Match '# skill: qconf-templates'
+    }
+
+    It 'throws for an unknown skill name with available names' {
+        { qbuild '!agent.skills' nope -ErrorAction Stop } | Should -Throw '*Available*'
+        { qbuild '!agent.skills' nope -ErrorAction Stop } | Should -Throw '*qbuild-discover*'
+        { qbuild '!agent.skills' nope -ErrorAction Stop } | Should -Throw '*qconf-templates*'
+    }
+
+    It 'exposes Name dynamic parameter for !agent.skills' {
+        InModuleScope ConfigMap {
+            $map = Merge-ConfigMapCommands -Language build
+            $params = Get-EntryDynamicParam -map $map -key '!agent.skills' -command exec
+            @($params.Keys) | Should -Contain 'Name'
         }
     }
 }

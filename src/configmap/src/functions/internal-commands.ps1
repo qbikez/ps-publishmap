@@ -44,7 +44,7 @@ function Get-ConfigMapInternalCommands {
             }
         }
         '!agent.init' = @{
-            description = 'Install the qbuild discovery skill'
+            description = 'Install ConfigMap agent skills'
             exec = {
                 param(
                     $_context,
@@ -55,6 +55,28 @@ function Get-ConfigMapInternalCommands {
                 )
 
                 Initialize-QBuildAgent -Scope $Scope -Agent $Agent
+            }
+        }
+        '!agent.skills' = @{
+            description = 'Print shipped agent skill markdown'
+            exec = {
+                param(
+                    $_context,
+                    [string]$Name
+                )
+
+                $remaining = @($_context.RemainingArguments | Where-Object { $_ })
+                if ($Name -and $remaining.Count -gt 0 -and $remaining[0] -eq $Name) {
+                    $remaining = @($remaining | Select-Object -Skip 1)
+                }
+                if ($remaining.Count -gt 0) {
+                    if ($Name -or $remaining.Count -gt 1) {
+                        throw "!agent.skills accepts at most one skill name."
+                    }
+                    $Name = $remaining[0]
+                }
+
+                Show-QBuildAgentSkills -Name $Name
             }
         }
         '!settings' = @{
