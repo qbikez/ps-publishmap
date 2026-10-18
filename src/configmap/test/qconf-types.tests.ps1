@@ -547,6 +547,19 @@ Describe 'qconf dotenv _template' {
         $envValues['OTHER'] | Should -Be 'keep-me'
     }
 
+    It 'replaces a value in a one-line .env file' {
+        Set-Content -LiteralPath $script:envFile -Value 'API_URL=http://localhost:5000' -NoNewline -Encoding utf8
+
+        qconf -map $script:mapFile api -value prod -ErrorAction Stop
+
+        $lines = @(Get-Content -LiteralPath $script:envFile)
+        $lines[0] | Should -Be 'API_URL=https://api.example.com'
+        (Get-Content -LiteralPath $script:envFile -Raw) | Should -Not -Match 'API_URL=http://localhost:5000API_URL='
+        $envValues = Read-DotEnvFile $script:envFile
+        $envValues['API_URL'] | Should -Be $script:prodApiUrl
+        $envValues['API_KEY'] | Should -Be $script:prodApiKey
+    }
+
     It 'uses an explicit get instead of the dotenv template' {
         Write-ConfigMapFile $script:mapFile @'
 @{

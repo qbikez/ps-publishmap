@@ -378,7 +378,9 @@ function set-envsetting($key, $value, $envFile = ".env") {
     $found = $false
     
     if (Test-Path $envFile) {
-        $lines = Get-Content $envFile
+        # Get-Content returns a string for a one-line file. Force an array so
+        # index assignment updates that line instead of concatenating onto it.
+        $lines = @(Get-Content $envFile)
     }
     
     for ($i = 0; $i -lt $lines.Count; $i++) {
