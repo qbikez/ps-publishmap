@@ -89,7 +89,19 @@ Settings management with get/set/validate operations, or a built-in `_template`:
         }
     }
 
-    "api" = @{
+    # Optional: keep _template and override set/get; call inherited impl via $_context.base
+    "storage_hook" = @{
+        _template = "appsettings:src/appsettings.Development.json"
+        options = @{
+            local = @{ "Storage:BaseUrl" = "https://127.0.0.1:10000/devstoreaccount1" }
+        }
+        set = {
+            param($ctx, $key, $value, $_context)
+            & $_context.base.set $ctx $key $value $_context
+        }
+    }
+
+    "envfile" = @{
         # Short form; long form is _template = @{ type = "dotenv"; file = "..." }
         _template = "dotenv:.env"
         options = @{
@@ -115,7 +127,7 @@ ConfigMap automatically discovers parameters from script blocks using AST parsin
 ### Reserved Keys
 - `exec` - Default execution command for qbuild
 - `get/set/validate` - Configuration operations for qconf / `process = options`
-- `_template` - Built-in entry type: hashtable (`type`/`file`) or short string (`appsettings:{filepath}` / `dotenv:{filepath}`) that fills get/set
+- `_template` - Built-in entry type: hashtable (`type`/`file`) or short string (`appsettings:{filepath}` / `dotenv:{filepath}`) that fills get/set; author get/set win and can call `$_context.base.get` / `$_context.base.set`
 - `list` - Nested entry container
 - `options` - Available configuration values (map key; distinct from process type `options`)
 - `description` - Command documentation
