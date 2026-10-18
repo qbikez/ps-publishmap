@@ -188,6 +188,76 @@ Describe 'qconf appconfig _template' {
         $settings.Storage.Account | Should -Be $script:localAccount
     }
 
+    It 'lets an overridden set call the inherited template set via $_context.base' {
+        Write-ConfigMapFile $script:mapFile @'
+@{
+    storage = @{
+        _template = @{
+            type = 'appconfig'
+            file = 'appsettings.Development.json'
+        }
+        set = {
+            param($ctx, $key, $value, $_context)
+            & $_context.base.set $ctx $key $value $_context
+            'wrapped-set' | Set-Content 'wrapped-set.txt'
+        }
+        options = @{
+            local = @{
+                'Storage:BaseUrl' = 'https://127.0.0.1:10000/devstoreaccount1'
+                'Storage:Account' = 'devstore'
+            }
+            prod = @{
+                'Storage:BaseUrl' = 'https://prod.example'
+                'Storage:Account' = 'prodstore'
+            }
+        }
+    }
+}
+'@
+
+        qconf -map $script:mapFile storage -value prod -ErrorAction Stop
+
+        Get-Content (Join-Path $script:projectDir 'wrapped-set.txt') -Raw | Should -Match 'wrapped-set'
+        $settings = Read-AppSettings $script:settingsFile
+        $settings.Storage.BaseUrl | Should -Be $script:prodBaseUrl
+        $settings.Storage.Account | Should -Be $script:prodAccount
+    }
+
+    It 'lets an overridden get call the inherited template get via $_context.base' {
+        Write-ConfigMapFile $script:mapFile @'
+@{
+    storage = @{
+        _template = @{
+            type = 'appconfig'
+            file = 'appsettings.Development.json'
+        }
+        get = {
+            param($ctx, $options, $_context)
+            $result = & $_context.base.get $ctx $options $_context
+            'wrapped-get' | Set-Content 'wrapped-get.txt'
+            $result
+        }
+        options = @{
+            local = @{
+                'Storage:BaseUrl' = 'https://127.0.0.1:10000/devstoreaccount1'
+                'Storage:Account' = 'devstore'
+            }
+            prod = @{
+                'Storage:BaseUrl' = 'https://prod.example'
+                'Storage:Account' = 'prodstore'
+            }
+        }
+    }
+}
+'@
+
+        $result = qconf -map $script:mapFile storage -porcelain -ErrorAction Stop
+
+        Get-Content (Join-Path $script:projectDir 'wrapped-get.txt') -Raw | Should -Match 'wrapped-get'
+        @($result.Active) | Should -Contain 'local'
+        $result.Value['Storage:BaseUrl'] | Should -Be $script:localBaseUrl
+    }
+
     It 'leaves an entry without a _template on its own get' {
         $result = qconf -map $script:mapFile note -porcelain -ErrorAction Stop
 
