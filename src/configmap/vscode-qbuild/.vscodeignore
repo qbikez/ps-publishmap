@@ -1,0 +1,11 @@
+.vscode/**
+.vscode-test/**
+.publish/**
+scripts/**
+src/**
+node_modules/**
+tsconfig.json
+**/*.map
+**/*.test.js
+install.ps1
+install.tests.ps1
