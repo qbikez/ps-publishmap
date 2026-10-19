@@ -43,6 +43,60 @@ Describe "qbuild" {
     }
 }
 
+Describe "qbuild multi-target" {
+    BeforeAll {
+        $script:mtRan = [System.Collections.Generic.List[string]]::new()
+        function Invoke-MTTarget { param([string]$name) }
+        Mock Invoke-MTTarget { param([string]$name) $script:mtRan.Add($name) }
+        $script:mtTargets = @{
+            "clean" = { Invoke-MTTarget -name "clean" }
+            "build" = { Invoke-MTTarget -name "build" }
+            "test"  = { Invoke-MTTarget -name "test" }
+        }
+
+        $script:mtMapDir = Join-Path $TestDrive "multi-target"
+        New-Item -ItemType Directory -Path $script:mtMapDir -Force | Out-Null
+        "@{ 'clean' = { }; 'build' = { }; 'test' = { } }" | Out-File (Join-Path $script:mtMapDir ".build.map.ps1")
+
+        $script:mtCompleter = (Get-Command qbuild).Parameters['entry'].Attributes |
+            Where-Object { $_ -is [System.Management.Automation.ArgumentCompleterAttribute] } |
+            Select-Object -First 1
+    }
+
+    BeforeEach { $script:mtRan.Clear() }
+
+    It "runs each comma-separated target in order" {
+        qbuild -map $script:mtTargets clean,build
+        $script:mtRan | Should -Be @("clean", "build")
+    }
+
+    It "completes the second target after a comma" {
+        Push-Location $script:mtMapDir
+        try {
+            $completions = & $script:mtCompleter.ScriptBlock "qbuild" "entry" "clean," $null @{}
+            $completions | Should -Contain "clean,build"
+            $completions | Should -Contain "clean,test"
+        } finally { Pop-Location }
+    }
+
+    It "filters completions by the partial word after the comma" {
+        Push-Location $script:mtMapDir
+        try {
+            $completions = & $script:mtCompleter.ScriptBlock "qbuild" "entry" "clean,b" $null @{}
+            $completions | Should -Contain "clean,build"
+            $completions | Should -Not -Contain "clean,test"
+        } finally { Pop-Location }
+    }
+
+    It "excludes already-selected entries from completions" {
+        Push-Location $script:mtMapDir
+        try {
+            $completions = & $script:mtCompleter.ScriptBlock "qbuild" "entry" "clean," $null @{}
+            $completions | Should -Not -Contain "clean,clean"
+        } finally { Pop-Location }
+    }
+}
+
 Describe "qbuild passthrough args (--)" {
     BeforeAll {
         $script:capturedAdditionalArgs = $null

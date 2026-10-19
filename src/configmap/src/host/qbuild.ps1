@@ -22,9 +22,23 @@ function Invoke-QBuild {
                         $userMap = $userMap | Assert-ConfigMap
                     }
 
+                    $completionPrefix = ""
+                    $completionWord = $wordToComplete
+                    $selectedEntries = @()
+                    $lastComma = $wordToComplete.LastIndexOf(',')
+                    if ($lastComma -ge 0) {
+                        $completionPrefix = $wordToComplete.Substring(0, $lastComma + 1)
+                        $completionWord = $wordToComplete.Substring($lastComma + 1)
+                        $selectedEntries = $wordToComplete.Substring(0, $lastComma) -split ','
+                    }
+
+                    $entryCompParams = @{}
+                    foreach ($k in $PSBoundParameters.Keys) { $entryCompParams[$k] = $PSBoundParameters[$k] }
+                    $entryCompParams['wordToComplete'] = $completionWord
+
                     $completions = [System.Collections.Generic.List[string]]::new()
                     if ($userMap) {
-                        foreach ($c in @(Get-EntryCompletion $userMap -language "build" @PSBoundParameters)) {
+                        foreach ($c in @(Get-EntryCompletion $userMap -language "build" @entryCompParams)) {
                             if ($c) { $completions.Add([string]$c) | Out-Null }
                         }
                     }
@@ -32,7 +46,7 @@ function Invoke-QBuild {
                     $configMapModule = (Get-Command Invoke-QBuild).Module
                     $internalCommands = & $configMapModule { Get-ConfigMapInternalCommands -Language build }
                     foreach ($item in $internalCommands.GetEnumerator()) {
-                        if (-not ([string]$item.Key).StartsWith($wordToComplete)) {
+                        if (-not ([string]$item.Key).StartsWith($completionWord)) {
                             continue
                         }
                         $includeCompletion = & $configMapModule {
@@ -54,7 +68,7 @@ function Invoke-QBuild {
                                 $procWords = Get-ConfigMapProcessCompleteWord `
                                     -ProcessName (Get-ConfigMapProcessCliName -ProcessName $procName) `
                                     -MapPath $resolvedMapPath `
-                                    -Word $wordToComplete
+                                    -Word $completionWord
                                 if ($null -eq $procWords) { continue }
                                 foreach ($w in @($procWords)) {
                                     if ($w -and -not $completions.Contains([string]$w)) {
@@ -68,6 +82,10 @@ function Invoke-QBuild {
                         # No file path / process discovery failure → keep map-only completions
                     }
 
+                    if ($completionPrefix) {
+                        $result = $completions | Where-Object { $_ -notin $selectedEntries } | ForEach-Object { "$completionPrefix$_" }
+                        return @($result)
+                    }
                     return @($completions)
                 }
                 catch {
@@ -153,6 +171,7 @@ function Invoke-QBuild {
         [string[]]$RemainingArguments
     )
     dynamicparam {
+        if ($entry -is [array]) { return }
         if (-not $entry) {
             # Host-only switch so entry scriptblocks may still declare their own -Version.
             # No -v alias: PowerShell binds -v to common -Verbose.
@@ -231,6 +250,16 @@ function Invoke-QBuild {
     }
 
     process {
+        if ($entry -is [array]) {
+            foreach ($e in $entry) {
+                $params = @{}
+                foreach ($k in $PSBoundParameters.Keys) { $params[$k] = $PSBoundParameters[$k] }
+                $params['entry'] = $e
+                Invoke-QBuild @params
+            }
+            return
+        }
+
         if (-not $entry -and $PSBoundParameters['Version']) {
             $commandName = if ($MyInvocation.InvocationName) { $MyInvocation.InvocationName } else { 'qbuild' }
             return "$commandName $(Get-ConfigMapModuleVersion)"
