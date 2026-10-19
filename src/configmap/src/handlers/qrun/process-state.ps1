@@ -304,7 +304,7 @@ function Invoke-ProcessStateCommand {
     foreach ($item in $catalog) {
         $statePath = Get-ProcessStatePath -ProcessKey $item.ProcessKey -BaseDir $BaseDir -MapFile $MapFile
         $state = Read-ProcessState -StatePath $statePath -ProcessKey $item.ProcessKey -StepNames $item.StepNames -MapFile $MapFile
-        Write-ProcessStatus -ProcessKey $item.ProcessKey -StepNames $item.StepNames -State $state -Description $item.Description
+        Write-ProcessStatus -ProcessKey $item.ProcessKey -StepNames $item.StepNames -State $state -Description $item.Description -ProcessEntry $item.ProcessEntry
     }
 }
 
@@ -542,6 +542,27 @@ function Get-ProcessStatusMarker {
     }
 }
 
+function Invoke-ProcessStepSkippedScript {
+    param(
+        [System.Collections.IDictionary]$ProcessEntry,
+        [string]$StepName
+    )
+
+    if (-not $ProcessEntry -or -not $ProcessEntry.Keys -contains $StepName) { return @() }
+    $stepEntry = $ProcessEntry[$StepName]
+    if ($stepEntry -isnot [System.Collections.IDictionary]) { return @() }
+    if ($stepEntry.skipped -isnot [scriptblock]) { return @() }
+
+    try {
+        $result = & $stepEntry.skipped
+        if ($result -and $result.comment) { return @($result.comment) }
+        return @()
+    }
+    catch {
+        return @()
+    }
+}
+
 function Write-ProcessStatus {
     param(
         [Parameter(Mandatory = $true)]
@@ -550,7 +571,8 @@ function Write-ProcessStatus {
         [string[]]$StepNames,
         [Parameter(Mandatory = $true)]
         $State,
-        [string]$Description
+        [string]$Description,
+        [System.Collections.IDictionary]$ProcessEntry
     )
 
     Write-Host ""
@@ -583,6 +605,15 @@ function Write-ProcessStatus {
             Write-Host "    " -NoNewline
             Write-Host $pad -NoNewline -ForegroundColor DarkGray
             Write-Host $stepState.error -ForegroundColor DarkRed
+        }
+
+        if ($status -eq 'Succeeded' -and $ProcessEntry) {
+            $comments = @(Invoke-ProcessStepSkippedScript -ProcessEntry $ProcessEntry -StepName $name)
+            foreach ($line in $comments) {
+                Write-Host "    " -NoNewline
+                Write-Host $pad -NoNewline -ForegroundColor DarkGray
+                Write-Host "  $line" -ForegroundColor DarkGray
+            }
         }
     }
     Write-Host ""
