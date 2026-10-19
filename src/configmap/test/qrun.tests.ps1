@@ -285,12 +285,12 @@ Describe 'qrun process runner' {
             setup = [ordered]@{
                 'step-a' = @{
                     exec    = { 'a' | Set-Content 'a.txt' }
-                    skipped = { return 'rule for port 123 exists' }
+                    skipped = { return @{ comment = 'rule for port 123 exists' } }
                 }
                 'step-b' = @{
                     exec    = { 'b' | Set-Content 'b.txt' }
                     skipped = {
-                        return @('first comment', 'second comment')
+                        return @{ comment = @('first comment', 'second comment') }
                     }
                 }
             }
@@ -311,11 +311,11 @@ Describe 'qrun process runner' {
                 description = 'check process'
                 'web'       = @{
                     exec    = { 'w' | Set-Content 'w.txt' }
-                    skipped = { return 'firewall rule ok' }
+                    skipped = { return @{ comment = 'firewall rule ok' } }
                 }
                 'dashboard' = @{
                     exec    = { 'd' | Set-Content 'd.txt' }
-                    skipped = { return 'dashboard rule ok' }
+                    skipped = { return @{ comment = 'dashboard rule ok' } }
                 }
             }
         }
