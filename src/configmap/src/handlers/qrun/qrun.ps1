@@ -244,7 +244,8 @@ function Invoke-QRun {
                     -ProcessKey $processKey `
                     -StepNames $stepNames `
                     -State $state `
-                    -Description $description
+                    -Description $description `
+                    -ProcessEntry $listedEntry
                 return
             }
 
@@ -333,7 +334,7 @@ function Invoke-QRun {
         $state = Read-ProcessState -StatePath $statePath -ProcessKey $processKey -StepNames $stepNames -MapFile $sourceFile
 
         if ($Status) {
-            Write-ProcessStatus -ProcessKey $processKey -StepNames $stepNames -State $state
+            Write-ProcessStatus -ProcessKey $processKey -StepNames $stepNames -State $state -ProcessEntry $processMapEntry
             return
         }
 
@@ -389,6 +390,10 @@ function Invoke-QRun {
                 Write-Host "SKIP" -NoNewline -ForegroundColor DarkCyan
                 Write-Host "  $stepName" -NoNewline -ForegroundColor White
                 Write-Host "  (already succeeded)" -ForegroundColor DarkGray
+                $skipComments = @(Invoke-ProcessStepSkippedScript -ProcessEntry $processMapEntry -StepName $stepName)
+                foreach ($line in $skipComments) {
+                    Write-Host "           $line" -ForegroundColor DarkGray
+                }
                 $skipped++
                 continue
             }

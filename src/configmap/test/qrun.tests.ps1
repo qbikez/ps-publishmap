@@ -278,4 +278,52 @@ Describe 'qrun process runner' {
         qrun -map $mapFile -entry setup.prepare
         Test-Path 'ok.txt' | Should -BeTrue
     }
+
+    It 'executes skipped scriptblock and shows output when step is skipped' {
+        $comments = [System.Collections.Generic.List[string]]::new()
+        $skipMap = [ordered]@{
+            setup = [ordered]@{
+                'step-a' = @{
+                    exec    = { 'a' | Set-Content 'a.txt' }
+                    skipped = { return 'rule for port 123 exists' }
+                }
+                'step-b' = @{
+                    exec    = { 'b' | Set-Content 'b.txt' }
+                    skipped = {
+                        return @('first comment', 'second comment')
+                    }
+                }
+            }
+        }
+
+        qrun -map $skipMap setup
+
+        # capture output on the second run (all steps skipped)
+        $output = qrun -map $skipMap setup 6>&1 | Out-String
+        $output | Should -Match 'rule for port 123 exists'
+        $output | Should -Match 'first comment'
+        $output | Should -Match 'second comment'
+    }
+
+    It 'shows skipped scriptblock comments in Write-ProcessStatus tree view' {
+        $skipMap = [ordered]@{
+            setup = [ordered]@{
+                description = 'check process'
+                'web'       = @{
+                    exec    = { 'w' | Set-Content 'w.txt' }
+                    skipped = { return 'firewall rule ok' }
+                }
+                'dashboard' = @{
+                    exec    = { 'd' | Set-Content 'd.txt' }
+                    skipped = { return 'dashboard rule ok' }
+                }
+            }
+        }
+
+        qrun -map $skipMap setup
+
+        $output = qrun -map $skipMap '!state' show 6>&1 | Out-String
+        $output | Should -Match 'firewall rule ok'
+        $output | Should -Match 'dashboard rule ok'
+    }
 }
