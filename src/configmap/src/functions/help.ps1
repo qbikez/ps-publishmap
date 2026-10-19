@@ -47,18 +47,40 @@ function Get-CommandHelpParamInfo {
     return (($args.Keys | ForEach-Object { "-$_" }) -join " ")
 }
 
+function Get-ConfigMapGitHubBranch {
+    param([string]$Path)
+
+    if (-not $Path -or -not (Get-Command git -ErrorAction Ignore)) { return $null }
+    $dir = if (Test-Path $Path -PathType Container) { $Path } else { Split-Path -Parent $Path }
+    if (-not (Test-Path $dir)) { return $null }
+
+    $remote = & git -C $dir config --get remote.origin.url 2>$null
+    if ($LASTEXITCODE -ne 0 -or $remote -notmatch 'github\.com') { return $null }
+
+    $branch = & git -C $dir rev-parse --abbrev-ref HEAD 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $branch -or $branch -eq 'HEAD') { return $null }
+
+    return [string]$branch
+}
+
 function Get-ConfigMapModuleVersion {
     $module = (Get-Command Invoke-QBuild -ErrorAction Stop).Module
-    if ($module.Version -and $module.Version -ne [version]'0.0') {
-        return $module.Version.ToString()
+    $version = if ($module.Version -and $module.Version -ne [version]'0.0') {
+        $module.Version.ToString()
+    }
+    else {
+        $psd1Path = Join-Path (Split-Path -Parent $module.Path) 'configmap.psd1'
+        if (Test-Path $psd1Path) {
+            [string](Import-PowerShellDataFile $psd1Path).ModuleVersion
+        }
+        else {
+            $module.Version.ToString()
+        }
     }
 
-    $psd1Path = Join-Path (Split-Path -Parent $module.Path) 'configmap.psd1'
-    if (Test-Path $psd1Path) {
-        return [string](Import-PowerShellDataFile $psd1Path).ModuleVersion
-    }
-
-    return $module.Version.ToString()
+    $branch = Get-ConfigMapGitHubBranch -Path $module.Path
+    if ($branch) { return "$version-$branch" }
+    return $version
 }
 
 function Write-InternalHelp {

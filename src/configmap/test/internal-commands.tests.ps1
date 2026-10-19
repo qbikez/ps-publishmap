@@ -90,6 +90,18 @@ Describe 'qbuild -version' {
     It 'prints the ConfigMap module version without requiring a map' {
         $result = qbuild -Version
 
-        $result | Should -Be "qbuild $script:moduleVersion"
+        $result | Should -Match "^qbuild $([regex]::Escape($script:moduleVersion))(-.+)?$"
+    }
+
+    It 'appends the git branch when the module is loaded from a github repo' {
+        $moduleDir = Join-Path $PSScriptRoot '..'
+        $remote = & git -C $moduleDir config --get remote.origin.url 2>$null
+        $branch = & git -C $moduleDir rev-parse --abbrev-ref HEAD 2>$null
+        if ($remote -notmatch 'github\.com' -or -not $branch -or $branch -eq 'HEAD') {
+            Set-ItResult -Skipped -Because 'module is not loaded from a github checkout on a branch'
+            return
+        }
+
+        qbuild -Version | Should -Be "qbuild $script:moduleVersion-$branch"
     }
 }
