@@ -3,7 +3,7 @@
     RootModule           = 'configmap.psm1'
 
     # Version number of this module.
-    ModuleVersion = '1.3.5.0'
+    ModuleVersion = '1.3.6.0'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Core')
