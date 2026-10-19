@@ -120,6 +120,12 @@ function Write-MapHelp {
             return $false
         }
 
+        # Sub-paths without their own _settings.process belong to their parent's process tree
+        # and are already shown inside that parent's status block — skip them here.
+        if ($name -match '\.' -and -not (Get-EntryProcess $entryValue -Default '')) {
+            return $true
+        }
+
         $settings = Get-ConfigMapSettingsForPath -Map $map -Path $name -OperationContext $operationContext
         $handler = Get-ConfigMapProcessHandler -Name $settings.Process
         if ($null -ne $handler) {
@@ -135,11 +141,6 @@ function Write-MapHelp {
                 return $true
             }
             return $false
-        }
-
-        # Nested step paths under an external process entry are shown inside the status tree
-        if ($name -match '\.' -and -not (Get-EntryProcess $entryValue -Default '')) {
-            return $true
         }
 
         try {
