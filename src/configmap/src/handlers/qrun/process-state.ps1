@@ -554,7 +554,9 @@ function Invoke-ProcessStepSkippedScript {
     if ($stepEntry.skipped -isnot [scriptblock]) { return @() }
 
     try {
-        return @(& $stepEntry.skipped)
+        $result = & $stepEntry.skipped
+        if ($result -and $result.comment) { return @($result.comment) }
+        return @()
     }
     catch {
         return @()
