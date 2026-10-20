@@ -23,11 +23,14 @@ function Get-ConfigMapInternalCommands {
             exec        = {
                 param(
                     $_context,
+                    [ValidateSet('@types')]
                     [string]$Type
                 )
 
                 Invoke-ConfigMapListCommand -Context $_context -Type $Type
             }
+            # Valid -Type values (CLI and canonical process names), resolved by ValidateSet('@types')
+            types       = @(Get-ConfigMapListTypes -Map $Map -IncludeAliases)
             # list.<type> shorthands, one per process type in the map
             list        = New-ConfigMapListTypeEntries -Map $Map
         }

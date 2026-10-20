@@ -129,7 +129,10 @@ function Get-ConfigMapListTypes {
     .SYNOPSIS
         Process types (CLI names) present in a map, for `qbuild list -Type` completion.
     #>
-    param([AllowNull()][System.Collections.IDictionary]$Map)
+    param(
+        [AllowNull()][System.Collections.IDictionary]$Map,
+        [switch]$IncludeAliases
+    )
 
     $types = [System.Collections.Generic.SortedSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     [void]$types.Add('exec')
@@ -141,6 +144,9 @@ function Get-ConfigMapListTypes {
                 $settings = Get-ConfigMapSettingsForPath -Map $Map -Path ([string]$key) -OperationContext $operationContext
                 if ($settings.Process) {
                     [void]$types.Add((Get-ConfigMapProcessCliName -ProcessName $settings.Process))
+                    if ($IncludeAliases) {
+                        [void]$types.Add((Get-ConfigMapProcessCanonicalName -ProcessName $settings.Process))
+                    }
                 }
             }
             catch { }

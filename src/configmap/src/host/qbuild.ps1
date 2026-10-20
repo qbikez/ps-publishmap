@@ -200,16 +200,7 @@ function Invoke-QBuild {
             $dynMap = Merge-ConfigMapCommands -Map $dynUserMap -Language build
 
             if (Test-ConfigMapInternalCommand -Name $entry -Language build) {
-                $internalParams = Get-EntryDynamicParam $dynMap $entry $command -skip 0 -bound $PSBoundParameters
-                if ($entry -eq 'list' -and $internalParams.ContainsKey('Type')) {
-                    $listTypes = Get-ConfigMapListTypes -Map $dynUserMap
-                    $internalParams['Type'].Attributes.Add(
-                        [System.Management.Automation.ArgumentCompleterAttribute]::new(
-                            { param($c, $p, $word) $listTypes | Where-Object { $_ -like "$word*" } }.GetNewClosure()
-                        )
-                    )
-                }
-                return $internalParams
+                return Get-EntryDynamicParam $dynMap $entry $command -skip 0 -bound $PSBoundParameters
             }
             if (!$dynUserMap) {
                 return

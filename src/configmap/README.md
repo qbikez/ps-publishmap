@@ -21,6 +21,12 @@ ConfigMap is a PowerShell module that extends publishmap functionality to provid
    qbuild help     # Shows help information
    ```
 
+   Filter the listing by process type (`exec`, `qconf`, `qrun`, …); both forms tab-complete:
+   ```powershell
+   qbuild list -Type qconf   # only entries with process type qconf (options)
+   qbuild list.qrun          # shorthand for -Type qrun (steps)
+   ```
+
 4. **Run build commands:**
    ```powershell
    qbuild build    # Runs the build script
@@ -33,6 +39,19 @@ ConfigMap is a PowerShell module that extends publishmap functionality to provid
    qbuild build -Configuration Release
    qbuild deploy -Environment staging
    ```
+
+### Dynamic `ValidateSet` values
+
+A `ValidateSet` whose single value is `'@key'` takes its values from the sibling key `key` of the same entry (an array, or a scriptblock returning one). The set drives tab completion and validation of the CLI parameter:
+
+```powershell
+@{
+    deploy = @{
+        envs = @('dev', 'prod')               # or: envs = { Get-EnvNames }
+        exec = { param([ValidateSet('@envs')][string]$Env) ... }
+    }
+}
+```
 
 ## Agent / automation
 

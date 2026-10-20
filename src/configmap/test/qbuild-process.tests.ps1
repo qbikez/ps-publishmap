@@ -317,6 +317,25 @@ Describe 'qbuild _settings.process=steps forwarding' {
         $exec | Should -Not -Match 'setting|steps1'
     }
 
+    It 'runs entries that declare ValidateSet with an @sibling reference' {
+        $localMap = Join-Path $script:workDir 'sibling.build.map.ps1'
+        @'
+[ordered]@{
+    deploy = @{
+        envs = @('dev', 'prod')
+        exec = {
+            param([ValidateSet('@envs')][string]$Env)
+            "deployed:$Env" | Set-Content 'deployed.txt'
+        }
+    }
+}
+'@ | Set-Content -LiteralPath $localMap -Encoding utf8
+
+        qbuild -map $localMap deploy -Env prod
+        Get-Content (Join-Path $script:workDir 'deployed.txt') | Should -Be 'deployed:prod'
+        { qbuild -map $localMap deploy -Env nope } | Should -Throw '*nope*'
+    }
+
     It 'completes list types for -Type and the list.<type> shorthand' {
         $localMap = Join-Path $script:workDir 'mixed.build.map.ps1'
         @'
@@ -333,10 +352,18 @@ Describe 'qbuild _settings.process=steps forwarding' {
 '@ | Set-Content -LiteralPath $localMap -Encoding utf8
 
         $line = "qbuild -map '$localMap' list -Type "
-        (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText | Should -Be @('exec', 'qconf', 'qrun')
+        (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText | Should -Be @('exec', 'options', 'qconf', 'qrun', 'steps')
 
         $line = "qbuild -map '$localMap' list -Type q"
         (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText | Should -Be @('qconf', 'qrun')
+
+        $line = "qbuild -map '$localMap' list -Type o"
+        (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText | Should -Be @('options')
+
+        # canonical names stay valid for -Type, but get no list.<type> shorthand
+        { qbuild -map $localMap list -Type options 6>$null } | Should -Not -Throw
+        { qbuild -map $localMap list -Type steps 6>$null } | Should -Not -Throw
+        { qbuild -map $localMap list -Type qcnof 6>$null } | Should -Throw '*qcnof*'
 
         $line = "qbuild -map '$localMap' list."
         (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText | Should -Be @('list.exec', 'list.qconf', 'list.qrun')
