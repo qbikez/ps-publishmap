@@ -326,4 +326,118 @@ Describe 'qrun process runner' {
         $output | Should -Match 'firewall rule ok'
         $output | Should -Match 'dashboard rule ok'
     }
+
+    Context '-Check' {
+        BeforeEach {
+            $script:checkMap = [ordered]@{
+                setup = [ordered]@{
+                    'step-a' = @{
+                        exec  = { 'a' | Set-Content 'a.txt' }
+                        check = { Test-Path 'a.txt' }
+                    }
+                    'step-b' = @{
+                        exec  = { 'b' | Set-Content 'b.txt' }
+                        check = { Test-Path 'b.txt' }
+                    }
+                    'step-c' = { 'c' | Set-Content 'c.txt' }
+                }
+            }
+            function script:Get-TestState {
+                $file = Get-ChildItem -Path (Join-Path $script:workDir '.configmap' 'process') -Recurse -Filter '*.state.json' | Select-Object -First 1
+                Get-Content $file.FullName -Raw | ConvertFrom-Json
+            }
+        }
+
+        It 'does not list check as a step' {
+            qrun -map $script:checkMap setup
+            (Get-TestState).steps.PSObject.Properties.Name | Should -Not -Contain 'check'
+        }
+
+        It 'marks a step Succeeded when its check passes even without a cached run' {
+            'a' | Set-Content 'a.txt'
+
+            qrun -map $script:checkMap setup.step-a -Check
+
+            (Get-TestState).steps.'step-a'.status | Should -Be 'Succeeded'
+            Test-Path 'b.txt' | Should -BeFalse
+        }
+
+        It 'never runs exec' {
+            { qrun -map $script:checkMap setup -Check } | Should -Throw
+            Test-Path 'a.txt' | Should -BeFalse
+            Test-Path 'b.txt' | Should -BeFalse
+            Test-Path 'c.txt' | Should -BeFalse
+        }
+
+        It 'resets a cached Succeeded step to Pending when its check fails and throws' {
+            qrun -map $script:checkMap setup
+            Remove-Item 'a.txt' -Force
+
+            { qrun -map $script:checkMap setup.step-a -Check } | Should -Throw
+            (Get-TestState).steps.'step-a'.status | Should -Be 'Pending'
+
+            qrun -map $script:checkMap setup
+            Test-Path 'a.txt' | Should -BeTrue
+        }
+
+        It 'checks only the requested step for a step path' {
+            qrun -map $script:checkMap setup
+            Remove-Item 'a.txt', 'b.txt' -Force
+
+            { qrun -map $script:checkMap setup.step-b -Check } | Should -Throw
+            $state = Get-TestState
+            $state.steps.'step-a'.status | Should -Be 'Succeeded'
+            $state.steps.'step-b'.status | Should -Be 'Pending'
+        }
+
+        It 'runs the checks of all steps in a process and reports unchecked steps without failing' {
+            qrun -map $script:checkMap setup
+
+            $output = qrun -map $script:checkMap setup -Check 6>&1 | Out-String
+
+            $output | Should -Match 'UNCHECKED\s+step-c'
+            (Get-TestState).steps.'step-c'.status | Should -Be 'Succeeded'
+        }
+
+        It 'runs a process-level check instead of the step checks' {
+            $script:calls = [System.Collections.Generic.List[string]]::new()
+            $groupMap = [ordered]@{
+                setup = [ordered]@{
+                    check    = { $true }
+                    'step-a' = @{
+                        exec  = { 'a' | Set-Content 'a.txt' }
+                        check = { throw 'step check must not run' }
+                    }
+                    'step-b' = { 'b' | Set-Content 'b.txt' }
+                }
+            }
+
+            qrun -map $groupMap setup -Check
+
+            $state = Get-TestState
+            $state.steps.'step-a'.status | Should -Be 'Succeeded'
+            $state.steps.'step-b'.status | Should -Be 'Succeeded'
+        }
+
+        It 'resets all steps to Pending when the process-level check fails' {
+            $groupMap = [ordered]@{
+                setup = [ordered]@{
+                    check    = { $false }
+                    'step-a' = { 'a' | Set-Content 'a.txt' }
+                    'step-b' = { 'b' | Set-Content 'b.txt' }
+                }
+            }
+            qrun -map $groupMap setup
+
+            { qrun -map $groupMap setup -Check } | Should -Throw
+
+            $state = Get-TestState
+            $state.steps.'step-a'.status | Should -Be 'Pending'
+            $state.steps.'step-b'.status | Should -Be 'Pending'
+        }
+
+        It 'exposes Check in !complete -params' {
+            @(qrun -map $script:checkMap '!complete' -params -entry setup) | Should -Contain 'Check'
+        }
+    }
 }

@@ -68,6 +68,35 @@ Describe 'qbuild _settings.process=steps forwarding' {
         $state.steps.verify.status | Should -Be 'Succeeded'
     }
 
+    It 'forwards -Check for a process and for a step path' {
+        @'
+[ordered]@{
+    bootstrap = [ordered]@{
+        _settings = @{ process = 'steps' }
+        prepare   = @{
+            exec  = { 'a' | Set-Content 'a.txt' }
+            check = { Test-Path 'a.txt' }
+        }
+        restore   = @{
+            exec  = { 'b' | Set-Content 'b.txt' }
+            check = { Test-Path 'b.txt' }
+        }
+    }
+}
+'@ | Set-Content -LiteralPath $script:mapFile -Encoding utf8
+        'a' | Set-Content 'a.txt'
+
+        qbuild -map $script:mapFile bootstrap.prepare -check
+        { qbuild -map $script:mapFile bootstrap -check } | Should -Throw '*not in desired state*'
+        { qbuild -map $script:mapFile bootstrap.restore -check } | Should -Throw '*not in desired state*'
+
+        Test-Path 'b.txt' | Should -BeFalse
+        $stateFile = Get-ChildItem -Path (Join-Path $script:workDir '.configmap' 'process') -Recurse -Filter '*.state.json' | Select-Object -First 1
+        $state = Get-Content $stateFile.FullName -Raw | ConvertFrom-Json
+        $state.steps.prepare.status | Should -Be 'Succeeded'
+        $state.steps.restore.status | Should -Be 'Pending'
+    }
+
     It 'does not delegate a process entry when an in-memory map has no source file' {
         $map = @{
             bootstrap = @{
