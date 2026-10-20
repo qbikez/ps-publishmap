@@ -79,6 +79,19 @@ function Get-ConfigMapInternalCommands {
                 Show-QBuildAgentSkills -Name $Name
             }
         }
+        '!extension.install' = @{
+            description = 'Install the qbuild Map Tools VS Code extension'
+            exec = {
+                param(
+                    $_context,
+                    [string]$Version,
+                    [ValidateSet('code', 'cursor', 'code-insiders')]
+                    [string]$Editor
+                )
+
+                Install-QBuildExtension -Version $Version -Editor $Editor
+            }
+        }
         '!settings' = @{
             description = 'Show effective ConfigMap settings'
             exec = {
@@ -166,6 +179,21 @@ function Get-ConfigMapInternalCommands {
             }
         }
     }
+}
+
+function Install-QBuildExtension {
+    param(
+        [string]$Version,
+        [string]$Editor
+    )
+
+    $installer = Join-Path $PSScriptRoot '..\..\vscode-qbuild\install.ps1'
+    if (!(Test-Path -LiteralPath $installer)) {
+        throw "Extension installer not found at '$installer'. Run it from a ConfigMap checkout, or see vscode-qbuild/README.md for manual install."
+    }
+
+    . $installer
+    Install-QBuildMapTools -Version $Version -Editor $Editor
 }
 
 function Merge-ConfigMapCommands {
