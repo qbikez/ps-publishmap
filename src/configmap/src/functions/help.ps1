@@ -116,10 +116,53 @@ function Write-InternalHelp {
     }
 }
 
+function Test-ConfigMapListTypeMatch {
+    param([string]$ProcessName, [string]$Type)
+
+    if (-not $Type) { return $true }
+    $actual = Get-ConfigMapProcessCliName -ProcessName $(if ($ProcessName) { $ProcessName } else { 'exec' })
+    return $actual -eq (Get-ConfigMapProcessCliName -ProcessName $Type)
+}
+
+function Get-ConfigMapListTypes {
+    <#
+    .SYNOPSIS
+        Process types (CLI names) present in a map, for `qbuild list -Type` completion.
+    #>
+    param([AllowNull()][System.Collections.IDictionary]$Map)
+
+    $types = [System.Collections.Generic.SortedSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    [void]$types.Add('exec')
+    if ($Map) {
+        $operationContext = New-ConfigMapOperationContext
+        foreach ($key in @($Map.Keys)) {
+            if ([string]$key -like '_*' -or [string]$key -eq 'list') { continue }
+            try {
+                $settings = Get-ConfigMapSettingsForPath -Map $Map -Path ([string]$key) -OperationContext $operationContext
+                if ($settings.Process) {
+                    [void]$types.Add((Get-ConfigMapProcessCliName -ProcessName $settings.Process))
+                }
+            }
+            catch { }
+        }
+    }
+    return @($types)
+}
+
 function Write-MapHelp {
-    param([System.Collections.IDictionary]$map, $invocation, [ValidateSet("build", "conf")]$language = "build")
+    param([System.Collections.IDictionary]$map, $invocation, [ValidateSet("build", "conf")]$language = "build", [string]$Type)
     $commandName = $invocation.InvocationName
     $operationContext = New-ConfigMapOperationContext
+
+    if ($Type) {
+        $filterEntries = {
+            param($items, $nameOf)
+            @($items | Where-Object {
+                    $settings = Get-ConfigMapSettingsForPath -Map $map -Path (& $nameOf $_) -OperationContext $operationContext
+                    Test-ConfigMapListTypeMatch -ProcessName $settings.Process -Type $Type
+                })
+        }
+    }
     $relativeMapPath = Get-RelativeMapDisplayPath -Map $map
 
     $writeHeader = {
@@ -188,6 +231,7 @@ function Write-MapHelp {
         if ($map -isnot [System.Collections.Specialized.OrderedDictionary]) {
             $scriptItems = @($scriptItems | Sort-Object { [string]$_.key })
         }
+        if ($Type) { $scriptItems = & $filterEntries $scriptItems { param($i) [string]$i.key } }
         $maxNameLength = @($scriptItems | ForEach-Object { ([string]$_.key).Length } | Measure-Object -Maximum).Maximum
         if ($null -eq $maxNameLength) { $maxNameLength = 0 }
         $maxNameLength = [Math]::Max($maxNameLength, 12)
@@ -210,6 +254,12 @@ function Write-MapHelp {
     }
 
     $scripts = Get-CompletionList $map -language $language
+    if ($Type) {
+        $allowed = @(& $filterEntries @($scripts.Keys) { param($i) [string]$i })
+        $filtered = [ordered]@{}
+        foreach ($k in $scripts.Keys) { if ($k -in $allowed) { $filtered[$k] = $scripts[$k] } }
+        $scripts = $filtered
+    }
 
     # Calculate max command name length for alignment
     $maxNameLength = ($scripts.Keys | Measure-Object -Property Length -Maximum).Maximum

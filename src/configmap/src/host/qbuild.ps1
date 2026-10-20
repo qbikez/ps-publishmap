@@ -61,6 +61,12 @@ function Invoke-QBuild {
                         }
                     }
 
+                    if ($userMap -and 'list.'.StartsWith($completionWord) -eq $false -and $completionWord.StartsWith('list.')) {
+                        foreach ($t in @(& $configMapModule { param($m) Get-ConfigMapListTypes -Map $m } $userMap)) {
+                            if ("list.$t".StartsWith($completionWord)) { $completions.Add("list.$t") | Out-Null }
+                        }
+                    }
+
                     try {
                         $resolvedMapPath = Resolve-MapPath -Map $userMap
                         if ($resolvedMapPath) {
@@ -172,7 +178,9 @@ function Invoke-QBuild {
     )
     dynamicparam {
         if ($entry -is [array]) { return }
-        if (-not $entry) {
+        # `list.<type>` shorthand resolves to the internal `list` command
+        $dynEntry = if ($entry -match '^list\.(.+)$') { 'list' } else { $entry }
+        if (-not $dynEntry) {
             # Host-only switch so entry scriptblocks may still declare their own -Version.
             # No -v alias: PowerShell binds -v to common -Verbose.
             $dict = [System.Management.Automation.RuntimeDefinedParameterDictionary]::new()
@@ -199,14 +207,23 @@ function Invoke-QBuild {
             }
             $dynMap = Merge-ConfigMapCommands -Map $dynUserMap -Language build
 
-            if (Test-ConfigMapInternalCommand -Name $entry -Language build) {
-                return Get-EntryDynamicParam $dynMap $entry $command -skip 0 -bound $PSBoundParameters
+            if (Test-ConfigMapInternalCommand -Name $dynEntry -Language build) {
+                $internalParams = Get-EntryDynamicParam $dynMap $dynEntry $command -skip 0 -bound $PSBoundParameters
+                if ($dynEntry -eq 'list' -and $internalParams.ContainsKey('Type')) {
+                    $listTypes = Get-ConfigMapListTypes -Map $dynUserMap
+                    $internalParams['Type'].Attributes.Add(
+                        [System.Management.Automation.ArgumentCompleterAttribute]::new(
+                            { param($c, $p, $word) $listTypes | Where-Object { $_ -like "$word*" } }.GetNewClosure()
+                        )
+                    )
+                }
+                return $internalParams
             }
             if (!$dynUserMap) {
                 return
             }
 
-            $settings = Get-ConfigMapSettingsForPath -Map $dynMap -Path $entry
+            $settings = Get-ConfigMapSettingsForPath -Map $dynMap -Path $dynEntry
             $handler = Get-ConfigMapProcessHandler -Name $settings.Process
             if ($null -ne $handler) {
                 if ($null -ne $handler.GetDynamicParam) {
@@ -214,7 +231,7 @@ function Invoke-QBuild {
                         -Map $dynMap `
                         -UserMap $dynUserMap `
                         -MapArgument $map `
-                        -Entry $entry `
+                        -Entry $dynEntry `
                         -Command $command `
                         -Invocation $MyInvocation `
                         -BoundParameters $PSBoundParameters `
@@ -223,22 +240,22 @@ function Invoke-QBuild {
                         -RemainingArguments $RemainingArguments
                     return & $handler.GetDynamicParam $context
                 }
-                return Get-EntryDynamicParam $dynMap $entry $command -skip 0 -bound $PSBoundParameters
+                return Get-EntryDynamicParam $dynMap $dynEntry $command -skip 0 -bound $PSBoundParameters
             }
             if (Test-ConfigMapProcessCannotDelegate -ProcessName $settings.Process) {
-                return Get-EntryDynamicParam $dynMap $entry $command -skip 0 -bound $PSBoundParameters
+                return Get-EntryDynamicParam $dynMap $dynEntry $command -skip 0 -bound $PSBoundParameters
             }
 
             $mapPath = Resolve-MapPath -Map $dynMap
             $followHint = [bool]$PSBoundParameters['Follow']
             if (-not $mapPath) {
-                return Get-ProcessDynamicParam -Map $dynMap -ProcessKey $entry -Follow:$followHint
+                return Get-ProcessDynamicParam -Map $dynMap -ProcessKey $dynEntry -Follow:$followHint
             }
             return New-ConfigMapProcessDynamicParam `
                 -ProcessName (Get-ConfigMapProcessCliName -ProcessName $settings.Process) `
                 -MapPath $mapPath `
                 -Map $dynMap `
-                -Entry $entry `
+                -Entry $dynEntry `
                 -Follow:$followHint `
                 -ProcessAction $ProcessAction `
                 -ProcessValue $ProcessValue `
@@ -280,6 +297,12 @@ function Invoke-QBuild {
         $map = Merge-ConfigMapCommands -Map $userMap -Language build
 
         if (-not $entry) {
+            $entry = 'list'
+        }
+
+        # Shorthand: `list.<type>` == `list -Type <type>`
+        if ($entry -match '^list\.(.+)$' -and -not $PSBoundParameters.ContainsKey('Type')) {
+            $PSBoundParameters['Type'] = $Matches[1]
             $entry = 'list'
         }
 

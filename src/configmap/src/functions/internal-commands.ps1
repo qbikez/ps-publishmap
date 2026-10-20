@@ -19,14 +19,17 @@ function Get-ConfigMapInternalCommands {
         'list' = @{
             description = 'List available build commands'
             exec = {
-                param($_context)
+                param(
+                    $_context,
+                    [string]$Type
+                )
 
                 if (!$_context.UserMap) {
                     Write-Help -invocation $_context.Invocation -mapPath "./.build.map.ps1"
                     return
                 }
 
-                Write-MapHelp -map $_context.UserMap -invocation $_context.Invocation
+                Write-MapHelp -map $_context.UserMap -invocation $_context.Invocation -Type $Type
             }
         }
         '!init' = @{
