@@ -1,6 +1,6 @@
 #requires -version 7.0
 
-# Mixed map: normal qbuild commands alongside steps and options process entries.
+# Mixed map: normal qbuild commands alongside steps and config process entries.
 # Try:
 #   qbuild clean
 #   qbuild build
@@ -69,7 +69,7 @@
     }
 
     "storage"           = [ordered]@{
-        _settings   = @{ process = "options" }
+        _settings   = @{ process = "config" }
         description = "Storage endpoint configuration"
         options     = [ordered]@{
             local = "https://127.0.0.1:10000/devstoreaccount1"
@@ -91,7 +91,7 @@
     }
 
     "endpoint"          = [ordered]@{
-        _settings   = @{ process = "options" }
+        _settings   = @{ process = "config" }
         _template   = "appsettings:appsettings.Development.json"
         description = "Appsettings storage endpoint (appconfig template)"
         options     = [ordered]@{
@@ -105,7 +105,7 @@
     }
 
     "endpoint_override" = [ordered]@{
-        _settings   = @{ process = "options" }
+        _settings   = @{ process = "config" }
         _template   = "appsettings:appsettings.Development.json"
         description = "Appsettings storage endpoint (appconfig template)"
         options     = [ordered]@{
@@ -128,7 +128,7 @@
     }
 
     "api"               = [ordered]@{
-        _settings   = @{ process = "options" }
+        _settings   = @{ process = "config" }
         _template   = "dotenv:.env"
         description = "API settings in .env (dotenv template)"
         options     = [ordered]@{
@@ -144,7 +144,7 @@
     }
 
     "env"               = [ordered]@{
-        _settings   = @{ process = "options" }
+        _settings   = @{ process = "config" }
         description = "Environment / tenant selection (opaque -tenant)"
         options     = [ordered]@{
             local = "local"

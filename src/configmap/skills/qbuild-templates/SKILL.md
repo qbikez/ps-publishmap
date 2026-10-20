@@ -3,7 +3,7 @@ name: qbuild-templates
 description: >-
   Converts hand-written options get/set entries to built-in _template forms
   (appsettings / dotenv), including get/set overrides via $_context.base.
-  Use when simplifying or modernizing .configuration.map.ps1 or options-process
+  Use when simplifying or modernizing .configuration.map.ps1 or config-process
   map entries, or when get/set only wrap appsettings JSON or .env helpers.
 ---
 
@@ -27,7 +27,7 @@ qbuild !agent.init [-Scope project|user] [-Agent cursor|claude|copilot]
 
 Convert an entry when **all** of these hold:
 
-- It is an options entry (`.configuration.map.ps1`, or `_settings.process = "options"` in a build/process map; legacy `process = "qconf"` still works).
+- It is a config entry (`.configuration.map.ps1`, or `_settings.process = "config"` in a build/process map; legacy `process = "qconf"` still works).
 - `get` / `set` only touch **one** fixed appsettings JSON file or **one** fixed `.env` file via helpers such as `get-appsettings*`, `set-appsettings*`, `Find-ActiveOption`, `get-envsetting*`, `set-envsetting*`, `get-envsettingsObject`, `set-envsettingsObject`.
 - `options` values are hashtables of setting keys (`"Section:Key" = value`) or env vars (`ENV_VAR = value`), not bare scalars.
 
@@ -38,7 +38,7 @@ An author-supplied `get` or `set` always wins over the template fill-in. The tem
 ## Locate entries
 
 1. Prefer `.configuration.map.ps1` next to the project.
-2. Also check `.build.map.ps1` / process maps for entries with `_settings = @{ process = "options" }` (or legacy `"qconf"`).
+2. Also check `.build.map.ps1` / process maps for entries with `_settings = @{ process = "config" }` (or legacy `"qconf"`).
 3. Work from the directory that owns the map (paths in `_template` are relative to the map’s directory / `_baseDir`).
 
 ## Convert
@@ -128,7 +128,7 @@ Declare `$_context` in `param()` so the runtime can inject it. Call the base imp
 
 ```powershell
 "endpoint_override" = @{
-    _settings   = @{ process = "options" }
+    _settings   = @{ process = "config" }
     _template   = "appsettings:appsettings.Development.json"
     description = "Appsettings endpoint with post-set hook"
     options     = @{
@@ -175,7 +175,7 @@ See `samples/process-mixed` (`endpoint_override`) for a runnable example.
 From the map’s directory:
 
 ```powershell
-# Prefer unified qbuild (options process in a build map)
+# Prefer unified qbuild (config process in a build map)
 qbuild <entry>
 qbuild <entry> -value <option>
 qbuild <entry> get

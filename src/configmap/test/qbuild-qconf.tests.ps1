@@ -17,7 +17,7 @@ Describe 'qconf as a qbuild process' {
     }
 
     storage = [ordered]@{
-        _settings   = @{ process = 'options' }
+        _settings   = @{ process = 'config' }
         description = 'App storage endpoint'
         options     = [ordered]@{
             local = 'L'
@@ -260,7 +260,7 @@ Describe 'qconf as a qbuild process' {
         @'
 [ordered]@{
     env = [ordered]@{
-        _settings = @{ process = 'options' }
+        _settings = @{ process = 'config' }
         options   = [ordered]@{ local = 'L'; dev = 'D' }
         get       = { param($ctx, $options) '' }
         set       = { param($ctx, $key, $value, [string]$tenant) }
@@ -287,7 +287,7 @@ Describe 'qconf as a qbuild process' {
         @'
 [ordered]@{
     env = [ordered]@{
-        _settings   = @{ process = 'options' }
+        _settings   = @{ process = 'config' }
         description = 'Environment / tenant selection'
         get         = {
             param($ctx, $options)
@@ -323,7 +323,7 @@ Describe 'qconf as a qbuild process' {
         @'
 [ordered]@{
     env = [ordered]@{
-        _settings = @{ process = 'options' }
+        _settings = @{ process = 'config' }
         get       = {
             param($ctx, $options)
             if (Test-Path 'env.txt') { (Get-Content 'env.txt' -Raw).Trim() } else { '' }
@@ -350,7 +350,7 @@ Describe 'qconf as a qbuild process' {
         @'
 [ordered]@{
     env = [ordered]@{
-        _settings = @{ process = 'options' }
+        _settings = @{ process = 'config' }
         get       = { param($ctx, $options) '' }
         set       = { param($ctx, $key, $value, [string]$tenant) }
     }
@@ -363,7 +363,7 @@ Describe 'qconf as a qbuild process' {
         $params | Should -Contain 'tenant'
     }
 
-    It 'accepts legacy process=qconf as an alias for options' {
+    It 'accepts legacy process=qconf as an alias for config' {
         @'
 [ordered]@{
     storage = [ordered]@{

@@ -213,12 +213,12 @@ function Invoke-QConf {
 
         # Skip noise during tab-completion protocol calls.
         if ($verb -ne '!complete') {
-            Write-ConfigMapDeprecatedProcessCliWarning -CliName 'qconf' -ProcessType 'options'
+            Write-ConfigMapDeprecatedProcessCliWarning -CliName 'qconf' -ProcessType 'config'
         }
 
         if ($verb -eq "help") {
             Write-Host "QCONF (deprecated)"
-            Write-Host "Prefer qbuild with _settings.process = 'options' in .build.map.ps1"
+            Write-Host "Prefer qbuild with _settings.process = 'config' in .build.map.ps1"
             Write-Host "A command line tool to manage configuration maps"
             Write-Host ""
             Write-Host "Usage:"
@@ -571,4 +571,4 @@ function ConvertTo-MapResult($value, $entryName, $entry, $options, $validate = $
 Set-Alias -Name "qconf" -Value "Invoke-QConf" -Force
 
 # Canonical process type for qbuild maps; CLI alias remains qconf.
-Register-ConfigMapCliProcess -Name 'options' -CliName 'qconf'
+Register-ConfigMapCliProcess -Name 'config' -CliName 'qconf'

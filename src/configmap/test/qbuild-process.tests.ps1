@@ -330,7 +330,7 @@ Describe 'deprecated standalone process CLIs' {
         $warnings = $null
         qconf -map $mapFile storage get -WarningVariable warnings -WarningAction SilentlyContinue
         "$warnings" | Should -Match "qconf' is deprecated"
-        "$warnings" | Should -Match "process = 'options'"
+        "$warnings" | Should -Match "process = 'config'"
     }
 
     It 'does not warn when qbuild runs a steps entry' {

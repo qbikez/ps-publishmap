@@ -122,14 +122,14 @@ ConfigMap automatically discovers parameters from script blocks using AST parsin
 ### Process types (`_settings.process`)
 - `exec` - Default; runs the entry `exec` scriptblock (omit `_settings.process` for the same)
 - `steps` - Multi-step runner with persisted state (prefer via `qbuild`; standalone `qrun` is deprecated; legacy map value `qrun` still works)
-- `options` - Configuration get/set/show (prefer via `qbuild`; standalone `qconf` is deprecated; legacy map value `qconf` still works)
+- `config` - Configuration get/set/show (prefer via `qbuild`; standalone `qconf` is deprecated; legacy map value `qconf` still works)
 
 ### Reserved Keys
 - `exec` - Default execution command for qbuild
-- `get/set/validate` - Configuration operations for qconf / `process = options`
+- `get/set/validate` - Configuration operations for qconf / `process = config`
 - `_template` - Built-in entry type: hashtable (`type`/`file`) or short string (`appsettings:{filepath}` / `dotenv:{filepath}`) that fills get/set; author get/set win and can call `$_context.base.get` / `$_context.base.set`
 - `list` - Nested entry container
-- `options` - Available configuration values (map key; distinct from process type `options`)
+- `options` - Available configuration values (map key; distinct from process type `config`)
 - `description` - Command documentation
 
 ### Sample Files Structure

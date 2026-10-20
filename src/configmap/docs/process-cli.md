@@ -1,7 +1,7 @@
 # Process CLI
 
-qbuild process types (`_settings.process`) are **`exec`** (default), **`steps`**, and **`options`**.
-Legacy map values `qrun` and `qconf` still normalize to `steps` and `options`.
+qbuild process types (`_settings.process`) are **`exec`** (default), **`steps`**, and **`config`**.
+Legacy map values `qrun` and `qconf` still normalize to `steps` and `config`.
 
 ## Preferred entry point
 
@@ -9,7 +9,7 @@ Use **`qbuild`** with process types in `.build.map.ps1`:
 
 ```powershell
 _settings = @{ process = 'steps' }    # multi-step runner
-_settings = @{ process = 'options' }  # config get/set/show
+_settings = @{ process = 'config' }  # config get/set/show
 ```
 
 ## Deprecated standalone CLIs
@@ -63,9 +63,9 @@ process-owned arguments.
 _settings = @{ process = 'steps' }
 
 # Config get/set (prefer via qbuild; standalone qconf is deprecated)
-_settings = @{ process = 'options' }
+_settings = @{ process = 'config' }
 
-# Still accepted (normalized to steps / options)
+# Still accepted (normalized to steps / config)
 _settings = @{ process = 'qrun' }
 _settings = @{ process = 'qconf' }
 ```

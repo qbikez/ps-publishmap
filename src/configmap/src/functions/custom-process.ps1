@@ -6,7 +6,7 @@
 # Null GetDynamicParam or WriteListEntry keeps the host fallback for that slot.
 # Only an unregistered, non-builtin name is handed to an external process command.
 #
-# Process-type aliases (legacy → canonical): qrun→steps, qconf→options.
+# Process-type aliases (legacy → canonical): qrun→steps, qconf→config (legacy 'options' also accepted).
 # Canonical names are what maps should declare; legacy values still normalize.
 $script:ConfigMapDefaultProcessName = 'exec'
 $script:ConfigMapProcessHandlers = [System.Collections.Generic.Dictionary[string, hashtable]]::new(
@@ -16,14 +16,15 @@ $script:ConfigMapProcessNameAliases = [System.Collections.Generic.Dictionary[str
     [StringComparer]::OrdinalIgnoreCase
 )
 $script:ConfigMapProcessNameAliases['qrun'] = 'steps'
-$script:ConfigMapProcessNameAliases['qconf'] = 'options'
+$script:ConfigMapProcessNameAliases['qconf'] = 'config'
+$script:ConfigMapProcessNameAliases['options'] = 'config'
 
 # Canonical process type → standalone CLI command (unchanged public aliases).
 $script:ConfigMapProcessCliNames = [System.Collections.Generic.Dictionary[string, string]]::new(
     [StringComparer]::OrdinalIgnoreCase
 )
 $script:ConfigMapProcessCliNames['steps'] = 'qrun'
-$script:ConfigMapProcessCliNames['options'] = 'qconf'
+$script:ConfigMapProcessCliNames['config'] = 'qconf'
 
 # When set, Invoke-QRun / Invoke-QConf skip their deprecation warning (qbuild host calls).
 $script:ConfigMapSuppressProcessCliDeprecation = $false
@@ -98,7 +99,7 @@ function Test-ConfigMapProcessNameMatch {
 function Get-ConfigMapProcessCliName {
     <#
     .SYNOPSIS
-        CLI command for a process type (steps→qrun, options→qconf). Identity otherwise.
+        CLI command for a process type (steps→qrun, config→qconf). Identity otherwise.
     #>
     param(
         [Parameter(Mandatory = $true)]
@@ -853,7 +854,7 @@ function New-ConfigMapProcessDynamicParam {
         $typed = New-Object System.Management.Automation.RuntimeDefinedParameterDictionary
     }
 
-    # Conf-style set scripts (process=options) expose opaque params after ctx/key/value.
+    # Conf-style set scripts (process=config) expose opaque params after ctx/key/value.
     $setParams = Get-EntryDynamicParam $Map "$Entry.set" -skip 3 -bound @{}
     if ($setParams) {
         foreach ($name in @($setParams.Keys)) {
