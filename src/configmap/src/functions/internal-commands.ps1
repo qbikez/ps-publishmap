@@ -1,7 +1,9 @@
 function Get-ConfigMapInternalCommands {
     param(
         [ValidateSet('build')]
-        [string]$Language = 'build'
+        [string]$Language = 'build',
+        [AllowNull()]
+        [System.Collections.IDictionary]$Map = $null
     )
 
     if ($Language -ne 'build') {
@@ -18,19 +20,16 @@ function Get-ConfigMapInternalCommands {
         }
         'list' = @{
             description = 'List available build commands'
-            exec = {
+            exec        = {
                 param(
                     $_context,
                     [string]$Type
                 )
 
-                if (!$_context.UserMap) {
-                    Write-Help -invocation $_context.Invocation -mapPath "./.build.map.ps1"
-                    return
-                }
-
-                Write-MapHelp -map $_context.UserMap -invocation $_context.Invocation -Type $Type
+                Invoke-ConfigMapListCommand -Context $_context -Type $Type
             }
+            # list.<type> shorthands, one per process type in the map
+            list        = New-ConfigMapListTypeEntries -Map $Map
         }
         '!init' = @{
             description = 'Create a build map in the current directory'
@@ -184,6 +183,33 @@ function Get-ConfigMapInternalCommands {
     }
 }
 
+function New-ConfigMapListTypeEntries {
+    param([AllowNull()][System.Collections.IDictionary]$Map)
+
+    $entries = [ordered]@{}
+    foreach ($type in @(Get-ConfigMapListTypes -Map $Map)) {
+        $entries[$type] = @{
+            description = "List $type entries"
+            # Create() keeps the block bound to module scope; GetNewClosure() would lose private functions.
+            exec        = [scriptblock]::Create(
+                "param(`$_context) Invoke-ConfigMapListCommand -Context `$_context -Type '$($type -replace "'", "''")'"
+            )
+        }
+    }
+    return $entries
+}
+
+function Invoke-ConfigMapListCommand {
+    param($Context, [string]$Type)
+
+    if (!$Context.UserMap) {
+        Write-Help -invocation $Context.Invocation -mapPath "./.build.map.ps1"
+        return
+    }
+
+    Write-MapHelp -map $Context.UserMap -invocation $Context.Invocation -Type $Type
+}
+
 function Install-QBuildExtension {
     param(
         [string]$Version,
@@ -209,7 +235,7 @@ function Merge-ConfigMapCommands {
 
     $result = [ordered]@{}
     $commands = [ordered]@{}
-    $internalCommands = Get-ConfigMapInternalCommands -Language $Language
+    $internalCommands = Get-ConfigMapInternalCommands -Language $Language -Map $Map
 
     if ($Map) {
         foreach ($metadataKey in @('_baseDir', '_sourceFile', '_settings', '_dependsOn')) {
@@ -264,5 +290,26 @@ function Test-ConfigMapInternalCommand {
         return $false
     }
 
-    return (Get-ConfigMapInternalCommands -Language $Language).Contains($Name)
+    $commands = Get-ConfigMapInternalCommands -Language $Language
+    # Nested internal entries (list.<type>) resolve through their parent command.
+    return $commands.Contains($Name) -or $commands.Contains(($Name -split '\.')[0])
+}
+
+function Get-ConfigMapInternalCommandPaths {
+    <#
+    .SYNOPSIS
+        Internal command names including nested entries (e.g. list.qconf), for completion.
+    #>
+    param([AllowNull()][System.Collections.IDictionary]$Map)
+
+    $paths = [ordered]@{}
+    foreach ($item in (Get-ConfigMapInternalCommands -Language build -Map $Map).GetEnumerator()) {
+        $paths[[string]$item.Key] = $item.Value
+        if ($item.Value -is [System.Collections.IDictionary] -and $item.Value.list -is [System.Collections.IDictionary]) {
+            foreach ($child in $item.Value.list.GetEnumerator()) {
+                $paths["$($item.Key).$($child.Key)"] = $child.Value
+            }
+        }
+    }
+    return $paths
 }

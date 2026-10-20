@@ -316,6 +316,31 @@ Describe 'qbuild _settings.process=steps forwarding' {
         $exec | Should -Match '\bclean\b'
         $exec | Should -Not -Match 'setting|steps1'
     }
+
+    It 'completes list types for -Type and the list.<type> shorthand' {
+        $localMap = Join-Path $script:workDir 'mixed.build.map.ps1'
+        @'
+[ordered]@{
+    clean   = { 'clean' }
+    steps1  = [ordered]@{ _settings = @{ process = 'steps' }; one = { 'one' } }
+    setting = [ordered]@{
+        _settings = @{ process = 'options' }
+        get       = { 'x' }
+        set       = { param($_context, $value, $key) }
+        options   = @{ local = 'x' }
+    }
+}
+'@ | Set-Content -LiteralPath $localMap -Encoding utf8
+
+        $line = "qbuild -map '$localMap' list -Type "
+        (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText | Should -Be @('exec', 'qconf', 'qrun')
+
+        $line = "qbuild -map '$localMap' list -Type q"
+        (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText | Should -Be @('qconf', 'qrun')
+
+        $line = "qbuild -map '$localMap' list."
+        (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText | Should -Be @('list.exec', 'list.qconf', 'list.qrun')
+    }
 }
 
 Describe 'deprecated standalone process CLIs' {
