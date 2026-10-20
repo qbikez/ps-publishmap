@@ -60,6 +60,7 @@ function Invoke-QRun {
         [switch]$Force,
         [switch]$Status,
         [switch]$Reset,
+        [switch]$Check,
 
         # Machine-readable !complete protocol (DontShow — used by qbuild / tooling)
         [Parameter(DontShow)]
@@ -113,8 +114,8 @@ function Invoke-QRun {
             Write-Host "Run multi-step processes with durable step state" -ForegroundColor Gray
             Write-Host ""
             Write-Host "USAGE:" -ForegroundColor Yellow
-            Write-Host "    qrun <process> [-Force] [-Status] [-Reset]" -ForegroundColor White
-            Write-Host "    qrun <process>.<step> [-Follow] [-Force]" -ForegroundColor White
+            Write-Host "    qrun <process> [-Force] [-Status] [-Reset] [-Check]" -ForegroundColor White
+            Write-Host "    qrun <process>.<step> [-Follow] [-Force] [-Check]" -ForegroundColor White
             Write-Host "    qrun !state [show|clean] [<process>]" -ForegroundColor White
             Write-Host "    qrun list [<process>]" -ForegroundColor White
             Write-Host ""
@@ -123,6 +124,7 @@ function Invoke-QRun {
             Write-Host "    -Force            Rerun succeeded steps; also allow starting mid-process when prior steps are incomplete" -ForegroundColor White
             Write-Host "    -Status           Show persisted step statuses without running" -ForegroundColor White
             Write-Host "    -Reset            Clear persisted state for the process" -ForegroundColor White
+            Write-Host "    -Check            Run 'check' handlers (process-level, else per step) instead of exec; syncs persisted state" -ForegroundColor White
             Write-Host ""
             Write-Host "STATE:" -ForegroundColor Yellow
             Write-Host "    qrun                      Show process state (same as !state)" -ForegroundColor White
@@ -187,7 +189,7 @@ function Invoke-QRun {
                 }
 
                 $names = [System.Collections.Generic.List[string]]::new()
-                foreach ($switchName in @('Follow', 'Force', 'Status', 'Reset')) {
+                foreach ($switchName in @('Follow', 'Force', 'Status', 'Reset', 'Check')) {
                     $names.Add($switchName) | Out-Null
                 }
 
@@ -338,6 +340,28 @@ function Invoke-QRun {
             return
         }
 
+        $bound = @{}
+        foreach ($key in $PSBoundParameters.Keys) {
+            if ($key -in @('command', 'entry', 'Follow', 'Force', 'Status', 'Reset', 'Check', 'map', 'RemainingArguments', 'Word', 'Params')) {
+                continue
+            }
+            $bound[$key] = $PSBoundParameters[$key]
+        }
+        $passthrough = @($RemainingArguments) | Where-Object { $null -ne $_ }
+        if ($passthrough.Count -gt 0) {
+            $bound._context = @{ additionalArgs = @($passthrough) }
+        }
+
+        if ($Check) {
+            $checkTarget = @{
+                Map = $map; ProcessKey = $processKey; ProcessEntry = $processMapEntry; BaseDir = $baseDir
+                Bound = $bound; OperationContext = $operationContext; State = $state; StatePath = $statePath
+            }
+            $stepsToCheck = Get-ProcessStepsToRun -StepNames $stepNames -FromStep $fromStep -Follow:$Follow
+            Invoke-ProcessCheckRun @checkTarget -StepNames $stepNames -StepsToCheck $stepsToCheck -WholeProcess:(-not $fromStep)
+            return
+        }
+
         $skippedPrior = @()
         if ($fromStep) {
             $skippedPrior = @(Assert-ProcessPriorSteps -StepNames $stepNames -FromStep $fromStep -State $state -Force:$Force)
@@ -363,18 +387,6 @@ function Invoke-QRun {
             Write-Host "SKIP" -NoNewline -ForegroundColor DarkYellow
             Write-Host "  $priorName" -NoNewline -ForegroundColor White
             Write-Host "  (forced; was $priorStatus)" -ForegroundColor DarkGray
-        }
-
-        $bound = @{}
-        foreach ($key in $PSBoundParameters.Keys) {
-            if ($key -in @('command', 'entry', 'Follow', 'Force', 'Status', 'Reset', 'map', 'RemainingArguments', 'Word', 'Params')) {
-                continue
-            }
-            $bound[$key] = $PSBoundParameters[$key]
-        }
-        $passthrough = @($RemainingArguments) | Where-Object { $null -ne $_ }
-        if ($passthrough.Count -gt 0) {
-            $bound._context = @{ additionalArgs = @($passthrough) }
         }
 
         $ran = 0

@@ -77,7 +77,16 @@ These stay on the process command for direct use:
 ```text
 qrun help
 qrun !state [show|clean] [<entry>]
-qrun <entry> [-Follow] [-Force] [-Status] [-Reset] …
+qrun <entry> [-Follow] [-Force] [-Status] [-Reset] [-Check] …
 ```
+
+### `-Check` (steps)
+
+`-Check` verifies the real state instead of trusting the cache, and never runs `exec`:
+
+- A step may declare `check = { ... }` (step as hashtable with `exec` + `check`). A truthy last output is OK; `$false`, no output or a throw is a failed check.
+- A `check` on the process entry itself replaces the per-step checks when checking the whole process (`qbuild bootstrap -check`). `qbuild bootstrap.prepare -check` always uses that step's own check.
+- Results sync the cache: OK -> `Succeeded`, failed -> `Pending`. Steps without a handler are reported `UNCHECKED` and keep their cached status.
+- The command throws (non-zero exit) when any check fails.
 
 Callers that only use the shared surface should not special-case these switches; they discover names via `!complete -params` and forward whatever the user bound.

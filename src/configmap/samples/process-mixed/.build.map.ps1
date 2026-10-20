@@ -37,11 +37,16 @@
         _settings   = @{ process = "steps" }
         description = "Multi-step bootstrap with durable step state"
 
-        "prepare"   = {
-            $ws = Join-Path (Get-Location) 'workspace'
-            New-Item -ItemType Directory -Path $ws -Force | Out-Null
-            'prepared' | Set-Content (Join-Path $ws 'prepare.txt')
-            Write-Host "  prepared workspace" -ForegroundColor Gray
+        # `qbuild bootstrap -check` runs `check` handlers instead of trusting cached state
+        # (a `check` on "bootstrap" itself would replace the per-step checks).
+        "prepare"   = @{
+            exec  = {
+                $ws = Join-Path (Get-Location) 'workspace'
+                New-Item -ItemType Directory -Path $ws -Force | Out-Null
+                'prepared' | Set-Content (Join-Path $ws 'prepare.txt')
+                Write-Host "  prepared workspace" -ForegroundColor Gray
+            }
+            check = { Test-Path (Join-Path (Get-Location) 'workspace/prepare.txt') }
         }
 
         "restore"   = {
