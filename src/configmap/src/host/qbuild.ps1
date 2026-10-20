@@ -44,7 +44,7 @@ function Invoke-QBuild {
                     }
 
                     $configMapModule = (Get-Command Invoke-QBuild).Module
-                    $internalCommands = & $configMapModule { Get-ConfigMapInternalCommands -Language build }
+                    $internalCommands = & $configMapModule { param($m) Get-ConfigMapInternalCommandPaths -Map $m } $userMap
                     foreach ($item in $internalCommands.GetEnumerator()) {
                         if (-not ([string]$item.Key).StartsWith($completionWord)) {
                             continue

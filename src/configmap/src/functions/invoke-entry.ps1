@@ -103,6 +103,13 @@ function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}
 
     Write-Verbose "ordered args: $( $ordered -join ', ' )"
     Write-Verbose "filtered args: $( $filtered.Keys -join ', ' )"
+    # ValidateSet('@sibling') is resolved into a real set by the dynamic parameter, which has already
+    # validated the value; the literal attribute would reject every real value when the block runs.
+    $siblingValidateSet = '\[\s*ValidateSet\(\s*[''"]@\w+[''"]\s*\)\s*\]'
+    if ($command.ToString() -match $siblingValidateSet) {
+        $command = [scriptblock]::Create(($command.ToString() -replace $siblingValidateSet, ''))
+    }
+
     try {
         pushd $baseDir
         return & $command @ordered @filtered

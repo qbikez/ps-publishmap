@@ -315,6 +315,88 @@ Describe 'qbuild _settings.process=steps forwarding' {
         qbuild -map $localMap bootstrap.prepare
         Test-Path (Join-Path $script:workDir 'workspace' 'prepare.txt') | Should -BeTrue
     }
+
+    It 'filters qbuild list by process type via -Type and list.<type> shorthand' {
+        $localMap = Join-Path $script:workDir 'mixed.build.map.ps1'
+        @'
+[ordered]@{
+    clean   = { 'clean' }
+    steps1  = [ordered]@{ _settings = @{ process = 'steps' }; one = { 'one' } }
+    setting = [ordered]@{
+        _settings = @{ process = 'options' }
+        get       = { 'x' }
+        set       = { param($_context, $value, $key) }
+        options   = @{ local = 'x' }
+    }
+}
+'@ | Set-Content -LiteralPath $localMap -Encoding utf8
+
+        $byParam = qbuild -map $localMap list -Type qconf 6>&1 | Out-String
+        $byShorthand = qbuild -map $localMap list.qconf 6>&1 | Out-String
+        $steps = qbuild -map $localMap list.qrun 6>&1 | Out-String
+        $exec = qbuild -map $localMap list.exec 6>&1 | Out-String
+
+        $byParam | Should -Match 'setting'
+        $byParam | Should -Not -Match 'steps1'
+        $byParam | Should -Not -Match '\bclean\b'
+        $byShorthand | Should -Be $byParam
+        $steps | Should -Match 'steps1'
+        $steps | Should -Not -Match 'setting'
+        $exec | Should -Match '\bclean\b'
+        $exec | Should -Not -Match 'setting|steps1'
+    }
+
+    It 'runs entries that declare ValidateSet with an @sibling reference' {
+        $localMap = Join-Path $script:workDir 'sibling.build.map.ps1'
+        @'
+[ordered]@{
+    deploy = @{
+        envs = @('dev', 'prod')
+        exec = {
+            param([ValidateSet('@envs')][string]$Env)
+            "deployed:$Env" | Set-Content 'deployed.txt'
+        }
+    }
+}
+'@ | Set-Content -LiteralPath $localMap -Encoding utf8
+
+        qbuild -map $localMap deploy -Env prod
+        Get-Content (Join-Path $script:workDir 'deployed.txt') | Should -Be 'deployed:prod'
+        { qbuild -map $localMap deploy -Env nope } | Should -Throw '*nope*'
+    }
+
+    It 'completes list types for -Type and the list.<type> shorthand' {
+        $localMap = Join-Path $script:workDir 'mixed.build.map.ps1'
+        @'
+[ordered]@{
+    clean   = { 'clean' }
+    steps1  = [ordered]@{ _settings = @{ process = 'steps' }; one = { 'one' } }
+    setting = [ordered]@{
+        _settings = @{ process = 'options' }
+        get       = { 'x' }
+        set       = { param($_context, $value, $key) }
+        options   = @{ local = 'x' }
+    }
+}
+'@ | Set-Content -LiteralPath $localMap -Encoding utf8
+
+        $line = "qbuild -map '$localMap' list -Type "
+        (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText | Should -Be @('exec', 'options', 'qconf', 'qrun', 'steps')
+
+        $line = "qbuild -map '$localMap' list -Type q"
+        (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText | Should -Be @('qconf', 'qrun')
+
+        $line = "qbuild -map '$localMap' list -Type o"
+        (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText | Should -Be @('options')
+
+        # canonical names stay valid for -Type, but get no list.<type> shorthand
+        { qbuild -map $localMap list -Type options 6>$null } | Should -Not -Throw
+        { qbuild -map $localMap list -Type steps 6>$null } | Should -Not -Throw
+        { qbuild -map $localMap list -Type qcnof 6>$null } | Should -Throw '*qcnof*'
+
+        $line = "qbuild -map '$localMap' list."
+        (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText | Should -Be @('list.exec', 'list.qconf', 'list.qrun')
+    }
 }
 
 Describe 'deprecated standalone process CLIs' {

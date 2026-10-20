@@ -22,6 +22,36 @@ Describe 'qbuild internal commands' {
         }
     }
 
+    It 'defines list.<type> shorthands as sub-entries of the list command' {
+        InModuleScope ConfigMap {
+            $map = [ordered]@{
+                setting = [ordered]@{ _settings = @{ process = 'options' }; get = { 'x' }; set = { param($_context, $value, $key) }; options = @{ local = 'x' } }
+                steps1  = [ordered]@{ _settings = @{ process = 'steps' }; one = { 'one' } }
+            }
+
+            $list = (Get-ConfigMapInternalCommands -Language build -Map $map)['list']
+            @($list.list.Keys) | Should -Be @('exec', 'qconf', 'qrun')
+
+            $merged = Merge-ConfigMapCommands -Map $map -Language build
+            (Get-MapEntry $merged 'list.qconf' -language build).exec | Should -BeOfType ([scriptblock])
+            (Get-MapEntry $merged 'list.exec' -language build).exec | Should -BeOfType ([scriptblock])
+            Test-ConfigMapInternalCommand -Name 'list.qconf' -Language build | Should -BeTrue
+            Test-ConfigMapInternalCommand -Name 'nope.qconf' -Language build | Should -BeFalse
+        }
+    }
+
+    It 'lists internal command paths including list.<type>' {
+        InModuleScope ConfigMap {
+            $map = [ordered]@{ steps1 = [ordered]@{ _settings = @{ process = 'steps' }; one = { 'one' } } }
+
+            $paths = Get-ConfigMapInternalCommandPaths -Map $map
+            @($paths.Keys) | Should -Contain 'list'
+            @($paths.Keys) | Should -Contain 'list.exec'
+            @($paths.Keys) | Should -Contain 'list.qrun'
+            @($paths.Keys) | Should -Not -Contain 'list.qconf'
+        }
+    }
+
     It 'keeps user commands while internal commands win name collisions' {
         InModuleScope ConfigMap {
             $userBuild = { 'user build' }

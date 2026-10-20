@@ -70,6 +70,7 @@ Entry script bodies live in the project's map (or maps it `#include`s):
 | Full catalog (objects) | `qbuild !describe` |
 | One command | `qbuild !describe <name>` |
 | Human listing | `qbuild` or `qbuild list` |
+| Listing by process type | `qbuild list -Type <type>` or `qbuild list.<type>` (`exec`, `qconf`, `qrun`, …; tab-completes) |
 | Effective settings | `qbuild !settings [path]` |
 | Discovery cache | `qbuild !cache [status\|clear\|rebuild]` |
 | Cache location | `qbuild !settings` → `DiscoveryCacheLocation` (`local` or `user`) |
@@ -78,3 +79,16 @@ Entry script bodies live in the project's map (or maps it `#include`s):
 ## Catalog shape
 
 Each object has `Name`, `Description`, `IsParent`, and `Parameters` (`Name`, `Type`, `IsSwitch`, `ValidateSet`, `DefaultValue`).
+
+## Dynamic `ValidateSet`
+
+An entry may declare `[ValidateSet('@key')]` on a parameter: the allowed values then come from the entry's sibling `key` (an array, or a scriptblock returning one) rather than a literal list.
+
+```powershell
+deploy = @{
+    envs = @('dev', 'prod')
+    exec = { param([ValidateSet('@envs')][string]$Env) ... }
+}
+```
+
+When reading a map, do not treat `'@envs'` as a value; use the resolved set from `qbuild !describe <name>` (`Parameters[].ValidateSet`) or tab completion. Keep this form when editing such parameters.

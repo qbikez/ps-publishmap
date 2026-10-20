@@ -385,12 +385,13 @@ function Get-ScriptArgs {
                     if ($values.Count -gt 0) {
                         # Resolve @__siblingKey reference to entry's sibling array
                         if ($values.Count -eq 1 -and $values[0] -match '^@(.+)$') {
-                            if ($entryContext -isnot [System.Collections.IDictionary]) {
-                                throw "entryContext is not a dictionary"
-                            }
                             $refKey = $Matches[1]
-                            $resolved = $entryContext[$refKey]
-                            if ($resolved) {
+                            # Callers that only read parameter names pass no entry; leave the set unresolved then.
+                            $resolved = if ($entryContext -is [System.Collections.IDictionary]) { $entryContext[$refKey] } else { $null }
+                            if ($entryContext -isnot [System.Collections.IDictionary]) {
+                                $values = @()
+                            }
+                            elseif ($resolved) {
                                 if ($resolved -is [array]) {
                                     $values = @($resolved | ForEach-Object { [string]$_ })
                                 }
