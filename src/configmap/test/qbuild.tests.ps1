@@ -70,6 +70,26 @@ Describe "qbuild multi-target" {
         $script:mtRan | Should -Be @("clean", "build")
     }
 
+    It "stops at the first target that throws" {
+        $map = @{
+            "a" = { Invoke-MTTarget -name "a" }
+            "b" = { throw "boom" }
+            "c" = { Invoke-MTTarget -name "c" }
+        }
+        { qbuild -map $map a,b,c } | Should -Throw
+        $script:mtRan | Should -Be @("a")
+    }
+
+    It "stops at the first target that leaves a non-zero exit code" {
+        $map = @{
+            "a" = { Invoke-MTTarget -name "a" }
+            "b" = { pwsh -NoProfile -Command "exit 3" }
+            "c" = { Invoke-MTTarget -name "c" }
+        }
+        { qbuild -map $map a,b,c } | Should -Throw "*exit code 3*"
+        $script:mtRan | Should -Be @("a")
+    }
+
     It "completes the second target after a comma" {
         Push-Location $script:mtMapDir
         try {
