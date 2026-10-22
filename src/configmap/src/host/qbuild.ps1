@@ -255,7 +255,11 @@ function Invoke-QBuild {
                 $params = @{}
                 foreach ($k in $PSBoundParameters.Keys) { $params[$k] = $PSBoundParameters[$k] }
                 $params['entry'] = $e
+                $global:LASTEXITCODE = 0
                 Invoke-QBuild @params
+                if ($global:LASTEXITCODE) {
+                    throw "Entry '$e' failed with exit code $global:LASTEXITCODE. Stopping."
+                }
             }
             return
         }
