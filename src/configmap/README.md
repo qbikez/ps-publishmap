@@ -406,6 +406,14 @@ Creates a `.configuration.map.ps1` file with sample configuration entries.
         description = "API settings, options discovered from .env.* files"
         _template   = "dotenv:.env"
     }
+
+    # keys = "auto" (reads .env.example/.sample/.template) or keys = "<file>" also adds one entry
+    # per key: `qbuild keyed.API_URL -value https://staging`. A comment line above a key becomes
+    # its description. Presets keep working on the parent entry.
+    "keyed" = @{
+        description = "API settings, one entry per key in .env.example"
+        _template   = @{ type = "dotenv"; file = ".env"; keys = "auto" }
+    }
 }
 ```
 

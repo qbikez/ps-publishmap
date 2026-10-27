@@ -252,6 +252,117 @@ function Get-DotEnvEntryOptions {
     return $options
 }
 
+function Read-DotEnvKeyInfo {
+    <#
+    .SYNOPSIS
+        Read a dotenv file as key -> @{ Value; Description }, where Description is the
+        comment line(s) directly above the key.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$File
+    )
+
+    $info = [ordered]@{}
+    $comments = [System.Collections.Generic.List[string]]::new()
+    foreach ($line in @(Get-Content -LiteralPath $File)) {
+        if ($line -match '^\s*#\s?(.*)$') {
+            $comments.Add($Matches[1].Trim())
+            continue
+        }
+
+        $parsed = ConvertFrom-DotEnvLine $line
+        if ($parsed) {
+            $info[$parsed.Key] = @{ Value = $parsed.Value; Description = ($comments -join ' ') }
+        }
+        $comments.Clear()
+    }
+    return $info
+}
+
+function Resolve-DotEnvKeysFile {
+    param(
+        $Keys,
+        [Parameter(Mandatory = $true)]
+        [string]$Target
+    )
+
+    $directory = Split-Path -Parent $Target
+    if ($Keys -is [string] -and $Keys -ne 'auto') {
+        $candidates = @([System.IO.Path]::IsPathRooted($Keys) ? $Keys : (Join-Path $directory $Keys))
+    }
+    else {
+        $candidates = 'example', 'sample', 'template' | ForEach-Object { "$Target.$_" }
+    }
+
+    return $candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+}
+
+function New-DotEnvKeyEntry {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Key,
+        [Parameter(Mandatory = $true)]
+        $Info,
+        [Parameter(Mandatory = $true)]
+        [string]$File,
+        [string]$BaseDir
+    )
+
+    # No _template here: it would make the child discover the parent's .env.<name> presets as options.
+    $description = $Info.Description ? $Info.Description : "$Key"
+    $entry = [ordered]@{
+        description = "$description (example: $($Info.Value))"
+        _internal   = @{ envKey = $Key; envFile = $File }
+        get         = {
+            param($ctx, $options, $_context)
+            get-envsetting $_context.self._internal.envKey $_context.self._internal.envFile
+        }
+        set         = {
+            param($ctx, $key, $value, $_context)
+            set-envsetting $_context.self._internal.envKey $key $_context.self._internal.envFile
+        }
+    }
+    if ($BaseDir) { $entry._baseDir = $BaseDir }
+    return $entry
+}
+
+function Expand-DotEnvKeyEntries {
+    <#
+    .SYNOPSIS
+        Add one child entry per key to dotenv _template entries that set `keys`.
+
+    .DESCRIPTION
+        `keys = 'auto'` reads `<file>.example` (or `.sample` / `.template`); any other string
+        names the file to read keys from. Children are named after the key (`api.API_URL`),
+        read and write just that key, and never replace an entry the map already defines.
+    #>
+    param(
+        [System.Collections.IDictionary]$Map
+    )
+
+    foreach ($name in @($Map.Keys)) {
+        $entry = $Map[$name]
+        if ($entry -isnot [System.Collections.IDictionary] -or "$name".StartsWith('_') -or $name -eq 'options') { continue }
+
+        $template = $null
+        try { $template = Get-ConfigEntryTemplate -Entry $entry } catch { Write-Verbose "dotenv key discovery skipped: $($_.Exception.Message)" }
+        if ($template -and $template.type -eq 'dotenv' -and $template.Contains('keys') -and $template.keys) {
+            $target = Resolve-ConfigEntryFile -Entry $entry -Template $template -TypeName 'dotenv'
+            $keysFile = Resolve-DotEnvKeysFile -Keys $template.keys -Target $target
+            if ($keysFile) {
+                $info = Read-DotEnvKeyInfo -File $keysFile
+                foreach ($key in $info.Keys) {
+                    if ($entry.Contains($key)) { continue }
+                    $entry[$key] = New-DotEnvKeyEntry -Key $key -Info $info[$key] -File $target -BaseDir $entry._baseDir
+                }
+            }
+        }
+
+        Expand-DotEnvKeyEntries -Map $entry
+    }
+}
+
 function Get-ConfigEntryTypeCommands {
     <#
     .SYNOPSIS

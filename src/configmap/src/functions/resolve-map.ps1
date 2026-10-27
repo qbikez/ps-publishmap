@@ -214,6 +214,7 @@ $script:ImportConfigMap = {
         if ($importConfigMapResolved.source -eq 'file') {
             $importConfigMapSourceFile = $importConfigMapResolved.sourceFile
             $importConfigMapResult = . $importConfigMapSourceFile | Add-BaseDir -baseDir $importConfigMapSourceFile
+            Expand-DotEnvKeyEntries -Map $importConfigMapResult
             $importConfigMapResult._sourceFile = [System.IO.Path]::GetFullPath($importConfigMapSourceFile)
         }
         else {
