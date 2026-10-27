@@ -398,6 +398,14 @@ Creates a `.configuration.map.ps1` file with sample configuration entries.
             prod  = @{ "API_URL" = "https://api.example.com"; "API_KEY" = "prod-key" }
         }
     }
+
+    # Omit `options` and the dotenv template discovers them from sibling files:
+    # .env.prod -> "prod", .env.dev.example -> "dev", .env.example -> "example".
+    # A real .env.<name> wins over .env.<name>.example; explicit `options` disable discovery.
+    "auto_envfile" = @{
+        description = "API settings, options discovered from .env.* files"
+        _template   = "dotenv:.env"
+    }
 }
 ```
 

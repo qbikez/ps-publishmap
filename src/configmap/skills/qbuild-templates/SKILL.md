@@ -77,6 +77,8 @@ Note: short prefix is `appsettings:`; long `type` is `appconfig`.
 
 Long form: `_template = @{ type = "dotenv"; file = ".env" }`.
 
+Omit `options` to discover them from sibling files: `.env.prod` → `prod`, `.env.dev.example` → `dev`, `.env.example` → `example` (real file wins over its `.example`; `#` comments, `export` and quotes are parsed). Explicit `options` turn discovery off.
+
 ### Keep / remove
 
 - **Keep:** `description`, `options`, `validate`, `_settings`, `_dependsOn`.

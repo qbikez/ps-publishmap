@@ -52,7 +52,12 @@ function Get-MapEntryList {
         Add-ConfigMapDependsOnDependencies -Node $map -Map $map -OperationContext $OperationContext
     }
 
-    $list = $map.$listKey ? $map.$listKey : $map
+    $discoveredOptions = $null
+    if ($listKey -eq 'options' -and $map -is [System.Collections.IDictionary] -and -not $map.Contains('options')) {
+        $discoveredOptions = Get-DotEnvEntryOptions -Entry $map
+    }
+
+    $list = $discoveredOptions ?? ($map.$listKey ? $map.$listKey : $map)
     $list = $list -is [scriptblock] ? (Invoke-Command -ScriptBlock $list) : $list
 
     # switch automatically iterates over the array, so we need to wrap it in a single element array

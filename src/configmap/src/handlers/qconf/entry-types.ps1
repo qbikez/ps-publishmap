@@ -166,6 +166,92 @@ function Set-DotEnvOption {
     }
 }
 
+function ConvertFrom-DotEnvLine {
+    <#
+    .SYNOPSIS
+        Parse one dotenv line into @{ Key; Value }, or $null for blanks, comments and non-assignments.
+    #>
+    param([string]$Line)
+
+    if ($Line -notmatch '^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_.]*)\s*=\s*(.*?)\s*$') { return $null }
+
+    $key = $Matches[1]
+    $value = $Matches[2]
+    if ($value -match '^"(.*)"$' -or $value -match "^'(.*)'$") {
+        $value = $Matches[1]
+    }
+    else {
+        # An unquoted value ends at an inline comment.
+        $value = ($value -replace '\s+#.*$', '')
+    }
+
+    return @{ Key = $key; Value = $value }
+}
+
+function Read-DotEnvOptionValues {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$File
+    )
+
+    $values = [ordered]@{}
+    foreach ($line in @(Get-Content -LiteralPath $File)) {
+        $parsed = ConvertFrom-DotEnvLine $line
+        if ($parsed) { $values[$parsed.Key] = $parsed.Value }
+    }
+    return $values
+}
+
+function Get-DotEnvEntryOptions {
+    <#
+    .SYNOPSIS
+        Derive options from the dotenv files that sit next to a dotenv _template entry's file.
+
+    .DESCRIPTION
+        For `_template = "dotenv:.env"` every sibling `.env.<name>` becomes option `<name>`.
+        A `.example`, `.sample` or `.template` suffix is ignored (`.env.dev.example` is option
+        `dev`); a bare `.env.example` becomes option `example`. When both `.env.dev` and
+        `.env.dev.example` exist, the real file wins. Returns $null when the entry is not a
+        dotenv template or nothing usable is found, so explicit `options` are never replaced.
+    #>
+    param(
+        $Entry
+    )
+
+    if ($Entry -isnot [System.Collections.IDictionary] -or -not $Entry.Contains('_template')) { return $null }
+
+    try {
+        $template = Get-ConfigEntryTemplate -Entry $Entry
+        if ($null -eq $template -or $template.type -ne 'dotenv') { return $null }
+        $target = Resolve-ConfigEntryFile -Entry $Entry -Template $template -TypeName 'dotenv'
+    }
+    catch {
+        Write-Verbose "dotenv option discovery skipped: $($_.Exception.Message)"
+        return $null
+    }
+
+    $directory = Split-Path -Parent $target
+    $leaf = Split-Path -Leaf $target
+    if (-not (Test-Path -LiteralPath $directory -PathType Container)) { return $null }
+
+    $templateSuffix = '\.(example|sample|template)$'
+    $candidates = Get-ChildItem -LiteralPath $directory -File -Force |
+        Where-Object { $_.Name -ne $leaf -and $_.Name.StartsWith("$leaf.", [System.StringComparison]::OrdinalIgnoreCase) } |
+        Sort-Object { $_.Name -match $templateSuffix }, Name
+
+    $options = [ordered]@{}
+    foreach ($file in $candidates) {
+        $name = $file.Name.Substring($leaf.Length + 1) -replace $templateSuffix, ''
+        if ($options.Contains($name)) { continue }
+
+        $values = Read-DotEnvOptionValues -File $file.FullName
+        if ($values.Count -gt 0) { $options[$name] = $values }
+    }
+
+    if ($options.Count -eq 0) { return $null }
+    return $options
+}
+
 function Get-ConfigEntryTypeCommands {
     <#
     .SYNOPSIS

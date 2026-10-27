@@ -131,7 +131,7 @@ ConfigMap automatically discovers parameters from script blocks using AST parsin
 - `get/set/validate` - Configuration operations for qconf / `process = options`
 - `_template` - Built-in entry type: hashtable (`type`/`file`) or short string (`appsettings:{filepath}` / `dotenv:{filepath}`) that fills get/set; author get/set win and can call `$_context.base.get` / `$_context.base.set`
 - `list` - Nested entry container
-- `options` - Available configuration values (map key; distinct from process type `options`)
+- `options` - Available configuration values (map key; distinct from process type `options`). A `dotenv` `_template` entry without `options` derives them from sibling `.env.<name>[.example|.sample|.template]` files (`Get-DotEnvEntryOptions`)
 - `description` - Command documentation
 
 ### Sample Files Structure
