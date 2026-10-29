@@ -6,6 +6,7 @@
 #   qbuild build
 #   qbuild bootstrap
 #   qbuild bootstrap.prepare
+#   qbuild provision            # forceCheck: re-checks real state on every run
 #   qbuild storage
 #   qbuild storage -value prod
 #   qbuild endpoint
@@ -70,6 +71,33 @@
             }
             'ok' | Set-Content (Join-Path $ws 'verify.txt')
             Write-Host "  verified" -ForegroundColor Green
+        }
+    }
+
+    "provision"         = [ordered]@{
+        # forceCheck runs the `check` handlers before every run instead of trusting
+        # cached state, so deleting workspace/tools re-runs "tools" on the next run.
+        _settings   = @{ process = "steps"; forceCheck = $true }
+        description = "Steps that re-verify real state on every run"
+
+        "tools"     = @{
+            exec  = {
+                $tools = Join-Path (Get-Location) 'workspace/tools'
+                New-Item -ItemType Directory -Path $tools -Force | Out-Null
+                'installed' | Set-Content (Join-Path $tools 'tool.txt')
+                Write-Host "  installed tools" -ForegroundColor Gray
+            }
+            check = { Test-Path (Join-Path (Get-Location) 'workspace/tools/tool.txt') }
+        }
+
+        "config"    = @{
+            exec  = {
+                $ws = Join-Path (Get-Location) 'workspace'
+                New-Item -ItemType Directory -Path $ws -Force | Out-Null
+                'configured' | Set-Content (Join-Path $ws 'provision.cfg')
+                Write-Host "  wrote provision.cfg" -ForegroundColor Gray
+            }
+            check = { Test-Path (Join-Path (Get-Location) 'workspace/provision.cfg') }
         }
     }
 
