@@ -89,4 +89,24 @@ qrun <entry> [-Follow] [-Force] [-Status] [-Reset] [-Check] …
 - Results sync the cache: OK -> `Succeeded`, failed -> `Pending`. Steps without a handler are reported `UNCHECKED` and keep their cached status.
 - The command throws (non-zero exit) when any check fails.
 
+### `_settings.forceCheck` (steps)
+
+Set `forceCheck` to run the checks on every normal run instead of trusting the cache, so one command both refreshes the state and reruns what is missing:
+
+```powershell
+bootstrap = [ordered]@{
+    _settings = @{ process = 'steps'; forceCheck = $true }
+    prepare   = @{
+        exec  = { ... }
+        check = { Test-Path 'prepared.txt' }
+    }
+}
+```
+
+- Each run first does what `-Check` does for the targeted steps, then runs as usual: steps whose check failed are reset to `Pending` and executed; steps whose check passed are skipped.
+- A failed check does not fail the run; only a failing `exec` does.
+- Steps without a `check` handler keep their cached status.
+- `-Force` skips the checks, since it reruns every step anyway.
+- Like other settings, it inherits from map and ancestor `_settings`, and `$env:QCONF_ForceCheck = '1'` turns it on everywhere.
+
 Callers that only use the shared surface should not special-case these switches; they discover names via `!complete -params` and forward whatever the user bound.

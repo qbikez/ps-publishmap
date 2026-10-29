@@ -703,7 +703,7 @@ function Invoke-ProcessCheckRun {
         `-Check`: verify real state with `check` handlers instead of the cache, and sync the cache.
         A process-level check (when checking the whole process) replaces the per-step checks.
         Steps without a handler keep their cached status and are reported as UNCHECKED.
-        Throws after reporting when any check failed.
+        Returns the number of failed checks.
     #>
     param(
         $Map,
@@ -760,7 +760,5 @@ function Invoke-ProcessCheckRun {
 
     Write-ProcessState -StatePath $StatePath -State $State
     Write-Host ""
-    if ($failed -gt 0) {
-        throw "Check failed for process '$ProcessKey': $failed step(s) not in desired state"
-    }
+    return $failed
 }

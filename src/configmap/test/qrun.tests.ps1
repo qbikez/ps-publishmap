@@ -440,4 +440,71 @@ Describe 'qrun process runner' {
             @(qrun -map $script:checkMap '!complete' -params -entry setup) | Should -Contain 'Check'
         }
     }
+
+    Context '_settings.forceCheck' {
+        BeforeEach {
+            $script:forceCheckMap = [ordered]@{
+                setup = [ordered]@{
+                    _settings = @{ forceCheck = $true }
+                    'step-a'  = @{
+                        exec  = { 'a' | Set-Content 'a.txt' }
+                        check = { Test-Path 'a.txt' }
+                    }
+                    'step-b'  = @{
+                        exec  = { 'b' | Set-Content 'b.txt' }
+                        check = { Test-Path 'b.txt' }
+                    }
+                }
+            }
+        }
+
+        It 'reruns a cached Succeeded step whose check now fails in a single run' {
+            qrun -map $script:forceCheckMap setup
+            Remove-Item 'a.txt' -Force
+
+            qrun -map $script:forceCheckMap setup
+
+            Test-Path 'a.txt' | Should -BeTrue
+        }
+
+        It 'skips steps whose check passes' {
+            qrun -map $script:forceCheckMap setup
+            Remove-Item 'a.txt' -Force
+            'manual' | Set-Content 'b.txt'
+
+            qrun -map $script:forceCheckMap setup
+
+            Get-Content 'b.txt' -Raw | Should -Match 'manual'
+        }
+
+        It 'skips a step whose check passes even without a cached run' {
+            'manual' | Set-Content 'a.txt'
+
+            qrun -map $script:forceCheckMap setup
+
+            Get-Content 'a.txt' -Raw | Should -Match 'manual'
+            Test-Path 'b.txt' | Should -BeTrue
+        }
+
+        It 'inherits forceCheck from map-level _settings' {
+            $script:forceCheckMap.setup.Remove('_settings')
+            $script:forceCheckMap.Insert(0, '_settings', @{ forceCheck = $true })
+            qrun -map $script:forceCheckMap setup
+            Remove-Item 'a.txt' -Force
+
+            qrun -map $script:forceCheckMap setup
+
+            Test-Path 'a.txt' | Should -BeTrue
+        }
+
+        It 'trusts the cache when forceCheck is not set' {
+            $script:forceCheckMap.setup.Remove('_settings')
+            qrun -map $script:forceCheckMap setup
+            Remove-Item 'a.txt' -Force
+
+            qrun -map $script:forceCheckMap setup
+
+            Test-Path 'a.txt' | Should -BeFalse
+        }
+    }
 }

@@ -352,14 +352,28 @@ function Invoke-QRun {
             $bound._context = @{ additionalArgs = @($passthrough) }
         }
 
+        $stepsToConsider = Get-ProcessStepsToRun -StepNames $stepNames -FromStep $fromStep -Follow:$Follow
+        $checkTarget = @{
+            Map = $map; ProcessKey = $processKey; ProcessEntry = $processMapEntry; BaseDir = $baseDir
+            Bound = $bound; OperationContext = $operationContext; State = $state; StatePath = $statePath
+            StepNames = $stepNames; StepsToCheck = $stepsToConsider; WholeProcess = (-not $fromStep)
+        }
+
         if ($Check) {
-            $checkTarget = @{
-                Map = $map; ProcessKey = $processKey; ProcessEntry = $processMapEntry; BaseDir = $baseDir
-                Bound = $bound; OperationContext = $operationContext; State = $state; StatePath = $statePath
+            $failed = Invoke-ProcessCheckRun @checkTarget
+            if ($failed -gt 0) {
+                throw "Check failed for process '$processKey': $failed step(s) not in desired state"
             }
-            $stepsToCheck = Get-ProcessStepsToRun -StepNames $stepNames -FromStep $fromStep -Follow:$Follow
-            Invoke-ProcessCheckRun @checkTarget -StepNames $stepNames -StepsToCheck $stepsToCheck -WholeProcess:(-not $fromStep)
             return
+        }
+
+        # -Force reruns every step anyway, so checking first would only add work.
+        $forceCheck = Invoke-WithEntrySettings -Map $map -EntryKey $processKey -Entry $processMapEntry -OperationContext $operationContext -ScriptBlock {
+            Test-ConfigMapFeatureEnabled -Name ForceCheck
+        }
+        if ($forceCheck -and -not $Force) {
+            # Failed checks reset their steps to Pending, so the run below executes them.
+            $null = Invoke-ProcessCheckRun @checkTarget
         }
 
         $skippedPrior = @()
@@ -367,7 +381,6 @@ function Invoke-QRun {
             $skippedPrior = @(Assert-ProcessPriorSteps -StepNames $stepNames -FromStep $fromStep -State $state -Force:$Force)
         }
 
-        $stepsToConsider = Get-ProcessStepsToRun -StepNames $stepNames -FromStep $fromStep -Follow:$Follow
         $total = $stepNames.Count
 
         Write-Host ""
