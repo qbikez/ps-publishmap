@@ -97,7 +97,7 @@ Describe 'qbuild _settings.process=steps forwarding' {
         $state.steps.restore.status | Should -Be 'Pending'
     }
 
-    It 'reruns steps whose check fails when _settings.forceCheck is set' {
+    It 'Given _settings.forceCheck, when qbuild runs the process again, then it reruns steps whose check fails and skips the rest' {
         @'
 [ordered]@{
     bootstrap = [ordered]@{
