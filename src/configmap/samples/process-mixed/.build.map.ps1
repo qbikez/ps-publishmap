@@ -93,7 +93,7 @@
                 if (!(Test-Path $tokenFile)) { return $false }
                 $issuedAt = [long](Get-Content $tokenFile -Raw).Trim()
                 $age = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() - $issuedAt
-                $age -le 5
+                return $age -le 5
             }
         }
     }

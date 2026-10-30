@@ -354,9 +354,17 @@ function Invoke-QRun {
 
         $stepsToConsider = Get-ProcessStepsToRun -StepNames $stepNames -FromStep $fromStep -Follow:$Follow
         $checkTarget = @{
-            Map = $map; ProcessKey = $processKey; ProcessEntry = $processMapEntry; BaseDir = $baseDir
-            Bound = $bound; OperationContext = $operationContext; State = $state; StatePath = $statePath
-            StepNames = $stepNames; StepsToCheck = $stepsToConsider; WholeProcess = (-not $fromStep)
+            Map              = $map
+            ProcessKey       = $processKey
+            ProcessEntry     = $processMapEntry
+            BaseDir          = $baseDir
+            Bound            = $bound
+            OperationContext = $operationContext
+            State            = $state
+            StatePath        = $statePath
+            StepNames        = $stepNames
+            StepsToCheck     = $stepsToConsider
+            WholeProcess     = (-not $fromStep)
         }
 
         if ($Check) {
