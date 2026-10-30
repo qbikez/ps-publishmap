@@ -124,7 +124,8 @@ function Register-ConfigMapProcess {
         [string]$Name,
         [scriptblock]$Invoke,
         [scriptblock]$GetDynamicParam,
-        [scriptblock]$WriteListEntry
+        [scriptblock]$WriteListEntry,
+        [scriptblock]$Complete
     )
 
     if ([string]::IsNullOrWhiteSpace($Name)) {
@@ -136,6 +137,7 @@ function Register-ConfigMapProcess {
         Invoke          = $Invoke
         GetDynamicParam = $GetDynamicParam
         WriteListEntry  = $WriteListEntry
+        Complete        = $Complete
     }
 }
 
@@ -551,9 +553,27 @@ function Get-QBuildProcessArgumentCompletion {
     if (-not $context.Entry) { return @() }
     if ($Position -eq 'Value' -and -not $context.ProcessAction) { return @() }
 
-    $processMap = Import-ConfigMap -Map $context.MapInput -Fallback "./.build.map.ps1" | Assert-ConfigMap
+    $userMap = try {
+        Import-ConfigMap -Map $context.MapInput -Fallback "./.build.map.ps1" | Assert-ConfigMap
+    }
+    catch {
+        # Auto-detected commands (e.g. bun) work without a map file.
+        if ($_.Exception.Message -notmatch '^map file .* not found$|^No map provided and fallback .* not found$|^map is null and defaultMapFile is not provided$') { throw }
+        $null
+    }
+    $processMap = Merge-ConfigMapCommands -Map $userMap -Language build
     $settings = Get-ConfigMapSettingsForPath -Map $processMap -Path $context.Entry
     if (Test-ConfigMapProcessIsBuiltin -ProcessName $settings.Process) { return @() }
+
+    $handler = Get-ConfigMapProcessHandler -Name $settings.Process
+    if ($null -ne $handler -and $null -ne $handler.Complete) {
+        return @(& $handler.Complete @{
+                Map      = $processMap
+                Entry    = $context.Entry
+                Position = $Position
+                Word     = $Word
+            })
+    }
 
     $mapPath = Resolve-MapPath -Map $processMap
     if (-not $mapPath) { return @() }
