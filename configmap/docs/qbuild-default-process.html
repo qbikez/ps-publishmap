@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>qbuild process handlers</title>
+<style>
+  :root {
+    --ink: #1c1915;
+    --muted: #5c564c;
+    --line: #e4dcd0;
+    --paper: #f6f1e8;
+    --card: #fffdf8;
+    --host: #1f4d45;
+    --host-soft: #e5f2ee;
+    --handler: #8a4b12;
+    --handler-soft: #f8ead8;
+    --external: #3d4a73;
+    --external-soft: #e7ebf6;
+    --warn: #8d2f2f;
+    --warn-soft: #f8e6e4;
+    --shadow: 0 16px 40px rgba(48, 36, 18, 0.08);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    background:
+      radial-gradient(900px 420px at 100% -10%, #efe2cc 0%, transparent 60%),
+      var(--paper);
+    font: 17px/1.5 "Segoe UI", Candara, sans-serif;
+  }
+  main { max-width: 1080px; margin: 0 auto; padding: 48px 24px 80px; }
+  h1 { font-size: 42px; line-height: 1.1; letter-spacing: -0.03em; margin: 0 0 12px; }
+  h2 { font-size: 26px; letter-spacing: -0.02em; margin: 48px 0 12px; }
+  h3 { font-size: 18px; margin: 0 0 8px; }
+  p { margin: 0 0 12px; }
+  .lede { font-size: 20px; max-width: 42rem; color: var(--muted); }
+  .kicker { text-transform: uppercase; letter-spacing: 0.14em; font-size: 12px; color: var(--host); font-weight: 700; }
+  code, .mono { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.86em; }
+  a { color: var(--host); }
+  .grid { display: grid; gap: 16px; }
+  .two { grid-template-columns: 1fr 1fr; }
+  .three { grid-template-columns: repeat(3, 1fr); }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 18px 18px 16px;
+    box-shadow: var(--shadow);
+  }
+  .card.host { border-top: 4px solid var(--host); }
+  .card.handler { border-top: 4px solid var(--handler); }
+  .card.external { border-top: 4px solid var(--external); }
+  .card.warn { border-top: 4px solid var(--warn); }
+  .tag {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .tag.host { background: var(--host-soft); color: var(--host); }
+  .tag.handler { background: var(--handler-soft); color: var(--handler); }
+  .tag.external { background: var(--external-soft); color: var(--external); }
+  .tag.warn { background: var(--warn-soft); color: var(--warn); }
+  ul { margin: 8px 0 0; padding-left: 18px; }
+  li + li { margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); }
+  th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); background: #fbf7f1; }
+  tr:last-child td { border-bottom: 0; }
+  .flow { display: flex; flex-direction: column; align-items: center; gap: 0; }
+  .node {
+    width: min(100%, 560px);
+    border-radius: 14px;
+    padding: 12px 16px;
+    text-align: center;
+    border: 1px solid var(--line);
+    background: var(--card);
+  }
+  .node strong { display: block; }
+  .node span { color: var(--muted); font-size: 14px; }
+  .node.host { background: var(--host-soft); border-color: #b7d4cc; }
+  .node.handler { background: var(--handler-soft); border-color: #e4c7a4; }
+  .node.external { background: var(--external-soft); border-color: #c5cde6; }
+  .node.warn { background: var(--warn-soft); border-color: #e4bdb8; }
+  .arrow { color: var(--muted); font-size: 20px; line-height: 1; padding: 4px 0; }
+  .split { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; width: min(100%, 920px); }
+  .example { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+  .example b { font-family: Consolas, monospace; font-weight: 600; }
+  footer { margin-top: 48px; color: var(--muted); font-size: 14px; }
+  @media (max-width: 800px) {
+    .two, .three, .split { grid-template-columns: 1fr; }
+    h1 { font-size: 32px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">configmap · qbuild</p>
+  <h1>qbuild is the host and the default handler</h1>
+  <p class="lede">The command still loads the map and decides who runs an entry. Running a normal build entry is now a registered handler named <span class="mono">qbuild</span>, not a special string compare.</p>
+
+  <h2>What changed</h2>
+  <div class="grid two">
+    <article class="card">
+      <span class="tag warn">Before</span>
+      <h3>One function, two jobs</h3>
+      <p><span class="mono">Invoke-QBuild</span> loaded the map and also executed the entry. Anything whose process was not exactly <span class="mono">qbuild</span> was assumed to be an external command, so it needed a map file.</p>
+      <ul>
+        <li>Dynamic parameters, run, list, and name discovery each checked <span class="mono">Process -ne 'qbuild'</span>.</li>
+        <li><span class="mono">QBuild</span> missed the handler and tried to launch a command of that name.</li>
+        <li>An in-memory map could not host another executor.</li>
+      </ul>
+    </article>
+    <article class="card host">
+      <span class="tag host">After</span>
+      <h3>Lookup, then run</h3>
+      <p>A private registry answers “is this process in-process?” Names match ordinal-ignore-case. <span class="mono">qbuild</span> is registered when the module loads.</p>
+      <ul>
+        <li>A registered name never falls through to the CLI.</li>
+        <li>An empty <span class="mono">GetDynamicParam</span> or <span class="mono">WriteListEntry</span> keeps the normal qbuild behavior for that slot.</li>
+        <li>Only an unregistered name is handed to <span class="mono">qrun</span> or <span class="mono">qconf</span>.</li>
+      </ul>
+    </article>
+  </div>
+
+  <h2>Run an entry</h2>
+  <div class="flow">
+    <div class="node host"><strong>Invoke-QBuild</strong><span>load map · merge commands · default entry to list</span></div>
+    <div class="arrow">↓</div>
+    <div class="node"><strong>Internal command?</strong><span>help, list, !init, !agent.init, !settings, !describe, !cache</span></div>
+    <div class="arrow">↓ no</div>
+    <div class="node"><strong>Get-ConfigMapProcessHandler</strong><span>_settings.process, default qbuild</span></div>
+    <div class="arrow">↓</div>
+    <div class="split">
+      <div class="node handler"><strong>Registered</strong><span>handler.Invoke(context)<br>qbuild calls Invoke-QBuildProcess</span></div>
+      <div class="node external"><strong>Unregistered</strong><span>path-only CLI<br>requires _sourceFile</span></div>
+      <div class="node warn"><strong>Name is qbuild, handler missing</strong><span>throw · do not call qbuild again</span></div>
+    </div>
+    <div class="arrow">↑ internal commands skip the registry and call Invoke-QBuildProcess directly</div>
+  </div>
+
+  <h2>Three slots</h2>
+  <p>Each handler can fill run, dynamic parameters, and list. A missing callback is not a CLI handoff.</p>
+  <div class="grid three">
+    <article class="card handler">
+      <span class="tag handler">Invoke</span>
+      <h3>Run</h3>
+      <p>Present: call it and return. Absent on a registered handler: throw. The default calls <span class="mono">Invoke-QBuildProcess</span>.</p>
+    </article>
+    <article class="card handler">
+      <span class="tag handler">GetDynamicParam</span>
+      <h3>Parameters</h3>
+      <p>Present: call it with the context. Absent: <span class="mono">Get-EntryDynamicParam</span>. Unregistered names still use <span class="mono">!complete -params</span>.</p>
+    </article>
+    <article class="card handler">
+      <span class="tag handler">WriteListEntry</span>
+      <h3>List row</h3>
+      <p>Present: the handler prints the row. Absent: the normal command line. Unregistered names forward <span class="mono">list</span> to the external command.</p>
+    </article>
+  </div>
+
+  <h2>Who owns what</h2>
+  <div class="grid two">
+    <article class="card host">
+      <span class="tag host">Host · Invoke-QBuild</span>
+      <ul>
+        <li>Command parameters, the <span class="mono">qbuild</span> alias, and the default map path.</li>
+        <li>Import, assert, and merge the map.</li>
+        <li>Internal commands and the missing-map message.</li>
+        <li>Read <span class="mono">_settings.process</span> and build one context object.</li>
+        <li>Completion: internal names, map entries, and <span class="mono">!complete</span> for external processes.</li>
+        <li>The external protocol: splat, <span class="mono">_sourceFile</span> error, and the recursion guard.</li>
+      </ul>
+    </article>
+    <article class="card handler">
+      <span class="tag handler">Default handler · Invoke-QBuildProcess</span>
+      <ul>
+        <li>Find targets with <span class="mono">Get-MapEntries</span>.</li>
+        <li>Filter bound parameters. <span class="mono">ProcessAction</span>, <span class="mono">ProcessValue</span>, and remaining arguments become passthrough.</li>
+        <li>Run the <span class="mono">InvokeQBuildTargets</span> plugin hook.</li>
+        <li>Prompt when a parent entry has no <span class="mono">exec</span>.</li>
+        <li>Call <span class="mono">Invoke-EntryWrapper</span>.</li>
+        <li>Dynamic parameters come from <span class="mono">Get-QBuildProcessDynamicParam</span>. <span class="mono">WriteListEntry</span> is left empty.</li>
+      </ul>
+    </article>
+  </div>
+
+  <h2>Context passed to a handler</h2>
+  <table>
+    <thead>
+      <tr><th>Field</th><th>Run</th><th>dynamicparam</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="mono">Map, UserMap, MapArgument, Entry, Command</td><td>filled</td><td>filled</td></tr>
+      <tr><td class="mono">Invocation, BoundParameters</td><td>filled</td><td>filled</td></tr>
+      <tr><td class="mono">ProcessAction, ProcessValue, RemainingArguments</td><td>filled</td><td>filled</td></tr>
+      <tr><td class="mono">OperationContext</td><td>filled</td><td>empty</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Same command, four outcomes</h2>
+  <div class="grid two">
+    <article class="card">
+      <div class="example"><b>build = { ... }</b><span class="tag handler">qbuild</span></div>
+      <p>No <span class="mono">_settings.process</span>. Settings default to <span class="mono">qbuild</span>. The registered handler runs <span class="mono">exec</span>.</p>
+    </article>
+    <article class="card">
+      <div class="example"><b>process = 'QBuild'</b><span class="tag handler">qbuild</span></div>
+      <p>Lookup is ignore-case, so this is the same handler as the implicit default.</p>
+    </article>
+    <article class="card">
+      <div class="example"><b>process = 'qprobe'</b><span class="tag host">in-process</span></div>
+      <p>A test can register <span class="mono">qprobe</span>. An in-memory map runs that handler and does not run <span class="mono">exec</span>. No <span class="mono">_sourceFile</span> is required.</p>
+    </article>
+    <article class="card">
+      <div class="example"><b>process = 'qrun'</b><span class="tag external">external</span></div>
+      <p>Not registered. <span class="mono">qbuild</span> calls <span class="mono">qrun -map &lt;file&gt;</span>. Without a source file this still throws. <span class="mono">qconf</span> works the same way, including <span class="mono">ProcessAction</span> and <span class="mono">ProcessValue</span>.</p>
+    </article>
+  </div>
+
+  <h2>Where the guard sits</h2>
+  <article class="card warn">
+    <p>If <span class="mono">qbuild</span> is unregistered, the process name still defaults to <span class="mono">qbuild</span>, and that command is <span class="mono">Invoke-QBuild</span>. Handing off would call the host again. Dynamic parameters, <span class="mono">!complete</span>, and the CLI runner all stop when the resolved command is the host. Run throws “no in-process handler is registered.”</p>
+  </article>
+
+  <footer>
+    Private registry: <span class="mono">Register-ConfigMapProcess</span>, <span class="mono">Get-ConfigMapProcessHandler</span>, <span class="mono">Unregister-ConfigMapProcess</span>.
+    These stay off the public command list. Pull request <a href="https://github.com/qbikez/ps-publishmap/pull/34">#34</a>.
+  </footer>
+</main>
+</body>
+</html>
