@@ -1,6 +1,6 @@
 function import-map {
     [cmdletbinding()]
-    param([Parameter(Mandatory=$true)] $maps)
+    param([Parameter(Mandatory = $true)] $maps)
     
     if ($maps -is [System.Collections.IDictionary] ) {
         return import-mapobject $maps
@@ -12,44 +12,44 @@ function import-map {
 
 function import-mapfile {
     [cmdletbinding()]
-    param([Parameter(Mandatory=$true)] $maps)
-  #  Measure-function  "$($MyInvocation.MyCommand.Name)" {
+    param([Parameter(Mandatory = $true)] $maps)
+    #  Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
-        write-verbose "processing publishmap..."
+    write-verbose "processing publishmap..."
 
-        if ($null -ne $maps) {
-            $maps = @($maps)
-        }
+    if ($null -ne $maps) {
+        $maps = @($maps)
+    }
         
-        $publishmap = @{}
+    $publishmap = @{}
 
-        foreach($m in $maps) {
-            $publishmap += import-singlemapfile $m
-        }
+    foreach ($m in $maps) {
+        $publishmap += import-singlemapfile $m
+    }
 
-        write-verbose "processing publishmap... DONE"
+    write-verbose "processing publishmap... DONE"
 
-        return $publishmap
-  #  }
+    return $publishmap
+    #  }
 }
 
 
 function import-mapobject { 
     [cmdletbinding()]
-    param([Parameter(Mandatory=$true)] $map) 
+    param([Parameter(Mandatory = $true)] $map) 
     $pmap = @{}
     
     $pmap = import-genericgroup $map ""   
-  #  Measure-function  "add-metaproperties" {
-        $pmap = add-metaproperties $pmap ""
- #   }
+    #  Measure-function  "add-metaproperties" {
+    $pmap = add-metaproperties $pmap ""
+    #   }
     return $pmap
 }
 
 function import-singlemapfile($file) {
     $fullname = $file
     if ($null -ne $fullname.FullName) {
-        $Fullname =$Fullname.FullName 
+        $Fullname = $Fullname.FullName 
     }
     $map = & "$FullName"
     
@@ -158,7 +158,7 @@ function add-metaproperties
     #$keys = @{}
     $keys = get-propertynames $group
         
-    foreach($projk in $keys) {
+    foreach ($projk in $keys) {
         #do not process special global settings
         if ($projk -in $specialkeys) {
             continue

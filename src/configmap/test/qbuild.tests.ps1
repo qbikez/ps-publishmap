@@ -66,7 +66,7 @@ Describe "qbuild multi-target" {
     BeforeEach { $script:mtRan.Clear() }
 
     It "runs each comma-separated target in order" {
-        qbuild -map $script:mtTargets clean,build
+        qbuild -map $script:mtTargets clean, build
         $script:mtRan | Should -Be @("clean", "build")
     }
 
@@ -76,7 +76,7 @@ Describe "qbuild multi-target" {
             "b" = { throw "boom" }
             "c" = { Invoke-MTTarget -name "c" }
         }
-        { qbuild -map $map a,b,c } | Should -Throw
+        { qbuild -map $map a, b, c } | Should -Throw
         $script:mtRan | Should -Be @("a")
     }
 
@@ -86,7 +86,7 @@ Describe "qbuild multi-target" {
             "b" = { pwsh -NoProfile -Command "exit 3" }
             "c" = { Invoke-MTTarget -name "c" }
         }
-        { qbuild -map $map a,b,c } | Should -Throw "*exit code 3*"
+        { qbuild -map $map a, b, c } | Should -Throw "*exit code 3*"
         $script:mtRan | Should -Be @("a")
     }
 
@@ -536,8 +536,8 @@ Describe "hierarchical completion" {
 
                 if ($flatten) {
                     return [ordered]@{
-                        'parent*' = $map.parent
-                        'child'   = $map.parent.child
+                        'parent*'    = $map.parent
+                        'child'      = $map.parent.child
                         'parent.all' = New-BuildAllEntry
                     }
                 }
@@ -748,7 +748,7 @@ Describe "qbuild all" {
             Mock Write-Host
             $targets = @{
                 "build" = @{
-                    "ui" = @{
+                    "ui"  = @{
                         exec = { Write-Host "ui" }
                     }
                     "api" = @{
@@ -785,7 +785,7 @@ Describe "qbuild all" {
             Mock Write-Host
             $targets = @{
                 "dev" = @{
-                    "ui" = { Write-Host "ui" }
+                    "ui"      = { Write-Host "ui" }
                     "servers" = @{
                         "api" = { Write-Host "api" }
                     }

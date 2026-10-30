@@ -159,10 +159,10 @@ function Initialize-QBuildAgent {
         Copy-Item -Path $skill.Directory -Destination $destination -Recurse -Force
         $installedSkill = Join-Path $destination 'SKILL.md'
         [pscustomobject]@{
-            Name      = $skill.Name
-            Source    = $skill.Directory
+            Name        = $skill.Name
+            Source      = $skill.Directory
             Destination = $destination
-            SkillPath = $installedSkill
+            SkillPath   = $installedSkill
         }
     }
 

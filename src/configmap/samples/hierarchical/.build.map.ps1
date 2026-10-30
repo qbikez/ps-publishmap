@@ -6,7 +6,7 @@ $targets = @{
     # Frontend development commands
     "frontend" = @{
         "build" = @{
-            exec = {
+            exec        = {
                 param([ValidateSet("development", "production")]$Environment = "development")
                 Write-Host "Building frontend for $Environment environment..."
                 if ($Environment -eq "production") {
@@ -18,7 +18,7 @@ $targets = @{
             description = "Build frontend application"
         }
         
-        "test" = {
+        "test"  = {
             param([switch]$Watch, [string]$Filter)
             Write-Host "Running frontend tests..."
             $args = @("test")
@@ -27,12 +27,12 @@ $targets = @{
             npm run @args
         }
         
-        "dev" = {
+        "dev"   = {
             Write-Host "Starting frontend development server..."
             npm run dev
         }
         
-        "lint" = {
+        "lint"  = {
             param([switch]$Fix)
             Write-Host "Linting frontend code..."
             $args = @("run", "lint")
@@ -42,9 +42,9 @@ $targets = @{
     }
     
     # Backend development commands  
-    "backend" = @{
-        "build" = @{
-            exec = {
+    "backend"  = @{
+        "build"   = @{
+            exec        = {
                 param([ValidateSet("Debug", "Release")]$Configuration = "Debug")
                 Write-Host "Building backend with $Configuration configuration..."
                 dotnet build --configuration $Configuration --no-restore
@@ -52,7 +52,7 @@ $targets = @{
             description = "Build backend API"
         }
         
-        "test" = {
+        "test"    = {
             param([switch]$Coverage, [string]$Filter)
             Write-Host "Running backend tests..."
             $args = @("test", "--no-build")
@@ -61,7 +61,7 @@ $targets = @{
             dotnet @args
         }
         
-        "run" = {
+        "run"     = {
             param([string]$Environment = "Development")
             Write-Host "Starting backend API in $Environment environment..."
             $env:ASPNETCORE_ENVIRONMENT = $Environment
@@ -78,7 +78,7 @@ $targets = @{
     
     # Database management commands
     "database" = @{
-        "reset" = {
+        "reset"  = {
             param([string]$Environment = "Development")
             Write-Host "Resetting database for $Environment environment..."
             $env:ASPNETCORE_ENVIRONMENT = $Environment
@@ -86,7 +86,7 @@ $targets = @{
             dotnet ef database update
         }
         
-        "seed" = {
+        "seed"   = {
             param([string]$Environment = "Development")
             Write-Host "Seeding database with sample data..."
             $env:ASPNETCORE_ENVIRONMENT = $Environment
@@ -102,7 +102,7 @@ $targets = @{
     }
     
     # Docker and deployment commands
-    "docker" = @{
+    "docker"   = @{
         "build" = {
             param([string]$Tag = "latest", [switch]$NoCache)
             Write-Host "Building Docker images with tag: $Tag"
@@ -112,7 +112,7 @@ $targets = @{
             docker @args
         }
         
-        "up" = {
+        "up"    = {
             param([switch]$Detached, [string]$Profile = "development")
             Write-Host "Starting Docker containers with profile: $Profile"
             $args = @("compose", "--profile", $Profile, "up")
@@ -120,12 +120,12 @@ $targets = @{
             docker @args
         }
         
-        "down" = {
+        "down"  = {
             Write-Host "Stopping Docker containers..."
             docker compose down
         }
         
-        "logs" = {
+        "logs"  = {
             param([string]$Service, [switch]$Follow)
             $args = @("compose", "logs")
             if ($Follow) { $args += "-f" }
@@ -135,8 +135,8 @@ $targets = @{
     }
     
     # CI/CD and deployment commands
-    "deploy" = @{
-        "staging" = {
+    "deploy"   = @{
+        "staging"    = {
             param([string]$Branch = "develop")
             Write-Host "Deploying $Branch branch to staging environment..."
             # Staging deployment logic
@@ -160,7 +160,7 @@ $targets = @{
             Write-Host "Production deployment completed"
         }
         
-        "rollback" = {
+        "rollback"   = {
             param([string]$Version)
             if (!$Version) {
                 throw "Version parameter is required for rollback"
@@ -172,8 +172,8 @@ $targets = @{
     }
     
     # Utility commands that can be used across the project
-    "utils" = @{
-        "clean" = {
+    "utils"    = @{
+        "clean"   = {
             Write-Host "Cleaning build artifacts..."
             Remove-Item "bin", "obj", "node_modules/.cache" -Recurse -Force -ErrorAction SilentlyContinue
             Write-Host "Clean completed"
@@ -186,7 +186,7 @@ $targets = @{
             Write-Host "Dependencies restored"
         }
         
-        "format" = {
+        "format"  = {
             param([switch]$Check)
             Write-Host "Formatting code..."
             $args = @("format")

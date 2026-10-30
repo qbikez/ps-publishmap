@@ -182,7 +182,7 @@ try {
         '#include' = @{
             child = @{ prefix = $true }
         }
-        _baseDir = $includeRoot
+        _baseDir   = $includeRoot
     }
     $withoutOperationCache = {
         & $module {

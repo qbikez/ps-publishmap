@@ -5,47 +5,47 @@ Inherit only value types, do not inherit dictionaries (helps prevent infinite in
 
 #>
 function Add-InheritedProperties($from, $to, $exclude = @(), [switch][bool] $valuesOnly) {
-   # Measure-function  "$($MyInvocation.MyCommand.Name)" {
+    # Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
-        if ($from -is [System.Collections.IDictionary]) {
+    if ($from -is [System.Collections.IDictionary]) {
+    }
+    else {
+        $from = $from.psobject.properties | % { $d = @{} } { $d[$_.name] = $_.value } { $d }
+    }
+    $from = $from.getenumerator( ) | % { $h = @{} } {
+        $key = $_.key
+        $value = $_.value
+        $shouldExclude = $false 
+        if ($key -in $exclude) {
+            $shouldExclude = $true 
         }
-        else {
-            $from = $from.psobject.properties | % { $d = @{} } { $d[$_.name] = $_.value } { $d }
+        if (@($exclude | ? { $key -match "^$_$" }).Count -gt 0) {
+            $shouldExclude = $true 
         }
-        $from = $from.getenumerator( ) | % { $h = @{} } {
-            $key = $_.key
-            $value = $_.value
-            $shouldExclude = $false 
-            if ($key -in $exclude) {
-                $shouldExclude = $true 
-            }
-            if (@($exclude | ? { $key -match "^$_$" }).Count -gt 0) {
-                $shouldExclude = $true 
-            }
           
-            if ($value -is [System.Collections.IDictionary]) {
-                if ($valuesOnly) {
-                    $shouldExclude = $true 
-                }
-                else {
-                    $newvalue = copy-hashtable $value
-                    $value = $newvalue
-                }
+        if ($value -is [System.Collections.IDictionary]) {
+            if ($valuesOnly) {
+                $shouldExclude = $true 
             }
-            if (!$shouldExclude) {
-                $h[$key] = $value    
+            else {
+                $newvalue = copy-hashtable $value
+                $value = $newvalue
             }
-        } { $h } 
-    
-        if ($null -ne $from) {
-            try {
-                $null = add-properties -object $to -props $from -merge -ifNotExists
-            } catch {
-                throw "failed to inherit properties:$($_.Exception.Message)`r`nfrom:`r`n$($from | format-table | out-string)`r`nto:`r`n$($to | format-table | out-string)"
-            }
-        
         }
-        <# foreach($key in $from.keys) {
+        if (!$shouldExclude) {
+            $h[$key] = $value    
+        }
+    } { $h } 
+    
+    if ($null -ne $from) {
+        try {
+            $null = add-properties -object $to -props $from -merge -ifNotExists
+        } catch {
+            throw "failed to inherit properties:$($_.Exception.Message)`r`nfrom:`r`n$($from | format-table | out-string)`r`nto:`r`n$($to | format-table | out-string)"
+        }
+        
+    }
+    <# foreach($key in $from.keys) {
 
         $value = $from[$key] 
 
@@ -63,24 +63,24 @@ function Add-InheritedProperties($from, $to, $exclude = @(), [switch][bool] $val
         }
     }
     #>
- #   }
+    #   }
 }
 
 
 function Add-GlobalSettings($proj, $settings) {
- #   Measure-function  "$($MyInvocation.MyCommand.Name)" {
+    #   Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
-        if ($null -ne $settings) {
-            write-verbose "inheriting global settings to $($proj._fullpath). strip=$stripsettingswrapper"
-            $stripsettingswrapper = $settings._strip
-            if ($null -ne $stripsettingswrapper -and $stripsettingswrapper) {
-                $null = inherit-properties -from $settings -to $proj -ifNotExists -merge -exclude "_strip"
-            }
-            else {
-                $null = add-property $proj "settings" $settings -ifNotExists -merge
-            }
+    if ($null -ne $settings) {
+        write-verbose "inheriting global settings to $($proj._fullpath). strip=$stripsettingswrapper"
+        $stripsettingswrapper = $settings._strip
+        if ($null -ne $stripsettingswrapper -and $stripsettingswrapper) {
+            $null = inherit-properties -from $settings -to $proj -ifNotExists -merge -exclude "_strip"
         }
-#    }
+        else {
+            $null = add-property $proj "settings" $settings -ifNotExists -merge
+        }
+    }
+    #    }
 }
 
 New-Alias -Name Inherit-Properties -Value Add-InheritedProperties -Force

@@ -1,6 +1,6 @@
 function Get-NuspecVersion($nuspec = $null) {
-	if ([string]::IsNullOrEmpty($nuspec)) {
-		$nuspec = Get-ChildItem . -Filter *.nuspec | select -First 1
+    if ([string]::IsNullOrEmpty($nuspec)) {
+        $nuspec = Get-ChildItem . -Filter *.nuspec | select -First 1
     }
     $content = Get-Content $nuspec
     $verRegex = "<version>(.*)</version>"
@@ -10,8 +10,8 @@ function Get-NuspecVersion($nuspec = $null) {
 }
 
 function Set-NuspecVersion([string] $version, $nuspec = $null) {
-	if ($null -eq $nuspec) {
-		$nuspec = Get-ChildItem . -Filter *.nuspec | select -First 1
+    if ($null -eq $nuspec) {
+        $nuspec = Get-ChildItem . -Filter *.nuspec | select -First 1
     }
     $content = Get-Content $nuspec
     $content2 = $content | % { 
@@ -25,8 +25,8 @@ function Set-NuspecVersion([string] $version, $nuspec = $null) {
 }
 
 function Incremet-NuspecVersion($nuspec = $null) {
-	if ($null -eq $nuspec) {
-		$nuspec = Get-ChildItem . -Filter *.nuspec | select -First 1
+    if ($null -eq $nuspec) {
+        $nuspec = Get-ChildItem . -Filter *.nuspec | select -First 1
     }
 
     $ver = Get-NuspecVersion $nuspec
@@ -36,7 +36,7 @@ function Incremet-NuspecVersion($nuspec = $null) {
     Set-NuspecVersion -version $ver2 -nuspec $nuspec   
 }
 if (-not ([System.Management.Automation.PSTypeName]'VersionComponent').Type) {
-Add-Type -TypeDefinition @"
+    Add-Type -TypeDefinition @"
    public enum VersionComponent
    {
       Major = 0,
@@ -46,9 +46,9 @@ Add-Type -TypeDefinition @"
 "@
 }
 
-function Incremet-Version([Parameter(mandatory=$true)]$ver, [VersionComponent]$component = [VersionComponent]::Patch) {
+function Incremet-Version([Parameter(mandatory = $true)]$ver, [VersionComponent]$component = [VersionComponent]::Patch) {
      
-    $vernums = $ver.Split(@('.','-'))
+    $vernums = $ver.Split(@('.', '-'))
     $lastNumIdx = $component
     $lastNum = [int]::Parse($vernums[$lastNumIdx])
     
@@ -60,7 +60,7 @@ function Incremet-Version([Parameter(mandatory=$true)]$ver, [VersionComponent]$c
     }#>
     
     $lastNum++
-    $vernums[$vernums.Count-1] = $lastNum.ToString()
+    $vernums[$vernums.Count - 1] = $lastNum.ToString()
     $ver2 = [string]::Join(".", $vernums)
 
     return $ver2

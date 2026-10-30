@@ -103,6 +103,7 @@ VSCode tasks are configured for running individual test files with Pester integr
 ## Code Quality
 
 - **PSScriptAnalyzer** settings defined in `PSScriptAnalyzerSettings.psd1`
+- Format with `Invoke-Formatter -ScriptDefinition (Get-Content <file> -Raw) -Settings ./PSScriptAnalyzerSettings.psd1`; lint with `Invoke-ScriptAnalyzer -Path <path> -Recurse -Settings ./PSScriptAnalyzerSettings.psd1`. `qbuild lint` checks formatting (CI runs it); `qbuild lint -Fix` applies it
 - PowerShell aliases permitted by `PSScriptAnalyzerSettings.psd1` are acceptable; do not replace them solely for style
 - CI/CD via AppVeyor with automatic testing and deployment
 

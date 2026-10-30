@@ -30,7 +30,7 @@ Describe "parse-packageEntry" {
         $package = parse-packageEntry $entry
         $package.name | Should -Be "foo"
         $package.installer | Should -Be "choco"
-        $package.installerArgs | Should -Be "install","-y","foo","--pre"
+        $package.installerArgs | Should -Be "install", "-y", "foo", "--pre"
     }
     
 }

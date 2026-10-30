@@ -39,7 +39,7 @@ function Get-ConfigMapDiscoveryCacheFileName {
     }
 
     $isCanonical = ($Language -eq 'build' -and $name -eq 'build') -or
-                   ($Language -eq 'conf' -and $name -eq 'configuration')
+    ($Language -eq 'conf' -and $name -eq 'configuration')
     if ($isCanonical) {
         return "discovery.$name.cache.json"
     }

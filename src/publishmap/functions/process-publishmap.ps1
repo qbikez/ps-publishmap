@@ -5,7 +5,7 @@ if ($null -eq $global:cache) {
 
 function import-publishmap {
     [cmdletbinding()]
-    param([Parameter(Mandatory=$false)] $maps = $null, [alias("nocache")][switch][bool]$force)
+    param([Parameter(Mandatory = $false)] $maps = $null, [alias("nocache")][switch][bool]$force)
     
     if ($force) {
         $global:cache = @{}
@@ -24,59 +24,59 @@ function import-publishmap {
 function import-publishmapfile {
     [cmdletbinding()]
     param($maps)
- #   Measure-function  "$($MyInvocation.MyCommand.Name)" {
+    #   Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
-        write-verbose "importing publishmaps..."
+    write-verbose "importing publishmaps..."
 
-        $global:publishmap = $null
+    $global:publishmap = $null
 
-        if ($null -ne $maps) {
-            $maps = @($maps)
-        }
-        else {
-            $maps = get-childitem . -filter "publishmap.*.config.ps1"
-        }
+    if ($null -ne $maps) {
+        $maps = @($maps)
+    }
+    else {
+        $maps = get-childitem . -filter "publishmap.*.config.ps1"
+    }
 
-        $publishmap = @{}
+    $publishmap = @{}
 
-        foreach($file in $maps) {
-            write-verbose "importing publishmap '$file'..."
-            try {
-                $fullname = $file
-                if ($null -ne $fullname.FullName) {
-                    $Fullname =$Fullname.FullName 
-                }
-                try {
-                $cached = get-cachedobject $fullname
-                } catch {
-                    # ignore cache exceptions
-                }
-                if ($null -ne $cached) {
-                    $pmap = $cached.value
-                    write-verbose "loaded publishmap '$fullname' from cache"
-                }
-                else {
-                    $map = & "$FullName"
-        
-                    #$publishmap_obj = ConvertTo-Object $publishmap
-                    $pmap = import-publishmapobject $map
-                    set-cachedobject $fullname $pmap
-                }
-                $publishmap += $pmap
-                write-verbose "publishmap '$file' import DONE"
-            } catch {
-                write-error "failed to import map file '$file': $($_.Exception.Message)"
-                throw
+    foreach ($file in $maps) {
+        write-verbose "importing publishmap '$file'..."
+        try {
+            $fullname = $file
+            if ($null -ne $fullname.FullName) {
+                $Fullname = $Fullname.FullName 
             }
+            try {
+                $cached = get-cachedobject $fullname
+            } catch {
+                # ignore cache exceptions
+            }
+            if ($null -ne $cached) {
+                $pmap = $cached.value
+                write-verbose "loaded publishmap '$fullname' from cache"
+            }
+            else {
+                $map = & "$FullName"
+        
+                #$publishmap_obj = ConvertTo-Object $publishmap
+                $pmap = import-publishmapobject $map
+                set-cachedobject $fullname $pmap
+            }
+            $publishmap += $pmap
+            write-verbose "publishmap '$file' import DONE"
+        } catch {
+            write-error "failed to import map file '$file': $($_.Exception.Message)"
+            throw
         }
+    }
 
-        $global:publishmap = $publishmap
-        $global:pmap = $global:publishmap 
+    $global:publishmap = $publishmap
+    $global:pmap = $global:publishmap 
 
-        write-verbose "processing publishmap... DONE"
+    write-verbose "processing publishmap... DONE"
 
-        return $publishmap
-#   }
+    return $publishmap
+    #   }
 }
 
 function import-publishmapobject {
@@ -96,46 +96,46 @@ function import-publishmapobject {
  * generates `_staging` and `swap_` profiles
 #>
 function preporcess-publishmap($map) {
- #   Measure-function  "$($MyInvocation.MyCommand.Name)" {
+    #   Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
-        $globalprofilesname = "global_profiles"
-        foreach($groupk in get-propertynames $map) {
-            if ($null -ne $map.$groupk.$globalprofilesname) {
-                $settings = @{     
-                    profiles = $map.$groupk.$globalprofilesname 
-                    _strip = $true
-                } 
-                $null = add-property $map.$groupk -name "settings" -value $settings -merge
-            }
+    $globalprofilesname = "global_profiles"
+    foreach ($groupk in get-propertynames $map) {
+        if ($null -ne $map.$groupk.$globalprofilesname) {
+            $settings = @{     
+                profiles = $map.$groupk.$globalprofilesname 
+                _strip   = $true
+            } 
+            $null = add-property $map.$groupk -name "settings" -value $settings -merge
         }
-        foreach($groupk in get-propertynames $map) {
-            foreach($projk in get-propertynames $map.$groupk) { 
-                foreach($profk in get-propertynames $map.$groupk.$projk.profiles) { 
-                    $shouldcreatestaging = ($profk -notmatch "_staging") -and ($profk -notmatch "swap_") -and ($map.$groupk.$projk.profiles.$profk -is [System.Collections.IDictionary])
+    }
+    foreach ($groupk in get-propertynames $map) {
+        foreach ($projk in get-propertynames $map.$groupk) { 
+            foreach ($profk in get-propertynames $map.$groupk.$projk.profiles) { 
+                $shouldcreatestaging = ($profk -notmatch "_staging") -and ($profk -notmatch "swap_") -and ($map.$groupk.$projk.profiles.$profk -is [System.Collections.IDictionary])
                 
-                    if ($shouldcreatestaging) {
-                        $stagingkey = "$($profk)_staging"    
-                        $swapkey= "swap_$($profk)"
-                        if ($null -eq $map.$groupk.$projk.profiles.$stagingkey) {
-                            $map.$groupk.$projk.profiles.$stagingkey = @{ 
-                                "_autogenerated" = $true
-                                "_inherit_from" = $profk
-                                "_postfix" = "-staging"
-                            } 
-                        }
-                        if ($null -eq $map.$groupk.$projk.profiles.$swapkey) {
-                            $map.$groupk.$projk.profiles.$swapkey = @{ 
-                                "_autogenerated" = $true
-                                "_inherit_from" = $profk
-                            } 
+                if ($shouldcreatestaging) {
+                    $stagingkey = "$($profk)_staging"    
+                    $swapkey = "swap_$($profk)"
+                    if ($null -eq $map.$groupk.$projk.profiles.$stagingkey) {
+                        $map.$groupk.$projk.profiles.$stagingkey = @{ 
+                            "_autogenerated" = $true
+                            "_inherit_from"  = $profk
+                            "_postfix"       = "-staging"
                         } 
                     }
+                    if ($null -eq $map.$groupk.$projk.profiles.$swapkey) {
+                        $map.$groupk.$projk.profiles.$swapkey = @{ 
+                            "_autogenerated" = $true
+                            "_inherit_from"  = $profk
+                        } 
+                    } 
                 }
             }
         }
+    }
     
-        return $map
-#    }
+    return $map
+    #    }
 }
 
 
@@ -223,86 +223,86 @@ function preporcess-publishmap($map) {
 function get-profile {
     [CmdletBinding()]
     param(
-            [Parameter(Mandatory=$true)]
-            $name, 
-            $map = $null, 
-            [switch][bool] $noVarReplace = $false
-        ) 
-  #  Measure-function  "$($MyInvocation.MyCommand.Name)" {
-        write-verbose "processing profile '$name'"
-        $pmap = $map
-        if ($null -eq $map) {
-            $pmap = $global:pmap
-        }
+        [Parameter(Mandatory = $true)]
+        $name, 
+        $map = $null, 
+        [switch][bool] $noVarReplace = $false
+    ) 
+    #  Measure-function  "$($MyInvocation.MyCommand.Name)" {
+    write-verbose "processing profile '$name'"
+    $pmap = $map
+    if ($null -eq $map) {
+        $pmap = $global:pmap
+    }
 
-        $profName = $name
-        $splits = $profName.Split('.')
+    $profName = $name
+    $splits = $profName.Split('.')
 
-        $map = $pmap
-        $entry = $null
-        $parent = $null
-        $isGroup = $false
-        for($i = 0; $i -lt $splits.length; $i++) {
-            $split = $splits[$i]
-            $parent = $entry
-            if ($i -eq $splits.length-1) {
+    $map = $pmap
+    $entry = $null
+    $parent = $null
+    $isGroup = $false
+    for ($i = 0; $i -lt $splits.length; $i++) {
+        $split = $splits[$i]
+        $parent = $entry
+        if ($i -eq $splits.length - 1) {
             $entry = get-entry $split $map -excludeProperties @("project") -noVarReplace:$noVarReplace
-            }
-            else {
-                $entry = $map.$split
-            }
-            if ($null -eq $entry) {
-                break
-            }
-            if ($null -ne $entry -and $null -ne $entry.group) {
-                $isGroup = $true
-                break
-            }
-            $map = $entry
-        }    
-        $profile = $entry
-        if ($null -eq $profile)  {
-            if ($splits[1] -eq "all") {
-                $isGroup = $true
-                $profile = $parent
-                break
-            }
-            else {
-                #write-host "unknown profile $profName"
-                return $null
-            }
         }
+        else {
+            $entry = $map.$split
+        }
+        if ($null -eq $entry) {
+            break
+        }
+        if ($null -ne $entry -and $null -ne $entry.group) {
+            $isGroup = $true
+            break
+        }
+        $map = $entry
+    }    
+    $profile = $entry
+    if ($null -eq $profile) {
+        if ($splits[1] -eq "all") {
+            $isGroup = $true
+            $profile = $parent
+            break
+        }
+        else {
+            #write-host "unknown profile $profName"
+            return $null
+        }
+    }
 
-        return new-object -Type pscustomobject -Property @{
-            Profile = $profile
-            IsGroup = $isGroup
-            Project = $splits[0]
-            Group = $splits[1]
-            TaskName = $splits[2]
-        }
-  #  }
+    return new-object -Type pscustomobject -Property @{
+        Profile  = $profile
+        IsGroup  = $isGroup
+        Project  = $splits[0]
+        Group    = $splits[1]
+        TaskName = $splits[2]
+    }
+    #  }
 }
 
 
 
 function check-profileName($proj, $profk) {
- #   Measure-function  "$($MyInvocation.MyCommand.Name)" {
+    #   Measure-function  "$($MyInvocation.MyCommand.Name)" {
 
-        $prof = $proj.profiles.$profk
-        if ($null -eq $prof) {
+    $prof = $proj.profiles.$profk
+    if ($null -eq $prof) {
                     
-            if ($proj.inherit -ne $false) {
-                $prof = @{}
-                if ($null -eq $proj.profiles) {
-                    $null = add-property $proj -name "profiles" -value @{}
-                }
-                $null = add-property $proj.profiles -name $profk -value $prof
+        if ($proj.inherit -ne $false) {
+            $prof = @{}
+            if ($null -eq $proj.profiles) {
+                $null = add-property $proj -name "profiles" -value @{}
             }
-            else {
-                continue
-            }
+            $null = add-property $proj.profiles -name $profk -value $prof
         }
-  #  }
+        else {
+            continue
+        }
+    }
+    #  }
 }
 
 <#

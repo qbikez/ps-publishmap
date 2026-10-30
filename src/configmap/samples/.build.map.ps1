@@ -24,7 +24,7 @@
         }
     }
     "write:getset"  = @{
-        go = {
+        go  = {
             param([string] $message)
             return "GO: '$message'"
         }

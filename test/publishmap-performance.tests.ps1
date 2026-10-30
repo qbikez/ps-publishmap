@@ -1,6 +1,6 @@
 . "$PSScriptRoot\includes.ps1"
 
-function convertto-array([Parameter(ValueFromPipeline=$true)] $enumerable, [switch][bool]$flatten = $true) {
+function convertto-array([Parameter(ValueFromPipeline = $true)] $enumerable, [switch][bool]$flatten = $true) {
     $a = @()
     if ($enumerable -is [hashtable]) {
         $enumerable = $enumerable.Values
@@ -10,7 +10,7 @@ function convertto-array([Parameter(ValueFromPipeline=$true)] $enumerable, [swit
         if (!$flatten) {
             $a += $enumerable.Values        
         } else {
-            foreach($val in $enumerable.GetEnumerator()) {
+            foreach ($val in $enumerable.GetEnumerator()) {
                 if ($val -is [System.Collections.IEnumerable]) {
                     $a += convertto-array $val -flatten:$flatten
                 }
@@ -29,8 +29,8 @@ function convertto-array([Parameter(ValueFromPipeline=$true)] $enumerable, [swit
 
 
 Describe "parse publish map performance" {
-    $maps = @(gci "$PSScriptRoot\input\performance" -filter "publishmap.*.config.ps1"| % { 
-            @{ file=$_.name; item = $_ }
+    $maps = @(gci "$PSScriptRoot\input\performance" -filter "publishmap.*.config.ps1" | % { 
+            @{ file = $_.name; item = $_ }
         })
 
     Context "When map is parsed" {

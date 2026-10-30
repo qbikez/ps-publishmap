@@ -138,8 +138,8 @@ Describe 'qrun process runner' {
     It 'records failure and resumes from the failed step' {
         $failMap = [ordered]@{
             setup = [ordered]@{
-                ok   = { 'ok' | Set-Content 'ok.txt' }
-                boom = { throw 'boom-error' }
+                ok    = { 'ok' | Set-Content 'ok.txt' }
+                boom  = { throw 'boom-error' }
                 after = { 'after' | Set-Content 'after.txt' }
             }
         }
@@ -221,7 +221,7 @@ Describe 'qrun process runner' {
         $log = [System.Collections.Generic.List[string]]::new()
         $execMap = [ordered]@{
             setup = [ordered]@{
-                exec = @('second', 'first')
+                exec   = @('second', 'first')
                 second = { $log.Add('second') }
                 first  = { $log.Add('first') }
             }

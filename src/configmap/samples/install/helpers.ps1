@@ -59,7 +59,7 @@ function parse-packageEntry($entry) {
         name          = $packageName
         installer     = $installer
         installerArgs = $installerArgs
-        after = $after
+        after         = $after
     }
 }
 
@@ -67,7 +67,7 @@ function install-mygroup($group) {
     $submodules = Get-CompletionList $group
 
     write-verbose "installing group: $($submodules.Keys)" -verbose
-    foreach($kvp in $submodules.GetEnumerator()) {
+    foreach ($kvp in $submodules.GetEnumerator()) {
         write-verbose "installing '$($kvp.key)'"
         if (!$kvp.value.installer) {
             throw "package '$($kvp.key)' doesn't have an installer"

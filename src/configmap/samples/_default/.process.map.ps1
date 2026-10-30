@@ -1,6 +1,6 @@
 [ordered]@{
     "setup" = [ordered]@{
-        description = "Example multi-step process with durable state"
+        description  = "Example multi-step process with durable state"
 
         "create-dir" = {
             New-Item -ItemType Directory -Path "out" -Force | Out-Null
@@ -12,7 +12,7 @@
             Write-Host "wrote out/hello.txt"
         }
 
-        "verify" = {
+        "verify"     = {
             if (!(Test-Path "out/hello.txt")) {
                 throw "out/hello.txt is missing"
             }

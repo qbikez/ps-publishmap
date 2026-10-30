@@ -19,7 +19,7 @@ function measure-function([string] $__name, [scriptblock] $__command) {
             $global:perfcounters = @{}
         }
         if ($fullperfnames) {
-            $__key = [string]::Join(">",$script:perfstack)
+            $__key = [string]::Join(">", $script:perfstack)
         } else {
             $__key = $__name
         }

@@ -11,14 +11,14 @@ function Get-ConfigMapInternalCommands {
     }
 
     return [ordered]@{
-        'help' = @{
+        'help'               = @{
             description = 'Show qbuild usage and internal commands'
-            exec = {
+            exec        = {
                 param($_context)
                 Write-InternalHelp -invocation $_context.Invocation
             }
         }
-        'list' = @{
+        'list'               = @{
             description = 'List available build commands'
             exec        = {
                 param(
@@ -34,12 +34,12 @@ function Get-ConfigMapInternalCommands {
             # list.<type> shorthands, one per process type in the map
             list        = New-ConfigMapListTypeEntries -Map $Map
         }
-        '!init' = @{
+        '!init'              = @{
             description = 'Create a build map in the current directory'
-            _internal = @{
+            _internal   = @{
                 completeWhen = 'localMapMissing'
             }
-            exec = {
+            exec        = {
                 param($_context)
 
                 if (Test-Path $_context.MapArgument) {
@@ -48,9 +48,9 @@ function Get-ConfigMapInternalCommands {
                 Initialize-BuildMap -file $_context.MapArgument
             }
         }
-        '!agent.init' = @{
+        '!agent.init'        = @{
             description = 'Install ConfigMap agent skills'
-            exec = {
+            exec        = {
                 param(
                     $_context,
                     [ValidateSet('user', 'project')]
@@ -62,9 +62,9 @@ function Get-ConfigMapInternalCommands {
                 Initialize-QBuildAgent -Scope $Scope -Agent $Agent
             }
         }
-        '!agent.skills' = @{
+        '!agent.skills'      = @{
             description = 'Print shipped agent skill markdown'
-            exec = {
+            exec        = {
                 param(
                     $_context,
                     [string]$Name
@@ -86,7 +86,7 @@ function Get-ConfigMapInternalCommands {
         }
         '!extension.install' = @{
             description = 'Install the qbuild Map Tools VS Code extension'
-            exec = {
+            exec        = {
                 param(
                     $_context,
                     [string]$Version,
@@ -97,9 +97,9 @@ function Get-ConfigMapInternalCommands {
                 Install-QBuildExtension -Version $Version -Editor $Editor
             }
         }
-        '!settings' = @{
+        '!settings'          = @{
             description = 'Show effective ConfigMap settings'
-            exec = {
+            exec        = {
                 param(
                     $_context,
                     [string]$Path
@@ -123,9 +123,9 @@ function Get-ConfigMapInternalCommands {
                 Get-ConfigMapSettingsForPath -Map $_context.UserMap -Path $Path
             }
         }
-        '!describe' = @{
+        '!describe'          = @{
             description = 'Describe commands in the build map'
-            exec = {
+            exec        = {
                 param(
                     $_context,
                     [string]$Path
@@ -152,9 +152,9 @@ function Get-ConfigMapInternalCommands {
                 Get-ConfigMapCommandCatalog -Map $_context.UserMap -Language build
             }
         }
-        '!cache' = @{
+        '!cache'             = @{
             description = 'Inspect or manage the discovery cache'
-            exec = {
+            exec        = {
                 param(
                     $_context,
                     [ValidateSet('status', 'clear', 'rebuild')]

@@ -187,352 +187,352 @@ function get-appsettingsObjct(
     return @{ value = "?"; }
 
 
-function test-azureAccount($value) {
-    $account = az account show | ConvertFrom-Json
-    $targetSubscription = $value["__AzureSubscription"];
-    if (!$targetSubscription) {
-        write-warning "no '__AzureSubscription' subscription specified in $($value | ConvertTo-Json)"
-        return $true
-    }
-    $targetTenant = $value["__AzureTenant"]
-
-    if ($account) {
-        if (($account.name -eq $targetSubscription -or $account.id -eq $targetSubscription)) {
-            write-host "✅ active azure account: $($account.name) [$($account.id)]"
-            write-host "   active tenant:        $($account.tenantId)"
+    function test-azureAccount($value) {
+        $account = az account show | ConvertFrom-Json
+        $targetSubscription = $value["__AzureSubscription"];
+        if (!$targetSubscription) {
+            write-warning "no '__AzureSubscription' subscription specified in $($value | ConvertTo-Json)"
             return $true
         }
-        else {
-            write-host "❌ active azure account: $($account.name) [$($account.id)] does not match target subscription '$targetSubscription'"
-        }
-    }
-    else {
-        write-host "no active azure account"
-    }
+        $targetTenant = $value["__AzureTenant"]
 
-    return $false
-}
-function set-azureAccount($value) {
-    $targetSubscription = $value["__AzureSubscription"];
-    $targetTenant = $value["__AzureTenant"]
-
-    if (test-azureAccount $value) {
-        return
-    }
-
-    Write-Host "Logging into azure..."
-    $a = @()
-    if ($targetTenant) {
-        $a += "--tenant", $targetTenant
-    }
-    az login @a
-    Write-Host "Selecting subscription $targetSubscription..."
-    az account set --subscription $targetSubscription
-
-}
-
-function get-dockerContainer(
-    [Parameter(Mandatory = $false)] $displayName, 
-    [Parameter(ParameterSetName = "port", Mandatory = $true)] $port, 
-    [Parameter(ParameterSetName = "name", Mandatory = $true)] $name 
-) {
-    $dockerVersionStr = docker -v
-    $m = $dockerVersionStr -match "[0-9]+\.[0-9]+\.[0-9]+"
-    $dockerVersion = [version]::Parse($matches[0])
-
-    if ($dockerVersion.Major -lt 24) {
-        return @{ Value = "? (Docker version >=24 required)" }
-    }
-    
-    $containers = docker ps -a --format json | convertfrom-json 
-    if ($port -ne $null) {
-        $container = $containers | ? { $_.Ports.contains([string]$port) }
-    }
-    elseif ($name -ne $null) {
-        if ($name.StartsWith("/")) {
-            $regexp = [regex]::new($name.Trim("/"))
-            $container = $containers | ? { $regexp.IsMatch($_.Image) -or $regexp.IsMatch($_.Names) }
-        }
-        else {
-            $container = $containers | ? { $_.Image.StartsWith($name) -or $_.Names.StartsWith($name) }
-        }
-    }
-    
-    write-verbose "== all containers: =="
-    docker -v | write-verbose
-    docker compose version | write-verbose
-    $containers | convertto-json | write-verbose
-    write-verbose "== containers END =="
-
-    return $container
-}
-function test-dockerContainer(
-    [Parameter(Mandatory = $false)] $displayName, 
-    [Parameter(ParameterSetName = "port", Mandatory = $true)] $port, 
-    [Parameter(ParameterSetName = "name", Mandatory = $true)] $name) {
-    $container = $null
-    if ($port) { 
-        $container = get-dockerContainer -displayName $displayName -port $port
-        if (!$container) {
-            write-host "❌ $displayName container at port $port not found"
-            return $false
-        }
-    }
-    if ($name) { 
-        $container = get-dockerContainer -displayName $displayName -name $name
-        if (!$container) {
-            write-host "❌ $displayName container matching name '$name' not found"
-            return $false
-        }
-    }
-
-    
-    $isvalid = $container -and $container.state -eq "running"
-
-    if ($isvalid ) { write-host "✅ $displayName running" }
-    else { write-host "❌ $displayName not running" }
-
-    return $isvalid
-}
-
-function test-dockerDb($containerName, $dbName = "rls_lagerman") {
-    write-verbose "checking if db is running..."
-    $container = get-dockerContainer -name $containerName
-    if (!$container) {
-        throw "no containers found with name matching '$containerName'"
-    }
-    if (@($container).Length -gt 1) {
-        throw "multiple containers found with name matching '$containerName'"
-    }
-
-    $containerName = $container.Names
-    write-verbose "checking sql connection to $containerName..."
-    
-    $retries = 5
-    $backoff = 5
-
-    for ($i = $retries; $i -ge 0; $i++) {
-        $result = docker exec $containerName "/opt/mssql-tools/bin/sqlcmd" -S localhost -U sa -P '12345678!aA#' -Q "print 'select from inisettings'; use [$dbName]; select top 10 * from inisitesettings;"
-        $result
-
-        if ($lastExitCode -eq 0 -and $result[0].StartsWith("select from inisettings")) {
-            write-verbose "DB is running"
-            break
-        }
-        else {
-            write-verbose "DB is not running"
-            if ($i -eq 0) {
-                return $false
+        if ($account) {
+            if (($account.name -eq $targetSubscription -or $account.id -eq $targetSubscription)) {
+                write-host "✅ active azure account: $($account.name) [$($account.id)]"
+                write-host "   active tenant:        $($account.tenantId)"
+                return $true
             }
-            write-verbose "retrying in $backoff s..."
-            Start-Sleep -Seconds $backoff
-        }
-    }
-
-    write-verbose "DONE exitCode=$LastExitCode"
-    return $true
-}
-
-function get-envsetting($file, $path) {
-    if (!(test-path $file)) {
-        return $null
-    }
-    $env = get-content $file | ConvertFrom-StringData
-    return $env.$path
-}
-
-function set-envsetting($file, $path, $value) {
-    $envData = @{}
-    if (test-path $file) {
-        $envData = get-content $file | ConvertFrom-StringData
-    }
-    $hash = [ordered]@{}
-    $envData.keys | % {
-        $hash[$_] = $envData.$_
-    }
-    $hash[$path] = $value
-    $hash.GetEnumerator() | % {
-        "$($_.key)=$($_.value)"
-    } | Out-File $file
-}
-
-function set-envsettingsObject($file, $path, $value) {
-    $dir = split-path $file
-    foreach ($key in $value.keys) {
-        if ($key.StartsWith("__")) {
-            continue
-        }
-
-        $v = resolve-value $value.$key
-        
-        set-envsetting $file -path $key -value $v
-    }   
-}
-
-function get-envsettingsObject(
-    [Parameter(Mandatory = $true)][string]$file, 
-    [Parameter(Mandatory = $true)]$options
-) {
-    if (!(test-path $file)) {
-        return @{ value = $null; Active = $null }
-    }
-    $value = get-content $file | ConvertFrom-StringData
-    
-    foreach ($optionSet in $options.keys) {
-        $option = $options.$optionSet
-        $isMatch = $true
-        foreach ($key in $option.keys) {
-            $v = $value.key
-            Write-Verbose "getting key $key=$v"
-            if ($v -is [string] -and $v -ne $option.$key -and !(test-isSpecialValue $option.$key)) {
-                Write-Verbose "key $key=$v does not match $option.$key"
-                $isMatch = $false
-                break
+            else {
+                write-host "❌ active azure account: $($account.name) [$($account.id)] does not match target subscription '$targetSubscription'"
             }
         }
-        if ($isMatch) {
-            return @{ value = $value; Active = $optionSet }
+        else {
+            write-host "no active azure account"
         }
-    }
-    
-    return @{ value = $value; Active = $null }
-}
 
-function get-keyvaultSecret($keyvault, $secret) {
-    $secret = az keyvault secret show --vault-name $keyvault --name $secret | ConvertFrom-Json
-    return $secret.value
-}
-
-Function Create-JWT(
-    [Parameter(Mandatory = $true)]$headers,
-    [Parameter(Mandatory = $true)]$payload,
-    [Parameter(Mandatory = $true)]$secret
-) {
-
-
-    $headersJson = $headers | ConvertTo-Json -Compress
-    $payloadJson = $payload | ConvertTo-Json -Compress
-    $headersEncoded = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($headersJson), [Base64FormattingOptions]::None).TrimEnd('=')
-    $payloadEncoded = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($payloadJson), [Base64FormattingOptions]::None).TrimEnd('=')
-
-    $content = "$($headersEncoded).$($payloadEncoded)"
-
-    $hmacsha = New-Object System.Security.Cryptography.HMACSHA256  
-    $hmacsha.key = [Text.Encoding]::UTF8.GetBytes($secret)
-    $bytesToSign = [Text.Encoding]::UTF8.GetBytes($content)
-    $signatureByte = $hmacsha.ComputeHash($bytesToSign)
-
-    $signature = [System.Convert]::ToBase64String($signatureByte, [Base64FormattingOptions]::None).Replace('+', '-').Replace('/', '_').Replace("=", "").TrimEnd('=')
-
-    $jwt = "$($headersEncoded).$($payloadEncoded).$($signature)"
-
-    return $jwt
-
-}
-
-Function Get-RezlynxToken {
-    param(
-        [Parameter(Mandatory = $true)]$signingKey,
-        [Parameter(Mandatory = $true)]$siteId, 
-        $groupId = "",
-        $username = "SUPERVISOR",
-        $audience = "GhpServices",
-        $clientId = "RezlynxUi",
-        $expireAfterMin = 60
-    )
-
-    # rlx uses symmetric key for signature
-    $header = @{
-        "alg" = "HS256"
-        "typ" = "JWT"
-    }
-
-    # this is the format of Rlx auth token
-    $payload = @{
-        "aud"         = "$audience"
-        "username"    = "$username"
-        "gl_username" = "$username"
-        "gl_group"    = "$groupId"
-        "group"       = "$groupId"
-        "siteId"      = "$siteId"
-        "gl_site"     = "$siteId"
-        "client_id"   = "$clientId"
-        "nbf"         = 1677747257
-        "exp"         = 1677748457
-        "iat"         = 1677747257
-        "iss"         = "rezlynx"
-    }
-
-    $epochNow = [int]([DateTime]::UtcNow - [DateTime]('1970,1,1')).TotalSeconds
-    $epochExpiry = [int]([DateTime]::UtcNow.AddMinutes($expireAfterMin) - [DateTime]('1970,1,1')).TotalSeconds
-    $payload.nbf = $epochNow
-    $payload.iat = $epochNow
-    $payload.exp = $epochExpiry
-
-
-    $jwt = Create-JWT -headers $header -payload $payload -secret $signingKey
-
-    return $jwt 
-}
-
-function get-xmlconfig($file, $path) {
-    if (!(test-path $file)) {
-        return $null
-    }
-    $config = [xml](get-content $file)
-
-    $splits = $path.Split("/")
-    $current = $config
-    $currentPath = ""
-    foreach ($split in $splits) {
-        if ($current[$split] -eq $null) {
-            throw "Could not find $split in $currentPath"
-        }
-        $current = $current[$split]
-        $currentPath += "/$split"
-       
-    }
-    
-    return $current.InnerXml
-}
-
-function set-xmlconfig($file, $path, $value) {
-    $fullPath = [System.IO.Path]::GetFullPath($file)
-    if ((test-path $fullPath)) {
-        $config = [xml](get-content $fullPath)
-    }
-    else {
-        $config = [xml]""
-    }
-
-    $splits = $path.Split("/")
-    $current = $config
-    $currentPath = ""
-    foreach ($split in $splits) {
-        if ($current[$split] -eq $null) {
-            $current.AppendChild($config.CreateElement($split))
-        }
-        $current = $current[$split]
-        $currentPath += "/$split"
-       
-    }
-    
-    $current.InnerXml = $value
-    
-    $config.Save($fullPath)
-}
-
-function test-httpurl($url) {
-    try {
-        $result = Invoke-WebRequest -Uri $url -Method Get -UseBasicParsing -ErrorAction SilentlyContinue
-        return ($result.statuscode -eq 200)
-
-    }
-    catch {
-        if ($_.Exception.StatusCode -eq 404) {
-            # 404 means the service is there and responding, so treat it as success
-            return $true
-        }
         return $false
     }
-}
+    function set-azureAccount($value) {
+        $targetSubscription = $value["__AzureSubscription"];
+        $targetTenant = $value["__AzureTenant"]
+
+        if (test-azureAccount $value) {
+            return
+        }
+
+        Write-Host "Logging into azure..."
+        $a = @()
+        if ($targetTenant) {
+            $a += "--tenant", $targetTenant
+        }
+        az login @a
+        Write-Host "Selecting subscription $targetSubscription..."
+        az account set --subscription $targetSubscription
+
+    }
+
+    function get-dockerContainer(
+        [Parameter(Mandatory = $false)] $displayName, 
+        [Parameter(ParameterSetName = "port", Mandatory = $true)] $port, 
+        [Parameter(ParameterSetName = "name", Mandatory = $true)] $name 
+    ) {
+        $dockerVersionStr = docker -v
+        $m = $dockerVersionStr -match "[0-9]+\.[0-9]+\.[0-9]+"
+        $dockerVersion = [version]::Parse($matches[0])
+
+        if ($dockerVersion.Major -lt 24) {
+            return @{ Value = "? (Docker version >=24 required)" }
+        }
+    
+        $containers = docker ps -a --format json | convertfrom-json 
+        if ($port -ne $null) {
+            $container = $containers | ? { $_.Ports.contains([string]$port) }
+        }
+        elseif ($name -ne $null) {
+            if ($name.StartsWith("/")) {
+                $regexp = [regex]::new($name.Trim("/"))
+                $container = $containers | ? { $regexp.IsMatch($_.Image) -or $regexp.IsMatch($_.Names) }
+            }
+            else {
+                $container = $containers | ? { $_.Image.StartsWith($name) -or $_.Names.StartsWith($name) }
+            }
+        }
+    
+        write-verbose "== all containers: =="
+        docker -v | write-verbose
+        docker compose version | write-verbose
+        $containers | convertto-json | write-verbose
+        write-verbose "== containers END =="
+
+        return $container
+    }
+    function test-dockerContainer(
+        [Parameter(Mandatory = $false)] $displayName, 
+        [Parameter(ParameterSetName = "port", Mandatory = $true)] $port, 
+        [Parameter(ParameterSetName = "name", Mandatory = $true)] $name) {
+        $container = $null
+        if ($port) { 
+            $container = get-dockerContainer -displayName $displayName -port $port
+            if (!$container) {
+                write-host "❌ $displayName container at port $port not found"
+                return $false
+            }
+        }
+        if ($name) { 
+            $container = get-dockerContainer -displayName $displayName -name $name
+            if (!$container) {
+                write-host "❌ $displayName container matching name '$name' not found"
+                return $false
+            }
+        }
+
+    
+        $isvalid = $container -and $container.state -eq "running"
+
+        if ($isvalid ) { write-host "✅ $displayName running" }
+        else { write-host "❌ $displayName not running" }
+
+        return $isvalid
+    }
+
+    function test-dockerDb($containerName, $dbName = "rls_lagerman") {
+        write-verbose "checking if db is running..."
+        $container = get-dockerContainer -name $containerName
+        if (!$container) {
+            throw "no containers found with name matching '$containerName'"
+        }
+        if (@($container).Length -gt 1) {
+            throw "multiple containers found with name matching '$containerName'"
+        }
+
+        $containerName = $container.Names
+        write-verbose "checking sql connection to $containerName..."
+    
+        $retries = 5
+        $backoff = 5
+
+        for ($i = $retries; $i -ge 0; $i++) {
+            $result = docker exec $containerName "/opt/mssql-tools/bin/sqlcmd" -S localhost -U sa -P '12345678!aA#' -Q "print 'select from inisettings'; use [$dbName]; select top 10 * from inisitesettings;"
+            $result
+
+            if ($lastExitCode -eq 0 -and $result[0].StartsWith("select from inisettings")) {
+                write-verbose "DB is running"
+                break
+            }
+            else {
+                write-verbose "DB is not running"
+                if ($i -eq 0) {
+                    return $false
+                }
+                write-verbose "retrying in $backoff s..."
+                Start-Sleep -Seconds $backoff
+            }
+        }
+
+        write-verbose "DONE exitCode=$LastExitCode"
+        return $true
+    }
+
+    function get-envsetting($file, $path) {
+        if (!(test-path $file)) {
+            return $null
+        }
+        $env = get-content $file | ConvertFrom-StringData
+        return $env.$path
+    }
+
+    function set-envsetting($file, $path, $value) {
+        $envData = @{}
+        if (test-path $file) {
+            $envData = get-content $file | ConvertFrom-StringData
+        }
+        $hash = [ordered]@{}
+        $envData.keys | % {
+            $hash[$_] = $envData.$_
+        }
+        $hash[$path] = $value
+        $hash.GetEnumerator() | % {
+            "$($_.key)=$($_.value)"
+        } | Out-File $file
+    }
+
+    function set-envsettingsObject($file, $path, $value) {
+        $dir = split-path $file
+        foreach ($key in $value.keys) {
+            if ($key.StartsWith("__")) {
+                continue
+            }
+
+            $v = resolve-value $value.$key
+        
+            set-envsetting $file -path $key -value $v
+        }   
+    }
+
+    function get-envsettingsObject(
+        [Parameter(Mandatory = $true)][string]$file, 
+        [Parameter(Mandatory = $true)]$options
+    ) {
+        if (!(test-path $file)) {
+            return @{ value = $null; Active = $null }
+        }
+        $value = get-content $file | ConvertFrom-StringData
+    
+        foreach ($optionSet in $options.keys) {
+            $option = $options.$optionSet
+            $isMatch = $true
+            foreach ($key in $option.keys) {
+                $v = $value.key
+                Write-Verbose "getting key $key=$v"
+                if ($v -is [string] -and $v -ne $option.$key -and !(test-isSpecialValue $option.$key)) {
+                    Write-Verbose "key $key=$v does not match $option.$key"
+                    $isMatch = $false
+                    break
+                }
+            }
+            if ($isMatch) {
+                return @{ value = $value; Active = $optionSet }
+            }
+        }
+    
+        return @{ value = $value; Active = $null }
+    }
+
+    function get-keyvaultSecret($keyvault, $secret) {
+        $secret = az keyvault secret show --vault-name $keyvault --name $secret | ConvertFrom-Json
+        return $secret.value
+    }
+
+    Function Create-JWT(
+        [Parameter(Mandatory = $true)]$headers,
+        [Parameter(Mandatory = $true)]$payload,
+        [Parameter(Mandatory = $true)]$secret
+    ) {
+
+
+        $headersJson = $headers | ConvertTo-Json -Compress
+        $payloadJson = $payload | ConvertTo-Json -Compress
+        $headersEncoded = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($headersJson), [Base64FormattingOptions]::None).TrimEnd('=')
+        $payloadEncoded = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($payloadJson), [Base64FormattingOptions]::None).TrimEnd('=')
+
+        $content = "$($headersEncoded).$($payloadEncoded)"
+
+        $hmacsha = New-Object System.Security.Cryptography.HMACSHA256  
+        $hmacsha.key = [Text.Encoding]::UTF8.GetBytes($secret)
+        $bytesToSign = [Text.Encoding]::UTF8.GetBytes($content)
+        $signatureByte = $hmacsha.ComputeHash($bytesToSign)
+
+        $signature = [System.Convert]::ToBase64String($signatureByte, [Base64FormattingOptions]::None).Replace('+', '-').Replace('/', '_').Replace("=", "").TrimEnd('=')
+
+        $jwt = "$($headersEncoded).$($payloadEncoded).$($signature)"
+
+        return $jwt
+
+    }
+
+    Function Get-RezlynxToken {
+        param(
+            [Parameter(Mandatory = $true)]$signingKey,
+            [Parameter(Mandatory = $true)]$siteId, 
+            $groupId = "",
+            $username = "SUPERVISOR",
+            $audience = "GhpServices",
+            $clientId = "RezlynxUi",
+            $expireAfterMin = 60
+        )
+
+        # rlx uses symmetric key for signature
+        $header = @{
+            "alg" = "HS256"
+            "typ" = "JWT"
+        }
+
+        # this is the format of Rlx auth token
+        $payload = @{
+            "aud"         = "$audience"
+            "username"    = "$username"
+            "gl_username" = "$username"
+            "gl_group"    = "$groupId"
+            "group"       = "$groupId"
+            "siteId"      = "$siteId"
+            "gl_site"     = "$siteId"
+            "client_id"   = "$clientId"
+            "nbf"         = 1677747257
+            "exp"         = 1677748457
+            "iat"         = 1677747257
+            "iss"         = "rezlynx"
+        }
+
+        $epochNow = [int]([DateTime]::UtcNow - [DateTime]('1970,1,1')).TotalSeconds
+        $epochExpiry = [int]([DateTime]::UtcNow.AddMinutes($expireAfterMin) - [DateTime]('1970,1,1')).TotalSeconds
+        $payload.nbf = $epochNow
+        $payload.iat = $epochNow
+        $payload.exp = $epochExpiry
+
+
+        $jwt = Create-JWT -headers $header -payload $payload -secret $signingKey
+
+        return $jwt 
+    }
+
+    function get-xmlconfig($file, $path) {
+        if (!(test-path $file)) {
+            return $null
+        }
+        $config = [xml](get-content $file)
+
+        $splits = $path.Split("/")
+        $current = $config
+        $currentPath = ""
+        foreach ($split in $splits) {
+            if ($current[$split] -eq $null) {
+                throw "Could not find $split in $currentPath"
+            }
+            $current = $current[$split]
+            $currentPath += "/$split"
+       
+        }
+    
+        return $current.InnerXml
+    }
+
+    function set-xmlconfig($file, $path, $value) {
+        $fullPath = [System.IO.Path]::GetFullPath($file)
+        if ((test-path $fullPath)) {
+            $config = [xml](get-content $fullPath)
+        }
+        else {
+            $config = [xml]""
+        }
+
+        $splits = $path.Split("/")
+        $current = $config
+        $currentPath = ""
+        foreach ($split in $splits) {
+            if ($current[$split] -eq $null) {
+                $current.AppendChild($config.CreateElement($split))
+            }
+            $current = $current[$split]
+            $currentPath += "/$split"
+       
+        }
+    
+        $current.InnerXml = $value
+    
+        $config.Save($fullPath)
+    }
+
+    function test-httpurl($url) {
+        try {
+            $result = Invoke-WebRequest -Uri $url -Method Get -UseBasicParsing -ErrorAction SilentlyContinue
+            return ($result.statuscode -eq 200)
+
+        }
+        catch {
+            if ($_.Exception.StatusCode -eq 404) {
+                # 404 means the service is there and responding, so treat it as success
+                return $true
+            }
+            return $false
+        }
+    }

@@ -12,7 +12,7 @@ $modules = [ordered]@{
         }
     }
 
-    "api" = @{
+    "api"     = @{
         description = "API settings in .env (dotenv template)"
         _template   = "dotenv:.env"
         options     = @{
