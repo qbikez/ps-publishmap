@@ -32,9 +32,6 @@ npm run restore  # Restore packages/dependencies
 # Run tests via npm
 npm test
 
-# Run tests via Grunt
-grunt test
-
 # Run just C# tests
 cd publishmap.native/publishmap.test
 dotnet test
@@ -44,7 +41,6 @@ dotnet test
 ```powershell
 # Push/publish module (runs tests first)
 npm run push
-grunt push
 
 # Install module locally
 npm run install
