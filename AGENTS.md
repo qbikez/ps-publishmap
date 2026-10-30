@@ -8,9 +8,9 @@ This repository contains **publishmap**, a PowerShell module for creating declar
 
 ### Core Modules
 
-- **publishmap** (`src/publishmap/`) - Main module for processing publish maps with inheritance and variable substitution
-- **configmap** (`src/configmap/`) - Extended module that adds build/configuration management functionality on top of publishmap
-- **publishmap.native** (`src/publishmap.native/`) - C# .NET components providing core functionality
+- **publishmap** (`publishmap/`) - Main module for processing publish maps with inheritance and variable substitution
+- **configmap** (`configmap/`) - Extended module that adds build/configuration management functionality on top of publishmap
+- **publishmap.native** (`publishmap.native/`) - C# .NET components providing core functionality
 
 ## Development Commands
 
@@ -36,7 +36,7 @@ npm test
 grunt test
 
 # Run just C# tests
-cd src/publishmap.native/publishmap.test
+cd publishmap.native/publishmap.test
 dotnet test
 ```
 

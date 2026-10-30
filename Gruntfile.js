@@ -5,7 +5,7 @@ module.exports = function (grunt) {
                 options: {
                     stdout: true
                 },
-                command: 'powershell scripts\\lib\\test.ps1'
+                command: 'powershell scripts\\lib\\test.ps1 publishmap'
             },
             push: {
                 command: "powershell scripts\\lib\\push.ps1 -newversion"

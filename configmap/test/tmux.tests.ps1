@@ -4,7 +4,7 @@ BeforeDiscovery {
 
 Describe "Tmux" {
     BeforeAll {
-        . "$PSScriptRoot\..\src\plugins\plugin-tmux\tmux.ps1"
+        . "$PSScriptRoot\..\plugins\plugin-tmux\tmux.ps1"
     }
 
     BeforeEach {
@@ -61,7 +61,7 @@ Describe "Tmux" {
 
 Describe "Invoke-TmuxCommand" {
     BeforeAll {
-        . "$PSScriptRoot\..\src\plugins\plugin-tmux\tmux.ps1"
+        . "$PSScriptRoot\..\plugins\plugin-tmux\tmux.ps1"
     }
 
     BeforeEach {

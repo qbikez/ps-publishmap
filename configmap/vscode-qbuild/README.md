@@ -16,7 +16,7 @@ The extension does not register a language or grammar. Build maps remain PowerSh
 Install the latest published release into every detected editor (`code`, `cursor`, and `code-insiders`):
 
 ```powershell
-iwr -UseBasicParsing https://raw.githubusercontent.com/qbikez/ps-publishmap/master/src/configmap/vscode-qbuild/install.ps1 | iex
+iwr -UseBasicParsing https://raw.githubusercontent.com/qbikez/ps-publishmap/master/configmap/vscode-qbuild/install.ps1 | iex
 ```
 
 Reload the editor window after the script finishes.
@@ -26,7 +26,7 @@ Set `QBUILD_EDITOR` to `code`, `cursor`, or `code-insiders` to install into one 
 ```powershell
 $env:QBUILD_EDITOR = 'cursor'
 $env:QBUILD_MAP_TOOLS_VERSION = '0.1.1'
-iwr -UseBasicParsing https://raw.githubusercontent.com/qbikez/ps-publishmap/master/src/configmap/vscode-qbuild/install.ps1 | iex
+iwr -UseBasicParsing https://raw.githubusercontent.com/qbikez/ps-publishmap/master/configmap/vscode-qbuild/install.ps1 | iex
 ```
 
 Running the script file uses the same variables:

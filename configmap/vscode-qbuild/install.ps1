@@ -8,14 +8,14 @@
 
     Pipe the script to Invoke-Expression:
 
-        iwr -UseBasicParsing https://raw.githubusercontent.com/qbikez/ps-publishmap/master/src/configmap/vscode-qbuild/install.ps1 | iex
+        iwr -UseBasicParsing https://raw.githubusercontent.com/qbikez/ps-publishmap/master/configmap/vscode-qbuild/install.ps1 | iex
 
     Set QBUILD_EDITOR to code, cursor, or code-insiders to install into one editor.
     Set QBUILD_MAP_TOOLS_VERSION to a major.minor.patch version to pin a release.
     When those variables are empty, the latest release is installed into every detected editor.
 
 .EXAMPLE
-    iwr -UseBasicParsing https://raw.githubusercontent.com/qbikez/ps-publishmap/master/src/configmap/vscode-qbuild/install.ps1 | iex
+    iwr -UseBasicParsing https://raw.githubusercontent.com/qbikez/ps-publishmap/master/configmap/vscode-qbuild/install.ps1 | iex
 
 .EXAMPLE
     $env:QBUILD_EDITOR = 'cursor'
