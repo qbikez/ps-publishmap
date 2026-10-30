@@ -539,10 +539,10 @@ Describe "qbuild dynamic parameters" {
     ) {
         param($EntryType)
         
-        qbuild -map $buildTargets $EntryType -path ".\src\configmap\"
+        qbuild -map $buildTargets $EntryType -path ".\configmap\"
 
         Should -Invoke Write-Host -ParameterFilter {
-            $Object -eq "Running push/publish workflow with args: NewVersion=False, path=.\src\configmap\"
+            $Object -eq "Running push/publish workflow with args: NewVersion=False, path=.\configmap\"
         }
     }
 
@@ -552,10 +552,10 @@ Describe "qbuild dynamic parameters" {
     ) {
         param($EntryType)
         
-        qbuild -map $buildTargets $EntryType -NewVersion -path ".\src\configmap\"
+        qbuild -map $buildTargets $EntryType -NewVersion -path ".\configmap\"
 
         Should -Invoke Write-Host -ParameterFilter {
-            $Object -eq "Running push/publish workflow with args: NewVersion=True, path=.\src\configmap\"
+            $Object -eq "Running push/publish workflow with args: NewVersion=True, path=.\configmap\"
         }
     }
 }

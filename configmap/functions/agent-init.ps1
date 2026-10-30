@@ -6,7 +6,7 @@ function Get-QBuildUserHome {
 }
 
 function Get-QBuildShippedSkillsRoot {
-    return [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../skills'))
+    return [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../skills'))
 }
 
 function Get-QBuildShippedSkills {

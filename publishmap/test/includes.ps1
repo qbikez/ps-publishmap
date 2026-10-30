@@ -1,6 +1,6 @@
 param([switch][bool]$internal = $false)
 
-$publishmapPath = "$psscriptroot\..\src\publishmap"
+$publishmapPath = "$psscriptroot\.."
 import-module Pester
 
 # $inputDir = "$psscriptroot\input"

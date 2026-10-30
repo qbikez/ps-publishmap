@@ -219,7 +219,7 @@ function Install-QBuildExtension {
         [string]$Editor
     )
 
-    $installer = Join-Path $PSScriptRoot '..\..\vscode-qbuild\install.ps1'
+    $installer = Join-Path $PSScriptRoot '..\vscode-qbuild\install.ps1'
     if (!(Test-Path -LiteralPath $installer)) {
         throw "Extension installer not found at '$installer'. Run it from a ConfigMap checkout, or see vscode-qbuild/README.md for manual install."
     }

@@ -29,7 +29,7 @@
             
             Push-Location
             try {
-                Set-Location "src/publishmap.native"
+                Set-Location "publishmap.native"
                 dotnet build publishmap.native.sln
                 if ($LASTEXITCODE -ne 0) { 
                     throw "dotnet build failed" 
@@ -63,7 +63,7 @@
             # Run C# tests
             Push-Location
             try {
-                Set-Location "src/publishmap.native"
+                Set-Location "publishmap.native"
                 dotnet test publishmap.test/publishmap.test.csproj 2>&1
                 if ($LASTEXITCODE -ne 0) {
                     Write-Warning "C# tests failed"
@@ -74,11 +74,12 @@
             }
             
             # Run PowerShell tests
+            $publishmapRoot = Join-Path $PSScriptRoot "publishmap"
             if ($env:APPVEYOR_JOB_ID -ne $null) {
-                & "scripts/lib/test.appveyor.ps1"
+                & "scripts/lib/test.appveyor.ps1" $publishmapRoot
             }
             else {
-                & "scripts/lib/test.ps1"
+                & "scripts/lib/test.ps1" $publishmapRoot
             }
         }
         description = "Run both C# unit tests and PowerShell Pester tests"
@@ -163,11 +164,11 @@
             
             # Clean C# build outputs
             $paths = @(
-                "src\publishmap.native\publishmap.core\bin",
-                "src\publishmap.native\publishmap.core\obj",
-                "src\publishmap.native\publishmap.test\bin", 
-                "src\publishmap.native\publishmap.test\obj",
-                "src\publishmap\lib"
+                "publishmap.native\publishmap.core\bin",
+                "publishmap.native\publishmap.core\obj",
+                "publishmap.native\publishmap.test\bin", 
+                "publishmap.native\publishmap.test\obj",
+                "publishmap\lib"
             )
             
             foreach ($path in $paths) {

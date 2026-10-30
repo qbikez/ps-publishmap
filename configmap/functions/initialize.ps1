@@ -1,4 +1,4 @@
-$script:samplesPath = "$PSScriptRoot/../../samples"
+$script:samplesPath = "$PSScriptRoot/../samples"
 
 function Initialize-ConfigMap([Parameter(Mandatory = $true)] $file) {
     if (Test-Path $file) {

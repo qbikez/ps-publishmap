@@ -25,6 +25,6 @@ test_script:
 - pwsh: qbuild test
 artifacts:
 - path: artifacts
-- path: src/publishmap
+- path: publishmap
 deploy_script:
 - pwsh: qbuild push . -buildno $env:APPVEYOR_BUILD_NUMBER
