@@ -97,6 +97,32 @@ Describe 'qbuild _settings.process=steps forwarding' {
         $state.steps.restore.status | Should -Be 'Pending'
     }
 
+    It 'Given _settings.forceCheck, when qbuild runs the process again, then it reruns steps whose check fails and skips the rest' {
+        @'
+[ordered]@{
+    bootstrap = [ordered]@{
+        _settings = @{ process = 'steps'; forceCheck = $true }
+        prepare   = @{
+            exec  = { 'a' | Set-Content 'a.txt' }
+            check = { Test-Path 'a.txt' }
+        }
+        restore   = @{
+            exec  = { 'b' | Set-Content 'b.txt' }
+            check = { Test-Path 'b.txt' }
+        }
+    }
+}
+'@ | Set-Content -LiteralPath $script:mapFile -Encoding utf8
+        qbuild -map $script:mapFile bootstrap
+        Remove-Item 'a.txt' -Force
+        'manual' | Set-Content 'b.txt'
+
+        qbuild -map $script:mapFile bootstrap
+
+        Test-Path 'a.txt' | Should -BeTrue
+        Get-Content 'b.txt' -Raw | Should -Match 'manual'
+    }
+
     It 'does not delegate a process entry when an in-memory map has no source file' {
         $map = @{
             bootstrap = @{

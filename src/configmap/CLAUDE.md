@@ -123,7 +123,7 @@ ConfigMap automatically discovers parameters from script blocks using AST parsin
 
 ### Process types (`_settings.process`)
 - `exec` - Default; runs the entry `exec` scriptblock (omit `_settings.process` for the same)
-- `steps` - Multi-step runner with persisted state (prefer via `qbuild`; standalone `qrun` is deprecated; legacy map value `qrun` still works)
+- `steps` - Multi-step runner with persisted state (prefer via `qbuild`; standalone `qrun` is deprecated; legacy map value `qrun` still works). `_settings.forceCheck = $true` runs step `check` handlers before every run instead of trusting the cache
 - `options` - Configuration get/set/show (prefer via `qbuild`; standalone `qconf` is deprecated; legacy map value `qconf` still works)
 
 ### Reserved Keys

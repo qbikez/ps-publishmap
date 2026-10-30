@@ -6,6 +6,7 @@
 #   qbuild build
 #   qbuild bootstrap
 #   qbuild bootstrap.prepare
+#   qbuild short-lived-token    # forceCheck: reissues the token once it is older than 5s
 #   qbuild storage
 #   qbuild storage -value prod
 #   qbuild endpoint
@@ -70,6 +71,30 @@
             }
             'ok' | Set-Content (Join-Path $ws 'verify.txt')
             Write-Host "  verified" -ForegroundColor Green
+        }
+    }
+
+    "short-lived-token" = [ordered]@{
+        # forceCheck runs the `check` handlers before every run instead of trusting
+        # cached state, so an expired token is issued again on the next run.
+        _settings   = @{ process = "steps"; forceCheck = $true }
+        description = "Token that expires 5 seconds after it is issued"
+
+        "issue"     = @{
+            exec  = {
+                $ws = Join-Path (Get-Location) 'workspace'
+                New-Item -ItemType Directory -Path $ws -Force | Out-Null
+                $issuedAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+                $issuedAt | Set-Content (Join-Path $ws 'token.txt')
+                Write-Host "  issued token at $issuedAt" -ForegroundColor Gray
+            }
+            check = {
+                $tokenFile = Join-Path (Get-Location) 'workspace/token.txt'
+                if (!(Test-Path $tokenFile)) { return $false }
+                $issuedAt = [long](Get-Content $tokenFile -Raw).Trim()
+                $age = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() - $issuedAt
+                return $age -le 5
+            }
         }
     }
 

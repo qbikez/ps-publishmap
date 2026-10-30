@@ -440,4 +440,71 @@ Describe 'qrun process runner' {
             @(qrun -map $script:checkMap '!complete' -params -entry setup) | Should -Contain 'Check'
         }
     }
+
+    Context 'Given a steps process with _settings.forceCheck' {
+        BeforeEach {
+            $script:forceCheckMap = [ordered]@{
+                setup = [ordered]@{
+                    _settings = @{ forceCheck = $true }
+                    'step-a'  = @{
+                        exec  = { 'a' | Set-Content 'a.txt' }
+                        check = { Test-Path 'a.txt' }
+                    }
+                    'step-b'  = @{
+                        exec  = { 'b' | Set-Content 'b.txt' }
+                        check = { Test-Path 'b.txt' }
+                    }
+                }
+            }
+        }
+
+        It 'Given step-a succeeded, when its check now fails, then the next run reruns it' {
+            qrun -map $script:forceCheckMap setup
+            Remove-Item 'a.txt' -Force
+
+            qrun -map $script:forceCheckMap setup
+
+            Test-Path 'a.txt' | Should -BeTrue
+        }
+
+        It 'Given step-b succeeded, when its check still passes, then the next run skips it' {
+            qrun -map $script:forceCheckMap setup
+            Remove-Item 'a.txt' -Force
+            'manual' | Set-Content 'b.txt'
+
+            qrun -map $script:forceCheckMap setup
+
+            Get-Content 'b.txt' -Raw | Should -Match 'manual'
+        }
+
+        It 'Given step-a never ran, when its check already passes, then the run skips it' {
+            'manual' | Set-Content 'a.txt'
+
+            qrun -map $script:forceCheckMap setup
+
+            Get-Content 'a.txt' -Raw | Should -Match 'manual'
+            Test-Path 'b.txt' | Should -BeTrue
+        }
+
+        It 'Given forceCheck is set only on the map root, when a check fails, then the next run reruns the step' {
+            $script:forceCheckMap.setup.Remove('_settings')
+            $script:forceCheckMap.Insert(0, '_settings', @{ forceCheck = $true })
+            qrun -map $script:forceCheckMap setup
+            Remove-Item 'a.txt' -Force
+
+            qrun -map $script:forceCheckMap setup
+
+            Test-Path 'a.txt' | Should -BeTrue
+        }
+
+        It 'Given forceCheck is not set, when a check would fail, then the next run trusts the cache and skips the step' {
+            $script:forceCheckMap.setup.Remove('_settings')
+            qrun -map $script:forceCheckMap setup
+            Remove-Item 'a.txt' -Force
+
+            qrun -map $script:forceCheckMap setup
+
+            Test-Path 'a.txt' | Should -BeFalse
+        }
+    }
 }

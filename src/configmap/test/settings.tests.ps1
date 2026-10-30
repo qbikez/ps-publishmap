@@ -5,7 +5,8 @@ BeforeAll {
         'QCONF_Concurrently',
         'QCONF_Debug',
         'QCONF_DiscoveryCache',
-        'QCONF_DiscoveryCacheLocation'
+        'QCONF_DiscoveryCacheLocation',
+        'QCONF_ForceCheck'
     )
 
     foreach ($name in $script:settingsEnvironmentVariables) {
