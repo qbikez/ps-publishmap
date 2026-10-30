@@ -101,7 +101,7 @@ Describe 'qbuild _settings.process=steps forwarding' {
         $map = @{
             bootstrap = @{
                 _settings = @{ process = 'steps' }
-                prepare = { 'prepared' | Set-Content 'in-memory-process.txt' }
+                prepare   = { 'prepared' | Set-Content 'in-memory-process.txt' }
             }
         }
 
@@ -508,7 +508,7 @@ Describe 'qbuild in-process process handlers' {
                 $map = @{
                     job = @{
                         _settings = @{ process = 'qprobe' }
-                        exec = { 'exec-ran' | Set-Content 'exec.txt' }
+                        exec      = { 'exec-ran' | Set-Content 'exec.txt' }
                     }
                 }
 

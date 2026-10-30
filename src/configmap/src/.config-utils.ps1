@@ -535,7 +535,7 @@ function compare-optionsWithValues(
             $actualValue = & $getValueFunction $key
             $optionValue = $option.$key
 
-             $result = $null
+            $result = $null
             if ($actualValue -isnot [string]) {
                 $result = "skipped:not a string"
             }
@@ -545,8 +545,8 @@ function compare-optionsWithValues(
 
             if ($result -ne $null) {
                 $matchDict[$key] = @{
-                    OptionKey = $optionSet
-                    Result = $result
+                    OptionKey   = $optionSet
+                    Result      = $result
                     OptionValue = $optionValue
                     ActualValue = $actualValue
                 }
@@ -561,8 +561,8 @@ function compare-optionsWithValues(
             }
 
             $matchDict[$key] = @{
-                OptionKey = $optionSet
-                Result = $result
+                OptionKey   = $optionSet
+                Result      = $result
                 OptionValue = $optionValue
                 ActualValue = $actualValue
             }

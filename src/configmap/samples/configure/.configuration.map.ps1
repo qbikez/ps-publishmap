@@ -1,7 +1,7 @@
 . "$PSScriptRoot/.config-utils.ps1"
 
 $modules = [ordered]@{
-    "storage"     = @{
+    "storage" = @{
         options = {
             param($path)
             return @{

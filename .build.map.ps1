@@ -84,6 +84,55 @@
         description = "Run both C# unit tests and PowerShell Pester tests"
     }
     
+    "lint"    = @{
+        exec        = {
+            param([switch]$Fix)
+
+            if (-not (Get-Module -ListAvailable PSScriptAnalyzer)) {
+                throw "PSScriptAnalyzer is not installed. Run: Install-Module PSScriptAnalyzer -Scope CurrentUser"
+            }
+            Import-Module PSScriptAnalyzer
+
+            # Formatting rules only: Invoke-Formatter would otherwise also apply fixing rules such as
+            # alias expansion, which changes behavior (e.g. `qbuild` vs `Invoke-QBuild` invocation name).
+            $allSettings = Import-PowerShellDataFile (Join-Path $PSScriptRoot "PSScriptAnalyzerSettings.psd1")
+            $formatRules = @('PSUseConsistentIndentation', 'PSUseConsistentWhitespace', 'PSAlignAssignmentStatement')
+            $settings = @{
+                IncludeRules = $formatRules
+                Rules        = @{}
+            }
+            foreach ($rule in $formatRules) { $settings.Rules[$rule] = $allSettings.Rules[$rule] }
+            # git ls-files skips untracked build output and submodule content (scripts/lib)
+            $files = @(git -C $PSScriptRoot ls-files "*.ps1" "*.psm1" | Where-Object { $_ -notmatch '(^|/)lib/' })
+
+            $unformatted = @()
+            foreach ($file in $files) {
+                $path = Join-Path $PSScriptRoot $file
+                $bytes = [IO.File]::ReadAllBytes($path)
+                $hasBom = $bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF
+                $content = [IO.File]::ReadAllText($path)
+                $formatted = Invoke-Formatter -ScriptDefinition $content -Settings $settings
+                if ($formatted -ceq $content) { continue }
+
+                $unformatted += $file
+                if ($Fix) {
+                    [IO.File]::WriteAllText($path, $formatted, [Text.UTF8Encoding]::new($hasBom))
+                }
+            }
+
+            if ($Fix) {
+                Write-Host "Formatted $($unformatted.Count) of $($files.Count) file(s)"
+                return
+            }
+            if ($unformatted.Count -gt 0) {
+                $unformatted | ForEach-Object { Write-Host "  needs formatting: $_" -ForegroundColor Yellow }
+                throw "$($unformatted.Count) file(s) need formatting. Run: qbuild lint -Fix"
+            }
+            Write-Host "Lint passed ($($files.Count) file(s) checked)"
+        }
+        description = "Check PowerShell formatting with PSScriptAnalyzer (use -Fix to apply formatting)"
+    }
+
     "push"    = @{
         exec        = {
             param([string]$path = $null, [switch]$NewVersion)

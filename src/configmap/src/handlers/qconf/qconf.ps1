@@ -128,8 +128,8 @@ function Invoke-QConf {
                 $RemainingArguments | Where-Object { $null -ne $_ -and "$_" -ne '' } | Select-Object -First 1
             )
             $impliesSet = $command -eq 'set' -or $action -eq 'set' -or
-                $PSBoundParameters.ContainsKey('value') -or
-                ($remainingHead.Count -gt 0 -and $remainingHead[0] -eq 'set')
+            $PSBoundParameters.ContainsKey('value') -or
+            ($remainingHead.Count -gt 0 -and $remainingHead[0] -eq 'set')
 
             $dynamicOperation = if ($impliesSet) { 'set' } else { 'get' }
             $skip = if ($dynamicOperation -eq 'set') { 3 } else { 0 }

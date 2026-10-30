@@ -7,7 +7,7 @@ Describe "object cache" {
     }
     Context "When getting object from cache for non-existing file" {
         It "Should throw" {
-             { get-cachedobject "non-existing-file" } | should Throw
+            { get-cachedobject "non-existing-file" } | should Throw
         }
     }
     Context "When getting fresh object from cache for existing file" {
@@ -19,32 +19,32 @@ Describe "object cache" {
     }
     
     Context "When setting cached object" {
-       $f = New-TemporaryFile
-       $obj = new-object -type pscustomobject -Property @{ name = "test1" }
-       It "Should set" {
+        $f = New-TemporaryFile
+        $obj = new-object -type pscustomobject -Property @{ name = "test1" }
+        It "Should set" {
             { 
                 set-cachedobject $f.fullname $obj 
             } | Should Not Throw
-       }
-       It "Should return same object" {
-             $cached = get-cachedobject $f.fullname 
-             $cached | Should Not BeNullOrEmpty
-             $cached.value | Should Be $obj
-       }
+        }
+        It "Should return same object" {
+            $cached = get-cachedobject $f.fullname 
+            $cached | Should Not BeNullOrEmpty
+            $cached.value | Should Be $obj
+        }
     }
     
     Context "When triggerfile is modified" {
-       $f = New-TemporaryFile
-       $obj = new-object -type pscustomobject -Property @{ name = "test1" }
-       It "Should set" {
+        $f = New-TemporaryFile
+        $obj = new-object -type pscustomobject -Property @{ name = "test1" }
+        It "Should set" {
             { 
                 set-cachedobject $f.fullname $obj 
             } | Should Not Throw
-       }
-       touch $f
-       It "Should return null" {
-             $cached = get-cachedobject $f.fullname 
-             $cached | Should BeNullOrEmpty
-       }
+        }
+        touch $f
+        It "Should return null" {
+            $cached = get-cachedobject $f.fullname 
+            $cached | Should BeNullOrEmpty
+        }
     }
 }

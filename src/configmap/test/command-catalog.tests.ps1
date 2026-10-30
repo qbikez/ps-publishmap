@@ -6,8 +6,8 @@ BeforeAll {
 Describe 'Get-ConfigMapCommandCatalog' {
     BeforeAll {
         $script:map = [ordered]@{
-            clean = { 'clean' }
-            build = @{
+            clean  = { 'clean' }
+            build  = @{
                 exec        = {
                     param(
                         [string]$Configuration = 'Debug',

@@ -1,8 +1,8 @@
 @{
-  _settings = @{
+    _settings = @{
     
-  }
-  frontend = @{
-    build = { 'build' }
-  }
+    }
+    frontend  = @{
+        build = { 'build' }
+    }
 }

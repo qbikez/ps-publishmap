@@ -56,7 +56,7 @@ function Get-MapEntryList {
     $list = $list -is [scriptblock] ? (Invoke-Command -ScriptBlock $list) : $list
 
     # switch automatically iterates over the array, so we need to wrap it in a single element array
-    $r = switch (@(,$list)) {
+    $r = switch (@(, $list)) {
         { $_ -is [System.Collections.IDictionary] } {
             $result = [ordered]@{}
 

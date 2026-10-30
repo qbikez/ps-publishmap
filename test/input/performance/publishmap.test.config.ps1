@@ -3,44 +3,44 @@ param([switch][bool] $silent)
 $publishmap = @{
    
     test = [ordered]@{
-        settings = @{
+        settings                  = @{
             siteAuth = @{
-                    username = "user"
-                    password = "pass"
+                username = "user"
+                password = "pass"
             }
         }
-        global_profiles =@{
-            dev = @{
-                    connectionStringName = "dfdfs"
-                    db_legimi = @{ connectionStringName = "UsersDb-dev" }
-                    Config = "Debug"
-                    Password = "?"
-                    profile = "ne-dev.pubxml"
-                    Machine = "machine"
-                }
+        global_profiles           = @{
+            dev      = @{
+                connectionStringName = "dfdfs"
+                db_legimi            = @{ connectionStringName = "UsersDb-dev" }
+                Config               = "Debug"
+                Password             = "?"
+                profile              = "ne-dev.pubxml"
+                Machine              = "machine"
+            }
             dev_copy = @{
                 _inherit_from = "dev"
             }
-            dev_2 = @{
+            dev_2    = @{
                 _inherit_from = "dev"
             }
          
-            qa = @{
+            qa       = @{
                 Config = "qa"
             }
         }
-        use_default_profiles = @{
-            sln = "Platform\sln\NowaEra\NowaEra.Server.Content.sln"        
-            proj = "Platform\src\server\NowaEra.Server.Content\NowaEra.Server.Content.csproj"
-            task = "Migrate"            
+        use_default_profiles      = @{
+            sln     = "Platform\sln\NowaEra\NowaEra.Server.Content.sln"        
+            proj    = "Platform\src\server\NowaEra.Server.Content\NowaEra.Server.Content.csproj"
+            task    = "Migrate"            
             #deployprop="DeployBookMeta"
-            appname="svc/content"
+            appname = "svc/content"
         }
-        db_1 = @{
+        db_1                      = @{
         }
-        additional = @{
+        additional                = @{
             profiles = @{
-                dev = @{
+                dev  = @{
                     password = "overriden"
                 }
                 prod = @{
@@ -49,9 +49,9 @@ $publishmap = @{
             }
         }
         override_default_profiles = @{
-            task = "Migrate"
+            task     = "Migrate"
             profiles = @{
-                dev = @{
+                dev      = @{
                     password = "overriden"
                     new_prop = "abc"
                 }
@@ -60,27 +60,27 @@ $publishmap = @{
                 }               
             }
         }
-        do_not_inherit_global = @{
-            inherit = $false
+        do_not_inherit_global     = @{
+            inherit  = $false
             profiles = @{
                 dev = @{
                     new_prop = "abc"
                 }
             }
         }
-        do_not_inherit_local = @{
+        do_not_inherit_local      = @{
             profiles = @{
                 dev = @{
-                    inherit = $false
+                    inherit  = $false
                     new_prop = "abc"
                 }
             }
         }
-        generic = @{
+        generic                   = @{
             profiles = @{
                 prod_N_ = @{ 
                     computername = "prod{N}.cloudapp.net"; 
-                    Port = "1{N}80"
+                    Port         = "1{N}80"
                 }
                 
             }

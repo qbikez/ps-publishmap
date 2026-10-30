@@ -1,6 +1,6 @@
 $targets = @{
     "test" = {
-       invoke-pester .
+        invoke-pester .
     }
 }
 

@@ -1,8 +1,8 @@
 # grab functions from files
 get-childitem $psscriptroot\functions\ -filter "*.ps1" | 
-? { -not ($_.name.Contains(".Tests.")) } |
-? { -not (($_.name).StartsWith("_")) } |
-% { . $_.fullname }
+    ? { -not ($_.name.Contains(".Tests.")) } |
+    ? { -not (($_.name).StartsWith("_")) } |
+    % { . $_.fullname }
 
 
 $usenative = $false
@@ -14,7 +14,7 @@ function loadLib($lib, [scriptblock] $init) {
     $OnAssemblyResolve = [System.ResolveEventHandler] {
         param($sender, $e)
         write-warning "resolving assembly '$($e.Name)' by $sender"
-        foreach($a in [System.AppDomain]::CurrentDomain.GetAssemblies()) {
+        foreach ($a in [System.AppDomain]::CurrentDomain.GetAssemblies()) {
             if ($a.FullName -eq $e.Name) {
                 return $a
             }
@@ -28,7 +28,7 @@ function loadLib($lib, [scriptblock] $init) {
     }
 
 
-    foreach($asm in (get-childitem $libdir -Filter "*.dll")) {
+    foreach ($asm in (get-childitem $libdir -Filter "*.dll")) {
         try {
             [System.Reflection.Assembly]::LoadFile($asm.fullname)
             #write-host "imported $($asm.Name)"
@@ -65,9 +65,9 @@ if ($usenative) {
     function add-property {
         [CmdletBinding()]
         param(
-            [Parameter(ValueFromPipeline = $true, Position=1)] $object, 
-            [Parameter(Mandatory=$true,Position=2)] $name, 
-            [Parameter(Mandatory=$true,Position=3)] $value, 
+            [Parameter(ValueFromPipeline = $true, Position = 1)] $object, 
+            [Parameter(Mandatory = $true, Position = 2)] $name, 
+            [Parameter(Mandatory = $true, Position = 3)] $value, 
             [switch][bool] $ifNotExists,
             [switch][bool] $overwrite,
             [switch][bool] $merge
@@ -86,9 +86,9 @@ if ($usenative) {
 
     
     function add-properties(
-        [Parameter(Mandatory=$true, ValueFromPipeline = $true)] 
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)] 
         $object,
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         $props, 
         [switch][bool] $ifNotExists, 
         [switch][bool] $merge, 

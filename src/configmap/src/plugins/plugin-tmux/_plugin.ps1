@@ -30,7 +30,7 @@
             return @{ Handled = $true }
         }
 
-        InvokeEntryWrapper = {
+        InvokeEntryWrapper  = {
             param($Context)
 
             $hasMap = $Context.Bound.map -and $Context.Bound.map -isnot [string]

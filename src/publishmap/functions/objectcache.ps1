@@ -4,9 +4,9 @@ function set-cachedobject($triggerfile, $object) {
     $f = gi $triggerfile
     $ts = $f.LastWriteTimeUtc
     $global:cache[$triggerfile] = @{
-        ts = $ts
+        ts    = $ts
         value = $object
-        file = (gi $triggerfile).FullName
+        file  = (gi $triggerfile).FullName
     }
 }
 function get-cachedobject($triggerfile) {
@@ -14,7 +14,7 @@ function get-cachedobject($triggerfile) {
     if ($null -ne $global:cache[$triggerfile]) {
         $f = gi $triggerfile
         $ts = $f.LastWriteTimeUtc
-        if ($ts -le $global:cache[$triggerfile].ts)  {
+        if ($ts -le $global:cache[$triggerfile].ts) {
             return $global:cache[$triggerfile]
         }
     }

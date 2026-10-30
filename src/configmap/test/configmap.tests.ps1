@@ -501,7 +501,7 @@ Describe "qbuild dynamic parameters" {
         $mapWithConfigOptions = @{
             "build" = @{
                 "__configOptions" = @("debug", "release")
-                "exec"             = {
+                "exec"            = {
                     param([ValidateSet("@__configOptions")][string]$config)
                     Write-Host "building config $config"
                 }
@@ -519,7 +519,7 @@ Describe "qbuild dynamic parameters" {
         $mapWithScriptBlockOptions = @{
             "build" = @{
                 "__configOptions" = { @("debug", "release") }
-                "exec"             = {
+                "exec"            = {
                     param([ValidateSet("@__configOptions")][string]$config)
                     Write-Host "building config $config"
                 }
@@ -1236,7 +1236,7 @@ $global:ConfigMapIncludeLoadCount++
             '#include' = @{
                 child = @{ prefix = $true }
             }
-            _baseDir = $root
+            _baseDir   = $root
         }
 
         $global:ConfigMapIncludeLoadCount = 0
