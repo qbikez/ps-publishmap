@@ -6,7 +6,7 @@
 #   qbuild build
 #   qbuild bootstrap
 #   qbuild bootstrap.prepare
-#   qbuild provision            # forceCheck: re-checks real state on every run
+#   qbuild short-lived-token    # forceCheck: reissues the token once it is older than 5s
 #   qbuild storage
 #   qbuild storage -value prod
 #   qbuild endpoint
@@ -74,30 +74,27 @@
         }
     }
 
-    "provision"         = [ordered]@{
+    "short-lived-token" = [ordered]@{
         # forceCheck runs the `check` handlers before every run instead of trusting
-        # cached state, so deleting workspace/tools re-runs "tools" on the next run.
+        # cached state, so an expired token is issued again on the next run.
         _settings   = @{ process = "steps"; forceCheck = $true }
-        description = "Steps that re-verify real state on every run"
+        description = "Token that expires 5 seconds after it is issued"
 
-        "tools"     = @{
-            exec  = {
-                $tools = Join-Path (Get-Location) 'workspace/tools'
-                New-Item -ItemType Directory -Path $tools -Force | Out-Null
-                'installed' | Set-Content (Join-Path $tools 'tool.txt')
-                Write-Host "  installed tools" -ForegroundColor Gray
-            }
-            check = { Test-Path (Join-Path (Get-Location) 'workspace/tools/tool.txt') }
-        }
-
-        "config"    = @{
+        "issue"     = @{
             exec  = {
                 $ws = Join-Path (Get-Location) 'workspace'
                 New-Item -ItemType Directory -Path $ws -Force | Out-Null
-                'configured' | Set-Content (Join-Path $ws 'provision.cfg')
-                Write-Host "  wrote provision.cfg" -ForegroundColor Gray
+                $issuedAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+                $issuedAt | Set-Content (Join-Path $ws 'token.txt')
+                Write-Host "  issued token at $issuedAt" -ForegroundColor Gray
             }
-            check = { Test-Path (Join-Path (Get-Location) 'workspace/provision.cfg') }
+            check = {
+                $tokenFile = Join-Path (Get-Location) 'workspace/token.txt'
+                if (!(Test-Path $tokenFile)) { return $false }
+                $issuedAt = [long](Get-Content $tokenFile -Raw).Trim()
+                $age = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() - $issuedAt
+                $age -le 5
+            }
         }
     }
 

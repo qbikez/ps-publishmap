@@ -13,9 +13,10 @@ qbuild build -Configuration Release
 qbuild bootstrap     # runs prepare → restore → verify with persisted state
 qbuild bootstrap.prepare
 qbuild bootstrap.restore -Follow
-qbuild provision               # _settings.forceCheck: checks run before every run
-Remove-Item -Recurse workspace/tools
-qbuild provision               # check fails → reruns "tools", skips "config"
+qbuild short-lived-token       # _settings.forceCheck: issues workspace/token.txt
+qbuild short-lived-token       # within 5s: check passes → SKIP
+Start-Sleep 6
+qbuild short-lived-token       # token expired: check fails → issues a new one
 qbuild storage get             # reads the active storage option
 qbuild storage set prod        # activates the prod option
 qbuild storage show            # same status formatting as the list row
