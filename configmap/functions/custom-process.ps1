@@ -124,7 +124,8 @@ function Register-ConfigMapProcess {
         [string]$Name,
         [scriptblock]$Invoke,
         [scriptblock]$GetDynamicParam,
-        [scriptblock]$WriteListEntry
+        [scriptblock]$WriteListEntry,
+        [scriptblock]$Complete
     )
 
     if ([string]::IsNullOrWhiteSpace($Name)) {
@@ -136,6 +137,7 @@ function Register-ConfigMapProcess {
         Invoke          = $Invoke
         GetDynamicParam = $GetDynamicParam
         WriteListEntry  = $WriteListEntry
+        Complete        = $Complete
     }
 }
 
@@ -554,6 +556,16 @@ function Get-QBuildProcessArgumentCompletion {
     $processMap = Import-ConfigMap -Map $context.MapInput -Fallback "./.build.map.ps1" | Assert-ConfigMap
     $settings = Get-ConfigMapSettingsForPath -Map $processMap -Path $context.Entry
     if (Test-ConfigMapProcessIsBuiltin -ProcessName $settings.Process) { return @() }
+
+    $handler = Get-ConfigMapProcessHandler -Name $settings.Process
+    if ($null -ne $handler -and $null -ne $handler.Complete) {
+        return @(& $handler.Complete @{
+                Map      = $processMap
+                Entry    = $context.Entry
+                Position = $Position
+                Word     = $Word
+            })
+    }
 
     $mapPath = Resolve-MapPath -Map $processMap
     if (-not $mapPath) { return @() }

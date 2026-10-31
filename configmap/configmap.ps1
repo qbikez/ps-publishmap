@@ -25,5 +25,6 @@ $helpersPath = (Split-Path -Parent $MyInvocation.MyCommand.Definition)
 . "$helpersPath\handlers\exec\exec.ps1"
 . "$helpersPath\handlers\qconf\qconf.ps1"
 . "$helpersPath\handlers\qrun\qrun.ps1"
+. "$helpersPath\handlers\pkg\pkg.ps1"
 
 . "$helpersPath\functions\plugins-init.ps1" -PluginsPath "$helpersPath\plugins"

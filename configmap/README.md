@@ -516,6 +516,9 @@ Build-map entries can set `_settings.process` to select a runner:
 | `exec` (default) | Run the entry `exec` scriptblock | — |
 | `steps` | Multi-step process with persisted state | `qrun` |
 | `options` | Configuration get/set/show | `qconf` |
+| `bun`, `npm` | Run `package.json` scripts | — |
+
+`bun` / `npm` entries proxy to `<tool> run`: `qbuild web` (or `qbuild web list`) lists the scripts, `qbuild web dev -- --watch` runs `bun run dev --watch` in the entry's directory. `package.json` is read only when you invoke the entry.
 
 Legacy map values `qrun` and `qconf` still normalize to `steps` / `options`.
 Standalone `qrun` / `qconf` CLIs are **deprecated** — prefer unified `qbuild` with the process types above. See [docs/process-cli.md](docs/process-cli.md).

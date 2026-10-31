@@ -49,6 +49,7 @@ Entry `_settings.process` (when set) is one of:
 | `exec` (default) | Run entry `exec` | — |
 | `steps` | Multi-step run + state | Prefer `qbuild`; standalone `qrun` is deprecated |
 | `options` | Config get/set/show | Prefer `qbuild`; standalone `qconf` is deprecated |
+| `bun` / `npm` | Run `package.json` scripts | `qbuild bun` lists them, `qbuild bun dev -- <args>` runs one |
 
 Legacy map values `qrun` / `qconf` still normalize to `steps` / `options`. Prefer the unified `qbuild` CLI.
 
