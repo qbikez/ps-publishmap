@@ -206,12 +206,11 @@ function New-ConfigMapListTypeEntries {
 function Invoke-ConfigMapListCommand {
     param($Context, [string]$Type, [switch]$Internal)
 
-    if ($Internal -and $Type) {
-        throw "list -Internal cannot be combined with -Type."
-    }
-
     if ($Internal) {
-        Write-InternalCommandList -invocation $Context.Invocation -Map $Context.UserMap
+        if ($Type) {
+            throw "list -Internal cannot be combined with -Type."
+        }
+        Write-InternalHelp -invocation $Context.Invocation -commands (Get-ConfigMapInternalCommandPaths -Map $Context.UserMap)
         return
     }
 
@@ -311,7 +310,7 @@ function Test-ConfigMapInternalCommand {
 function Get-ConfigMapInternalCommandPaths {
     <#
     .SYNOPSIS
-        Internal command names including nested entries (e.g. list.qconf), for completion.
+        Internal command names including nested entries (e.g. list.qconf), for completion and list -Internal.
     #>
     param([AllowNull()][System.Collections.IDictionary]$Map)
 

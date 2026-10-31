@@ -387,13 +387,15 @@ function Get-ScriptArgs {
                         if ($values.Count -eq 1 -and $values[0] -match '^@(.+)$') {
                             $refKey = $Matches[1]
                             # Callers that only read parameter names pass no entry; leave the set unresolved then.
-                            # Leading comma stops the if-expression unrolling a one-element array to a scalar.
-                            $resolved = if ($entryContext -is [System.Collections.IDictionary]) { , $entryContext[$refKey] } else { $null }
-                            if ($entryContext -isnot [System.Collections.IDictionary]) {
+                            $resolved = $null
+                            if ($entryContext -is [System.Collections.IDictionary]) {
+                                $resolved = $entryContext[$refKey]
+                            }
+                            else {
                                 $values = @()
                             }
-                            elseif ($resolved) {
-                                if ($resolved -is [array]) {
+                            if ($resolved) {
+                                if ($resolved -is [System.Collections.IList]) {
                                     $values = @($resolved | ForEach-Object { [string]$_ })
                                 }
                                 elseif ($resolved -is [scriptblock]) {
