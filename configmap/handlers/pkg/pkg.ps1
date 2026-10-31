@@ -80,17 +80,17 @@ foreach ($packageManager in 'bun', 'npm') {
         -Invoke { param($Context) Invoke-PackageScriptProcess -Manager (Get-ConfigMapSettingsForPath -Map $Context.Map -Path $Context.Entry).Process -Context $Context } `
         -GetDynamicParam { param($Context) $null } `
         -WriteListEntry {
-            param($ListContext)
-            $name = (Get-ConfigMapSettingsForPath -Map $ListContext.Map -Path $ListContext.Name).Process
-            $description = if ($ListContext.Entry['description']) { $ListContext.Entry['description'] } else { "Run $name scripts from package.json" }
-            Write-Host ("  {0}  {1}" -f $ListContext.Name, $description)
-        } `
+        param($ListContext)
+        $name = (Get-ConfigMapSettingsForPath -Map $ListContext.Map -Path $ListContext.Name).Process
+        $description = if ($ListContext.Entry['description']) { $ListContext.Entry['description'] } else { "Run $name scripts from package.json" }
+        Write-Host ("  {0}  {1}" -f $ListContext.Name, $description)
+    } `
         -Complete {
-            param($CompleteContext)
-            if ($CompleteContext.Position -ne 'Action') { return @() }
-            $directory = Get-PackageScriptEntryDirectory -Map $CompleteContext.Map -Entry $CompleteContext.Entry
-            try { $names = @((Get-PackageScripts -Directory $directory).Keys) } catch { $names = @() }
-            @('list') + $names | Where-Object { $_ -like "$($CompleteContext.Word)*" }
-        }
+        param($CompleteContext)
+        if ($CompleteContext.Position -ne 'Action') { return @() }
+        $directory = Get-PackageScriptEntryDirectory -Map $CompleteContext.Map -Entry $CompleteContext.Entry
+        try { $names = @((Get-PackageScripts -Directory $directory).Keys) } catch { $names = @() }
+        @('list') + $names | Where-Object { $_ -like "$($CompleteContext.Word)*" }
+    }
 }
 Remove-Variable packageManager, manager
