@@ -119,7 +119,7 @@ ConfigMap automatically discovers parameters from script blocks using AST parsin
 - Provides tab completion for parameter values
 - Special handling for `$_context` parameter (auto-injected, not exposed to CLI)
 - `[ValidateSet('@key')]` resolves its values from the entry's sibling `key` (array or scriptblock); `Invoke-EntryCommand` strips the literal attribute before running the block
-- Internal commands live in `Get-ConfigMapInternalCommands`; `list` has `list.<type>` sub-entries (one per process type in the map) and a `types` key feeding `qbuild list -Type`
+- Internal commands live in `Get-ConfigMapInternalCommands`; `list` has `list.<type>` sub-entries (one per process type in the map) and a `types` key feeding `qbuild list -Type`. `qbuild list -Internal` lists only those internal commands, including `list.<type>`. `!cache` has `!cache.status|clear|rebuild` sub-entries; each prints a summary, or returns an object with `-Porcelain`
 
 ### Process types (`_settings.process`)
 - `exec` - Default; runs the entry `exec` scriptblock (omit `_settings.process` for the same)

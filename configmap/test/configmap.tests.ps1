@@ -515,6 +515,21 @@ Describe "qbuild dynamic parameters" {
         $validateSetAttr.ValidValues | Should -Be @("debug", "release")
     }
 
+    It "should resolve ValidateSet @__siblingKey when sibling is a one-element array" {
+        $mapWithSingleOption = @{
+            "build" = @{
+                "__configOptions" = @("debug")
+                "exec"            = {
+                    param([ValidateSet("@__configOptions")][string]$config)
+                    Write-Host "building config $config"
+                }
+            }
+        }
+        $parameters = Get-EntryDynamicParam $mapWithSingleOption "build" "exec"
+        $validateSetAttr = $parameters["config"].Attributes | Where-Object { $_ -is [System.Management.Automation.ValidateSetAttribute] }
+        $validateSetAttr.ValidValues | Should -Be @("debug")
+    }
+
     It "should resolve ValidateSet @__siblingKey when sibling is a scriptblock that returns a list" {
         $mapWithScriptBlockOptions = @{
             "build" = @{
