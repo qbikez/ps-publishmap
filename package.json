@@ -1,8 +1,4 @@
 {
-    "devDependencies": {
-        "grunt": "^0.4.5",
-        "grunt-shell": "^1.1.2"
-    },
     "scripts": {
         "init": "git submodule update --init --recursive && powershell scripts\\lib\\init.ps1 .", 
         "restore": "powershell scripts\\lib\\restore.ps1 .",
