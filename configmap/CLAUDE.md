@@ -125,7 +125,7 @@ ConfigMap automatically discovers parameters from script blocks using AST parsin
 - `exec` - Default; runs the entry `exec` scriptblock (omit `_settings.process` for the same)
 - `steps` - Multi-step runner with persisted state (prefer via `qbuild`; standalone `qrun` is deprecated; legacy map value `qrun` still works). `_settings.forceCheck = $true` runs step `check` handlers before every run instead of trusting the cache
 - `options` - Configuration get/set/show (prefer via `qbuild`; standalone `qconf` is deprecated; legacy map value `qconf` still works)
-- `bun` / `npm` - Proxy to `<tool> run <script>` in the entry directory (`handlers/pkg/pkg.ps1`); script list read lazily from `package.json`. `Get-ConfigMapAutoCommands` adds a `bun`/`npm` command from lockfiles when the map does not define one
+- `bun` / `npm` - Proxy to `<tool> run <script>` in the entry directory (`handlers/pkg/pkg.ps1`); script list read lazily from `package.json`.
 
 ### Reserved Keys
 - `exec` - Default execution command for qbuild

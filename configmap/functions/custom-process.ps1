@@ -553,15 +553,7 @@ function Get-QBuildProcessArgumentCompletion {
     if (-not $context.Entry) { return @() }
     if ($Position -eq 'Value' -and -not $context.ProcessAction) { return @() }
 
-    $userMap = try {
-        Import-ConfigMap -Map $context.MapInput -Fallback "./.build.map.ps1" | Assert-ConfigMap
-    }
-    catch {
-        # Auto-detected commands (e.g. bun) work without a map file.
-        if ($_.Exception.Message -notmatch '^map file .* not found$|^No map provided and fallback .* not found$|^map is null and defaultMapFile is not provided$') { throw }
-        $null
-    }
-    $processMap = Merge-ConfigMapCommands -Map $userMap -Language build
+    $processMap = Import-ConfigMap -Map $context.MapInput -Fallback "./.build.map.ps1" | Assert-ConfigMap
     $settings = Get-ConfigMapSettingsForPath -Map $processMap -Path $context.Entry
     if (Test-ConfigMapProcessIsBuiltin -ProcessName $settings.Process) { return @() }
 

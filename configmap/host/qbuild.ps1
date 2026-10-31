@@ -288,8 +288,7 @@ function Invoke-QBuild {
         }
 
         $isInternalCommand = Test-ConfigMapInternalCommand -Name $entry -Language build
-        $isAutoCommand = (Get-ConfigMapAutoCommands -Map $userMap).Contains([string]$entry)
-        if (!$userMap -and !$isInternalCommand -and !$isAutoCommand) {
+        if (!$userMap -and !$isInternalCommand) {
             Write-Help -invocation $MyInvocation -mapPath "./.build.map.ps1"
             return
         }
