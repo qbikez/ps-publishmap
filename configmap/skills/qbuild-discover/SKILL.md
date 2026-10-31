@@ -71,6 +71,7 @@ Entry script bodies live in the project's map (or maps it `#include`s):
 | One command | `qbuild !describe <name>` |
 | Human listing | `qbuild` or `qbuild list` |
 | Listing by process type | `qbuild list -Type <type>` or `qbuild list.<type>` (`exec`, `qconf`, `qrun`, …; tab-completes) |
+| Internal commands | `qbuild list -Internal` (internal commands only, including `list.<type>`) |
 | Effective settings | `qbuild !settings [path]` |
 | Discovery cache | `qbuild !cache [status\|clear\|rebuild]` |
 | Cache location | `qbuild !settings` → `DiscoveryCacheLocation` (`local` or `user`) |

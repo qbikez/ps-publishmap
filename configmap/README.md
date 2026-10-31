@@ -25,6 +25,7 @@ ConfigMap is a PowerShell module that extends publishmap functionality to provid
    ```powershell
    qbuild list -Type qconf   # only entries with process type qconf (options)
    qbuild list.qrun          # shorthand for -Type qrun (steps)
+   qbuild list -Internal     # only internal commands, including list.<type>
    ```
 
 4. **Run build commands:**

@@ -77,6 +77,76 @@ Describe 'qbuild internal commands' {
         }
     }
 
+    It 'lists every internal command and no user commands for qbuild list -Internal' {
+        $workDir = Join-Path $TestDrive 'internal-list'
+        New-Item -ItemType Directory -Path $workDir | Out-Null
+        $localMap = Join-Path $workDir 'mixed.build.map.ps1'
+        @'
+[ordered]@{
+    zeta_user_only = { 'user' }
+    steps1 = [ordered]@{ _settings = @{ process = 'steps' }; one = { 'one' } }
+    setting = [ordered]@{
+        _settings = @{ process = 'options' }
+        get = { 'x' }
+        set = { param($_context, $value, $key) }
+        options = @{ local = 'x' }
+    }
+}
+'@ | Set-Content -LiteralPath $localMap -Encoding utf8
+
+        $output = qbuild -map $localMap list -Internal 6>&1 | Out-String
+
+        $output | Should -Match 'INTERNAL COMMANDS'
+        foreach ($name in @(
+                'help', 'list', 'list.exec', 'list.qconf', 'list.qrun',
+                '!init', '!agent.init', '!agent.skills', '!extension.install',
+                '!settings', '!describe', '!cache'
+            )) {
+            $output | Should -Match ([regex]::Escape($name))
+        }
+        $output | Should -Match 'List available build commands'
+        $output | Should -Match 'List exec entries'
+        $output | Should -Match 'List qconf entries'
+        $output | Should -Match 'List qrun entries'
+        $output | Should -Match '-Type'
+        $output | Should -Match '-Internal'
+        $output | Should -Match '-Scope'
+        $output | Should -Match '-Action'
+        $output | Should -Not -Match 'zeta_user_only'
+
+        $plain = qbuild -map $localMap list 6>&1 | Out-String
+        $plain | Should -Match 'zeta_user_only'
+        $plain | Should -Not -Match '!describe'
+        $plain | Should -Not -Match 'INTERNAL COMMANDS'
+    }
+
+    It 'lists internal commands when no build map exists' {
+        $workDir = Join-Path $TestDrive 'no-map-internal-list'
+        New-Item -ItemType Directory -Path $workDir | Out-Null
+        Push-Location $workDir
+        try {
+            $output = qbuild list -Internal 6>&1 5>&1 4>&1 3>&1 2>&1 | Out-String
+
+            $output | Should -Match 'INTERNAL COMMANDS'
+            $output | Should -Match '!init'
+            $output | Should -Match 'list\.exec'
+            $output | Should -Not -Match 'list\.qconf'
+            $output | Should -Not -Match 'No build map file found'
+        }
+        finally {
+            Pop-Location
+        }
+    }
+
+    It 'rejects list -Internal combined with -Type' {
+        $workDir = Join-Path $TestDrive 'internal-list-type'
+        New-Item -ItemType Directory -Path $workDir | Out-Null
+        $localMap = Join-Path $workDir 'map.build.map.ps1'
+        "@{ clean = { 'clean' } }" | Set-Content -LiteralPath $localMap -Encoding utf8
+
+        { qbuild -map $localMap list -Internal -Type exec 6>$null } | Should -Throw '*cannot be combined*'
+    }
+
     It 'prints every internal command from help' {
         $output = qbuild help 6>&1 5>&1 4>&1 3>&1 2>&1 | Out-String
 

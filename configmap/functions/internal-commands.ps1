@@ -24,10 +24,11 @@ function Get-ConfigMapInternalCommands {
                 param(
                     $_context,
                     [ValidateSet('@types')]
-                    [string]$Type
+                    [string]$Type,
+                    [switch]$Internal
                 )
 
-                Invoke-ConfigMapListCommand -Context $_context -Type $Type
+                Invoke-ConfigMapListCommand -Context $_context -Type $Type -Internal:$Internal
             }
             # Valid -Type values (CLI and canonical process names), resolved by ValidateSet('@types')
             types       = @(Get-ConfigMapListTypes -Map $Map -IncludeAliases)
@@ -203,7 +204,16 @@ function New-ConfigMapListTypeEntries {
 }
 
 function Invoke-ConfigMapListCommand {
-    param($Context, [string]$Type)
+    param($Context, [string]$Type, [switch]$Internal)
+
+    if ($Internal -and $Type) {
+        throw "list -Internal cannot be combined with -Type."
+    }
+
+    if ($Internal) {
+        Write-InternalCommandList -invocation $Context.Invocation -Map $Context.UserMap
+        return
+    }
 
     if (!$Context.UserMap) {
         Write-Help -invocation $Context.Invocation -mapPath "./.build.map.ps1"

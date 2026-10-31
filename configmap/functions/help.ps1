@@ -89,10 +89,6 @@ function Write-InternalHelp {
     $commandName = if ($invocation -and $invocation.InvocationName) { $invocation.InvocationName } else { 'qbuild' }
     $commands = Get-ConfigMapInternalCommands -Language build
 
-    $maxNameLength = @($commands.Keys | ForEach-Object { ([string]$_).Length } | Measure-Object -Maximum).Maximum
-    if ($null -eq $maxNameLength) { $maxNameLength = 0 }
-    $maxNameLength = [Math]::Max($maxNameLength, 12)
-
     Write-Host ""
     Write-Host "$($commandName.ToUpper())" -ForegroundColor Cyan
     Write-Host "A command line tool to manage build scripts" -ForegroundColor Gray
@@ -104,7 +100,35 @@ function Write-InternalHelp {
     Write-Host ""
     Write-Host "INTERNAL COMMANDS:" -ForegroundColor Yellow
 
-    foreach ($item in $commands.GetEnumerator()) {
+    Write-ConfigMapHelpEntries -Commands $commands
+}
+
+function Write-InternalCommandList {
+    param($invocation, [AllowNull()][System.Collections.IDictionary]$Map)
+
+    $commandName = if ($invocation -and $invocation.InvocationName) { $invocation.InvocationName } else { 'qbuild' }
+    $commands = Get-ConfigMapInternalCommandPaths -Map $Map
+
+    Write-Host ""
+    Write-Host "$($commandName.ToUpper())" -ForegroundColor Cyan
+    Write-Host "A command line tool to manage build scripts" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "USAGE:" -ForegroundColor Yellow
+    Write-Host "    $commandName <COMMAND> [OPTIONS]" -ForegroundColor White
+    Write-Host ""
+    Write-Host "INTERNAL COMMANDS:" -ForegroundColor Yellow
+
+    Write-ConfigMapHelpEntries -Commands $commands
+}
+
+function Write-ConfigMapHelpEntries {
+    param([System.Collections.IDictionary]$Commands)
+
+    $maxNameLength = @($Commands.Keys | ForEach-Object { ([string]$_).Length } | Measure-Object -Maximum).Maximum
+    if ($null -eq $maxNameLength) { $maxNameLength = 0 }
+    $maxNameLength = [Math]::Max($maxNameLength, 12)
+
+    foreach ($item in $Commands.GetEnumerator()) {
         $name = [string]$item.Key
         $script = $item.Value
         $description = ""
