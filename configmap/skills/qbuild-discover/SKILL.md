@@ -37,7 +37,7 @@ From the project directory:
 
 2. Run only catalogued commands with their documented parameters. Prefer each entry's `Description`, `ValidateSet`, and `DefaultValue`.
 3. For concurrency/tmux/debug settings, use `qbuild !settings` or `qbuild !settings <path>` — do not guess `_settings` keys.
-4. If tab completion or `list` looks stale after map edits, use `qbuild !cache status` / `qbuild !cache clear` / `qbuild !cache rebuild`. Do not delete cache files by guessing paths.
+4. If tab completion or `list` looks stale after map edits, use `qbuild !cache.status` / `qbuild !cache.clear` / `qbuild !cache.rebuild`. Do not delete cache files by guessing paths.
 5. Prefer the catalog over reading the whole map file when **running** commands.
 
 ## Process types
@@ -71,8 +71,9 @@ Entry script bodies live in the project's map (or maps it `#include`s):
 | One command | `qbuild !describe <name>` |
 | Human listing | `qbuild` or `qbuild list` |
 | Listing by process type | `qbuild list -Type <type>` or `qbuild list.<type>` (`exec`, `qconf`, `qrun`, …; tab-completes) |
+| Internal commands | `qbuild list -Internal` (internal commands only, including `list.<type>`) |
 | Effective settings | `qbuild !settings [path]` |
-| Discovery cache | `qbuild !cache [status\|clear\|rebuild]` |
+| Discovery cache | `qbuild !cache.status\|clear\|rebuild [-Porcelain]` (`-Porcelain` returns an object) |
 | Cache location | `qbuild !settings` → `DiscoveryCacheLocation` (`local` or `user`) |
 | Run a command | `qbuild <name> [-Param value ...]` |
 

@@ -84,10 +84,9 @@ function Get-ConfigMapModuleVersion {
 }
 
 function Write-InternalHelp {
-    param($invocation)
+    param($invocation, [System.Collections.IDictionary]$commands = (Get-ConfigMapInternalCommandPaths))
 
     $commandName = if ($invocation -and $invocation.InvocationName) { $invocation.InvocationName } else { 'qbuild' }
-    $commands = Get-ConfigMapInternalCommands -Language build
 
     $maxNameLength = @($commands.Keys | ForEach-Object { ([string]$_).Length } | Measure-Object -Maximum).Maximum
     if ($null -eq $maxNameLength) { $maxNameLength = 0 }
