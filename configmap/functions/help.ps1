@@ -84,7 +84,7 @@ function Get-ConfigMapModuleVersion {
 }
 
 function Write-InternalHelp {
-    param($invocation, [System.Collections.IDictionary]$commands = (Get-ConfigMapInternalCommands -Language build))
+    param($invocation, [System.Collections.IDictionary]$commands = (Get-ConfigMapInternalCommandPaths))
 
     $commandName = if ($invocation -and $invocation.InvocationName) { $invocation.InvocationName } else { 'qbuild' }
 

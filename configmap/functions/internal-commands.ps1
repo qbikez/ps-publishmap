@@ -156,32 +156,31 @@ function Get-ConfigMapInternalCommands {
         '!cache'             = @{
             description = 'Inspect or manage the discovery cache'
             exec        = {
-                param(
-                    $_context,
-                    [ValidateSet('status', 'clear', 'rebuild')]
-                    [string]$Action = 'status'
-                )
-
-                $cacheAction = $Action
-                $remaining = @($_context.RemainingArguments | Where-Object { $_ })
-                if ($cacheAction -and $remaining.Count -gt 0 -and $remaining[0] -eq $cacheAction) {
-                    $remaining = @($remaining | Select-Object -Skip 1)
-                }
-                if ($remaining.Count -gt 0) {
-                    if ($PSBoundParameters.ContainsKey('Action') -or $remaining.Count -gt 1) {
-                        throw "!cache accepts at most one action."
+                param($_context, [switch]$Porcelain)
+                Invoke-QBuildCacheCommand -Context $_context -Action status -Porcelain:$Porcelain
+            }
+            list        = [ordered]@{
+                status  = @{
+                    description = 'Show discovery cache status'
+                    exec        = {
+                        param($_context, [switch]$Porcelain)
+                        Invoke-QBuildCacheCommand -Context $_context -Action status -Porcelain:$Porcelain
                     }
-                    $cacheAction = $remaining[0]
                 }
-                if ($cacheAction -notin @('status', 'clear', 'rebuild')) {
-                    throw "!cache accepts status, clear, or rebuild."
+                clear   = @{
+                    description = "Delete this map's discovery cache"
+                    exec        = {
+                        param($_context, [switch]$Porcelain)
+                        Invoke-QBuildCacheCommand -Context $_context -Action clear -Porcelain:$Porcelain
+                    }
                 }
-
-                if (!$_context.UserMap) {
-                    throw "No build map file found. Run 'qbuild !init' to create one, or provide -map."
+                rebuild = @{
+                    description = "Clear and rebuild this map's discovery cache"
+                    exec        = {
+                        param($_context, [switch]$Porcelain)
+                        Invoke-QBuildCacheCommand -Context $_context -Action rebuild -Porcelain:$Porcelain
+                    }
                 }
-
-                Invoke-QBuildCacheCommand -Map $_context.UserMap -Language build -Action $cacheAction
             }
         }
     }
@@ -310,7 +309,7 @@ function Test-ConfigMapInternalCommand {
 function Get-ConfigMapInternalCommandPaths {
     <#
     .SYNOPSIS
-        Internal command names including nested entries (e.g. list.qconf), for completion and list -Internal.
+        Internal command names including nested entries (e.g. list.qconf, !cache.clear), for completion, help and list -Internal.
     #>
     param([AllowNull()][System.Collections.IDictionary]$Map)
 

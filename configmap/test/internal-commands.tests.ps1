@@ -111,7 +111,7 @@ Describe 'qbuild internal commands' {
         $output | Should -Match '-Type'
         $output | Should -Match '-Internal'
         $output | Should -Match '-Scope'
-        $output | Should -Match '-Action'
+        $output | Should -Match '-Porcelain'
         $output | Should -Not -Match 'zeta_user_only'
 
         $plain = qbuild -map $localMap list 6>&1 | Out-String
@@ -163,7 +163,7 @@ Describe 'qbuild internal commands' {
         $output | Should -Match '-Version'
         $output | Should -Match '-Scope'
         $output | Should -Match '-Agent'
-        $output | Should -Match '-Action'
+        $output | Should -Match '-Porcelain'
     }
 
     It 'preserves root map metadata used by settings and file-backed commands' {

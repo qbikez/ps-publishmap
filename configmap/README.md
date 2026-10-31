@@ -257,9 +257,15 @@ Inspect or reset the cache for the current build map:
 
 ```powershell
 qbuild !cache              # status (path, validity, source)
-qbuild !cache status
-qbuild !cache clear        # delete this map's cache file and memory entry
-qbuild !cache rebuild      # clear, then rebuild
+qbuild !cache.status
+qbuild !cache.clear        # delete this map's cache file and memory entry
+qbuild !cache.rebuild      # clear, then rebuild
+```
+
+These print a formatted summary. Add `-Porcelain` to get a PowerShell object for scripting:
+
+```powershell
+(qbuild !cache.status -Porcelain).Valid
 ```
 
 ### Dynamic Parameter Discovery

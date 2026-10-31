@@ -40,7 +40,7 @@ Describe 'qbuild !cache' {
         Push-Location $script:tempRoot
         try {
             $null = qbuild list
-            $result = qbuild '!cache'
+            $result = qbuild '!cache' -Porcelain
 
             $result.Action | Should -Be 'status'
             $result.Enabled | Should -BeTrue
@@ -58,12 +58,12 @@ Describe 'qbuild !cache' {
         }
     }
 
-    It 'defaults to status and accepts an explicit status action' {
+    It 'bare !cache matches !cache.status' {
         Push-Location $script:tempRoot
         try {
             $null = qbuild list
-            $implicit = qbuild '!cache'
-            $explicit = qbuild '!cache' 'status'
+            $implicit = qbuild '!cache' -Porcelain
+            $explicit = qbuild '!cache.status' -Porcelain
 
             $implicit.Action | Should -Be 'status'
             $explicit.Action | Should -Be 'status'
@@ -81,14 +81,14 @@ Describe 'qbuild !cache' {
             $cachePath = Join-Path $script:tempRoot '.configmap\discovery.build.cache.json'
             Test-Path $cachePath | Should -BeTrue
 
-            $cleared = qbuild '!cache' 'clear'
+            $cleared = qbuild '!cache.clear' -Porcelain
             $cleared.Action | Should -Be 'clear'
             $cleared.Exists | Should -BeFalse
             $cleared.Valid | Should -BeFalse
             $cleared.Source | Should -Be 'none'
             Test-Path $cachePath | Should -BeFalse
 
-            $status = qbuild '!cache'
+            $status = qbuild '!cache' -Porcelain
             $status.Exists | Should -BeFalse
             $status.Source | Should -Be 'none'
         }
@@ -101,7 +101,7 @@ Describe 'qbuild !cache' {
         Push-Location $script:tempRoot
         try {
             $null = qbuild list
-            $before = qbuild '!cache'
+            $before = qbuild '!cache' -Porcelain
 
             Set-Content -Path (Join-Path $script:tempRoot '.build.map.ps1') -Value @'
 @{
@@ -111,7 +111,7 @@ Describe 'qbuild !cache' {
 }
 '@
 
-            $rebuilt = qbuild '!cache' 'rebuild'
+            $rebuilt = qbuild '!cache.rebuild' -Porcelain
             $rebuilt.Action | Should -Be 'rebuild'
             $rebuilt.Exists | Should -BeTrue
             $rebuilt.Valid | Should -BeTrue
@@ -126,33 +126,53 @@ Describe 'qbuild !cache' {
         }
     }
 
-    It 'rebuilds via -Action' {
+    It 'prints a summary and returns nothing without -Porcelain' {
         Push-Location $script:tempRoot
         try {
-            $result = qbuild '!cache' -Action rebuild
-            $result.Action | Should -Be 'rebuild'
-            $result.Exists | Should -BeTrue
-            $result.Valid | Should -BeTrue
+            $null = qbuild list
+            $cachePath = Join-Path $script:tempRoot '.configmap\discovery.build.cache.json'
+
+            qbuild '!cache' 6>$null | Should -BeNullOrEmpty
+
+            $status = qbuild '!cache' 6>&1 | Out-String
+            $status | Should -Match 'Discovery cache'
+            $status | Should -Match 'valid \(memory\)'
+            $status | Should -Match ([regex]::Escape($cachePath))
+            $status | Should -Match 'Entries'
+
+            $rebuilt = qbuild '!cache.rebuild' 6>&1 | Out-String
+            $rebuilt | Should -Match 'Discovery cache rebuilt'
+
+            $cleared = qbuild '!cache.clear' 6>&1 | Out-String
+            $cleared | Should -Match 'Discovery cache cleared'
+            $cleared | Should -Match 'missing'
+            $cleared | Should -Not -Match 'Entries'
+            Test-Path $cachePath | Should -BeFalse
         }
         finally {
             Pop-Location
         }
     }
 
-    It 'throws for an unknown action' {
+    It 'rejects the old action forms instead of falling back to status' {
         Push-Location $script:tempRoot
         try {
-            { qbuild '!cache' 'bogus' } | Should -Throw -ExpectedMessage '*status*'
+            $null = qbuild list
+            $cachePath = Join-Path $script:tempRoot '.configmap\discovery.build.cache.json'
+
+            { qbuild '!cache' 'clear' } | Should -Throw -ExpectedMessage '*!cache.clear*'
+            { qbuild '!cache' -Action clear } | Should -Throw -ExpectedMessage '*!cache.clear*'
+            Test-Path $cachePath | Should -BeTrue
         }
         finally {
             Pop-Location
         }
     }
 
-    It 'throws when more than one action is provided' {
+    It 'rejects extra arguments on subcommands' {
         Push-Location $script:tempRoot
         try {
-            { qbuild '!cache' 'clear' 'rebuild' } | Should -Throw -ExpectedMessage '*at most one action*'
+            { qbuild '!cache.clear' 'rebuild' } | Should -Throw -ExpectedMessage '*takes no arguments*'
         }
         finally {
             Pop-Location
@@ -203,15 +223,32 @@ Describe 'qbuild !cache' {
         }
     }
 
-    It 'exposes Action ValidateSet values for !cache' {
-        InModuleScope ConfigMap {
-            $map = Merge-ConfigMapCommands -Language build
-            $params = Get-EntryDynamicParam -map $map -key '!cache' -command exec
-            @($params.Keys) | Should -Be @('Action')
+    It 'includes !cache subcommands in entry completions' {
+        Push-Location $script:tempRoot
+        try {
+            $completer = (Get-Command qbuild).Parameters['entry'].Attributes |
+                Where-Object { $_ -is [System.Management.Automation.ArgumentCompleterAttribute] } |
+                Select-Object -First 1
 
-            $actionSet = $params['Action'].Attributes |
-                Where-Object { $_ -is [System.Management.Automation.ValidateSetAttribute] }
-            @($actionSet.ValidValues) | Should -Be @('status', 'clear', 'rebuild')
+            $completions = & $completer.ScriptBlock 'qbuild' 'entry' '!cache.' $null @{}
+            $completions | Should -Be @('!cache.status', '!cache.clear', '!cache.rebuild')
+        }
+        finally {
+            Pop-Location
+        }
+    }
+
+    It 'exposes only -Porcelain for <key>' -ForEach @(
+        @{ key = '!cache' }
+        @{ key = '!cache.status' }
+        @{ key = '!cache.clear' }
+        @{ key = '!cache.rebuild' }
+    ) {
+        InModuleScope ConfigMap -Parameters @{ key = $key } {
+            $map = Merge-ConfigMapCommands -Language build
+            $params = Get-EntryDynamicParam -map $map -key $key -command exec
+            @($params.Keys) | Should -Be @('Porcelain')
+            $params['Porcelain'].ParameterType | Should -Be ([switch])
         }
     }
 
@@ -229,7 +266,7 @@ Describe 'qbuild !cache' {
         $env:HOME = $userHome
         Push-Location $script:tempRoot
         try {
-            $result = qbuild '!cache' 'rebuild'
+            $result = qbuild '!cache.rebuild' -Porcelain
             $result.Location | Should -Be 'user'
             $result.Exists | Should -BeTrue
             $result.Path | Should -Match '\\.configmap\\'
@@ -259,13 +296,13 @@ Describe 'qbuild !cache' {
             try {
                 & (Get-Module ConfigMap) { Update-ConfigMapSettings | Out-Null }
 
-                $status = qbuild '!cache'
+                $status = qbuild '!cache' -Porcelain
                 $status.Enabled | Should -BeFalse
                 $status.Exists | Should -BeTrue
 
-                { qbuild '!cache' 'rebuild' } | Should -Throw -ExpectedMessage '*disabled*'
+                { qbuild '!cache.rebuild' } | Should -Throw -ExpectedMessage '*disabled*'
 
-                $cleared = qbuild '!cache' 'clear'
+                $cleared = qbuild '!cache.clear' -Porcelain
                 $cleared.Enabled | Should -BeFalse
                 $cleared.Exists | Should -BeFalse
                 Test-Path $cachePath | Should -BeFalse

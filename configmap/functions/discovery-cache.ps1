@@ -737,20 +737,75 @@ function Rebuild-ConfigMapDiscoveryCache {
 function Invoke-QBuildCacheCommand {
     <#
     .SYNOPSIS
-        Runs a qbuild !cache action against a map.
+        Runs a qbuild !cache subcommand against the user's map.
     #>
     param(
         [Parameter(Mandatory = $true)]
-        [System.Collections.IDictionary]$Map,
-        [ValidateSet('build', 'conf')]
-        [string]$Language,
-        [string]$Action = 'status'
+        $Context,
+        [ValidateSet('status', 'clear', 'rebuild')]
+        [string]$Action = 'status',
+        [switch]$Porcelain
     )
 
-    switch ($Action) {
-        'status' { return Get-ConfigMapDiscoveryCacheInfo -Map $Map -Language $Language -Action 'status' }
-        'clear' { return Clear-ConfigMapDiscoveryCache -Map $Map -Language $Language }
-        'rebuild' { return Rebuild-ConfigMapDiscoveryCache -Map $Map -Language $Language }
-        default { throw "!cache accepts status, clear, or rebuild." }
+    if (@($Context.RemainingArguments | Where-Object { $_ }).Count -gt 0) {
+        throw "!cache takes no arguments. Use !cache.status, !cache.clear, or !cache.rebuild."
+    }
+
+    if (!$Context.UserMap) {
+        throw "No build map file found. Run 'qbuild !init' to create one, or provide -map."
+    }
+
+    $info = switch ($Action) {
+        'status' { Get-ConfigMapDiscoveryCacheInfo -Map $Context.UserMap -Language build -Action 'status' }
+        'clear' { Clear-ConfigMapDiscoveryCache -Map $Context.UserMap -Language build }
+        'rebuild' { Rebuild-ConfigMapDiscoveryCache -Map $Context.UserMap -Language build }
+    }
+
+    if ($Porcelain) {
+        return $info
+    }
+
+    Write-QBuildCacheInfo -Info $info
+}
+
+function Write-QBuildCacheInfo {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Info
+    )
+
+    $title = switch ($Info.Action) {
+        'clear' { 'Discovery cache cleared' }
+        'rebuild' { 'Discovery cache rebuilt' }
+        default { 'Discovery cache' }
+    }
+
+    $state, $stateColor = if ($Info.Valid) { "valid ($($Info.Source))", 'Green' }
+    elseif ($Info.Exists) { 'stale', 'Yellow' }
+    else { 'missing', 'DarkGray' }
+
+    $rows = [ordered]@{
+        Enabled    = if ($Info.Enabled) { 'yes' } else { 'no' }
+        Location   = $Info.Location
+        Path       = $Info.Path
+        'Root map' = $Info.RootMap
+    }
+    if ($Info.Exists) {
+        $rows['Version'] = $Info.Version
+        $rows['Entries'] = $Info.EntryCount
+        $rows['Dependencies'] = @($Info.Dependencies).Count
+    }
+
+    Write-Host ""
+    Write-Host $title -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "    $('State'.PadRight(14))" -NoNewline
+    Write-Host $state -ForegroundColor $stateColor
+    foreach ($row in $rows.GetEnumerator()) {
+        if ($null -eq $row.Value -or $row.Value -eq '') {
+            continue
+        }
+        Write-Host "    $(([string]$row.Key).PadRight(14))" -NoNewline
+        Write-Host $row.Value -ForegroundColor White
     }
 }
