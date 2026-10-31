@@ -574,17 +574,249 @@ Describe "qbuild !init" {
         New-Item -ItemType Directory -Path $childDir -Force | Out-Null
     }
 
-    It "should fail when map file already exists in current directory" {
+    It "should add missing defaults to an existing map and keep what is there" {
         $existingDir = Join-Path $testRoot "existing"
         New-Item -ItemType Directory -Path $existingDir -Force | Out-Null
-        "@{ 'test' = { Write-Host 'test' } }" | Out-File (Join-Path $existingDir ".build.map.ps1")
+        "# my comment`n@{ 'test' = { Write-Host 'test' } }" | Out-File (Join-Path $existingDir ".build.map.ps1")
 
         Push-Location $existingDir
         try {
-            { qbuild "!init" } | Should -Throw "*already exists*"
+            qbuild "!init.options"
+            $content = Get-Content ".build.map.ps1" -Raw
+            $content | Should -Match "# my comment"
+            $content | Should -Match "'test' = \{ Write-Host 'test' \}"
+            $map = . ".\.build.map.ps1"
+            @($map.Keys) | Should -Contain "test"
+            @($map.Keys) | Should -Contain "api"
         }
         finally {
             Pop-Location
+        }
+    }
+
+    It "should only list suboptions and leave the map alone when bare !init finds a map" {
+        $listDir = Join-Path $testRoot "list-suboptions"
+        New-Item -ItemType Directory -Path $listDir -Force | Out-Null
+        $source = "@{ 'test' = { Write-Host 'test' } }"
+        $source | Set-Content (Join-Path $listDir ".build.map.ps1") -NoNewline
+
+        Push-Location $listDir
+        try {
+            $output = qbuild "!init" 6>&1 | Out-String
+
+            $output | Should -Match "already exists"
+            foreach ($name in '!init.exec', '!init.options', '!init.steps', '!init.bun', '!init.npm') {
+                $output | Should -Match ([regex]::Escape($name))
+            }
+            Get-Content ".build.map.ps1" -Raw | Should -Be $source
+        }
+        finally {
+            Pop-Location
+        }
+    }
+
+    It "should pick package managers from <files> on a fresh !init" -TestCases @(
+        @{ files = @(); expected = @('build', 'api', 'setup') }
+        @{ files = @('package.json'); expected = @('build', 'api', 'setup', 'npm') }
+        @{ files = @('bun.lock'); expected = @('build', 'api', 'setup', 'bun') }
+        @{ files = @('package.json', 'bun.lock'); expected = @('build', 'api', 'setup', 'bun') }
+    ) {
+        $detectDir = Join-Path $testRoot "detect-$($files -join '-')"
+        New-Item -ItemType Directory -Path $detectDir -Force | Out-Null
+        foreach ($name in $files) {
+            '{}' | Set-Content (Join-Path $detectDir $name)
+        }
+
+        Push-Location $detectDir
+        try {
+            qbuild "!init"
+            $map = . ".\.build.map.ps1"
+            @($map.Keys) | Should -Be $expected
+        }
+        finally {
+            Pop-Location
+        }
+    }
+
+    It "should add !init.<manager> entries without their detection files" -TestCases @(
+        @{ manager = 'bun' }
+        @{ manager = 'npm' }
+    ) {
+        $forcedDir = Join-Path $testRoot "forced-$manager"
+        New-Item -ItemType Directory -Path $forcedDir -Force | Out-Null
+
+        Push-Location $forcedDir
+        try {
+            qbuild "!init.$manager"
+            $map = . ".\.build.map.ps1"
+            @($map.Keys) | Should -Be @($manager)
+        }
+        finally {
+            Pop-Location
+        }
+    }
+
+    It "should build one map from successive !init.<type> runs on a fresh directory" {
+        $freshDir = Join-Path $testRoot "fresh"
+        New-Item -ItemType Directory -Path $freshDir -Force | Out-Null
+
+        Push-Location $freshDir
+        try {
+            qbuild "!init.options"
+            qbuild "!init.bun"
+
+            $map = . ".\.build.map.ps1"
+            @($map.Keys) | Should -Be @('api', 'bun')
+            $map.api._settings.process | Should -Be 'options'
+            $map.bun._settings.process | Should -Be 'bun'
+
+            $merged = InModuleScope ConfigMap -Parameters @{ Map = $map } {
+                param($Map)
+                (Get-ConfigMapSettingsForPath -Map (Merge-ConfigMapCommands -Map $Map -Language build) -Path 'bun').Process
+            }
+            $merged | Should -Be 'bun'
+        }
+        finally {
+            Pop-Location
+        }
+    }
+
+    It "should produce a map that lists and runs in an otherwise empty directory" {
+        $workingDir = Join-Path $testRoot "working"
+        New-Item -ItemType Directory -Path $workingDir -Force | Out-Null
+
+        Push-Location $workingDir
+        try {
+            qbuild "!init"
+
+            $listing = (qbuild list 6>&1) -join ''
+            $listing | Should -Not -Match '-ctx'
+            $listing | Should -Match 'Optionslocal, prod|Options local, prod'
+            qbuild setup 6>$null
+            Get-Content "out/hello.txt" | Should -Be "hello from qbuild"
+            qbuild api set local
+            Get-Content ".env" | Should -Contain "API_URL=http://localhost:5000"
+        }
+        finally {
+            Pop-Location
+        }
+    }
+
+    It "should keep blank lines inside a default entry" {
+        $blankDir = Join-Path $testRoot "blank-lines"
+        New-Item -ItemType Directory -Path $blankDir -Force | Out-Null
+
+        Push-Location $blankDir
+        try {
+            qbuild "!init.steps"
+            (Get-Content ".build.map.ps1" -Raw) | Should -Match '\r?\n\r?\n\s+"write-file"'
+        }
+        finally {
+            Pop-Location
+        }
+    }
+
+    It "should leave the map byte-identical when every default already exists" {
+        $idempotentDir = Join-Path $testRoot "idempotent"
+        New-Item -ItemType Directory -Path $idempotentDir -Force | Out-Null
+
+        Push-Location $idempotentDir
+        try {
+            qbuild "!init.steps"
+            $first = [System.IO.File]::ReadAllBytes((Join-Path $idempotentDir ".build.map.ps1"))
+            qbuild "!init.steps"
+            $second = [System.IO.File]::ReadAllBytes((Join-Path $idempotentDir ".build.map.ps1"))
+            $second | Should -Be $first
+        }
+        finally {
+            Pop-Location
+        }
+    }
+
+    It "should keep a user entry that shares a default's name" {
+        $collisionDir = Join-Path $testRoot "collision"
+        New-Item -ItemType Directory -Path $collisionDir -Force | Out-Null
+        "@{ 'bun' = { 'mine' } }" | Out-File (Join-Path $collisionDir ".build.map.ps1")
+
+        Push-Location $collisionDir
+        try {
+            qbuild "!init.bun"
+            $map = . ".\.build.map.ps1"
+            & $map.bun | Should -Be 'mine'
+        }
+        finally {
+            Pop-Location
+        }
+    }
+
+    It "should insert into <name> maps" -TestCases @(
+        @{ name = 'ordered'; source = "[ordered]@{`n    a = { 'a' }`n}`n"; path = @() }
+        @{ name = 'variable'; source = "`$targets = @{`n    a = { 'a' }`n}`n`nreturn `$targets`n"; path = @() }
+        @{ name = 'list container'; source = "@{`n    list = @{`n        a = { 'a' }`n    }`n}`n"; path = @('list') }
+        @{ name = 'empty'; source = "@{}"; path = @() }
+    ) {
+        $mapFile = Join-Path $testRoot "shape-$name.build.map.ps1"
+        $source | Set-Content -LiteralPath $mapFile -NoNewline
+
+        qbuild -map $mapFile "!init.npm"
+
+        $map = . $mapFile
+        foreach ($key in $path) { $map = $map[$key] }
+        $map.npm._settings.process | Should -Be 'npm'
+        if ($name -ne 'empty') {
+            & $map.a | Should -Be 'a'
+        }
+    }
+
+    It "should keep CRLF line endings" {
+        $mapFile = Join-Path $testRoot "crlf.build.map.ps1"
+        "@{`r`n    a = { 'a' }`r`n}`r`n" | Set-Content -LiteralPath $mapFile -NoNewline
+
+        qbuild -map $mapFile "!init.npm"
+
+        (Get-Content -LiteralPath $mapFile -Raw) | Should -Not -Match "[^\r]\n"
+    }
+
+    It "should fail and leave the file alone when the map has no hashtable literal" {
+        $mapFile = Join-Path $testRoot "computed.build.map.ps1"
+        $source = "New-Object System.Collections.Hashtable"
+        $source | Set-Content -LiteralPath $mapFile -NoNewline
+
+        { qbuild -map $mapFile "!init.npm" } | Should -Throw "*Cannot add entries*"
+
+        Get-Content -LiteralPath $mapFile -Raw | Should -Be $source
+    }
+
+    It "should offer !init.<type> in completions when a local map exists" {
+        $completeDir = Join-Path $testRoot "complete"
+        New-Item -ItemType Directory -Path $completeDir -Force | Out-Null
+        "@{ 'test' = { Write-Host 'test' } }" | Out-File (Join-Path $completeDir ".build.map.ps1")
+
+        Push-Location $completeDir
+        try {
+            $completer = (Get-Command qbuild).Parameters['entry'].Attributes |
+                Where-Object { $_ -is [System.Management.Automation.ArgumentCompleterAttribute] } |
+                Select-Object -First 1
+            $completions = & $completer.ScriptBlock "qbuild" "entry" "!init" $null @{}
+
+            foreach ($name in '!init', '!init.exec', '!init.options', '!init.steps', '!init.bun', '!init.npm') {
+                $completions | Should -Contain $name
+            }
+        }
+        finally {
+            Pop-Location
+        }
+    }
+
+    It "should only expose !init.<type> for processes with a template" {
+        InModuleScope ConfigMap {
+            Register-ConfigMapProcess -Name 'no-template' -Invoke { }
+            try {
+                @((Get-ConfigMapInternalCommands -Language build)['!init'].list.Keys) | Should -Be @('exec', 'options', 'steps', 'bun', 'npm')
+            }
+            finally {
+                Unregister-ConfigMapProcess -Name 'no-template'
+            }
         }
     }
 
@@ -628,27 +860,17 @@ Describe "qbuild !init" {
         }
     }
 
-    It "should add npm entry with script subentries when package.json exists" {
+    It "should add an npm proxy entry with !init.npm" {
         $npmDir = Join-Path $testRoot "npm-project"
         New-Item -ItemType Directory -Path $npmDir -Force | Out-Null
         Remove-Item (Join-Path $npmDir ".build.map.ps1") -ErrorAction Ignore
-        @'
-{"name":"test","version":"1.0.0","scripts":{"build":"echo build","test":"echo test","lint":"echo lint"}}
-'@ | Out-File (Join-Path $npmDir "package.json") -Encoding utf8
 
         Push-Location $npmDir
         try {
-            qbuild "!init"
-            Test-Path ".build.map.ps1" | Should -BeTrue
-            $content = Get-Content ".build.map.ps1" -Raw
-            $content | Should -Match '"npm"\s*=\s*\[ordered\]@\{'
-            $content | Should -Match '"build"\s*=\s*\{\s*npm run'
-            $content | Should -Match '"test"\s*=\s*\{\s*npm run'
-            $content | Should -Match '"lint"\s*=\s*\{\s*npm run'
+            qbuild "!init.npm"
             $map = . ".\.build.map.ps1"
-            $map.Keys | Should -Contain "npm"
-            $map.npm.build | Should -BeOfType [ScriptBlock]
-            $map.npm.test | Should -BeOfType [ScriptBlock]
+            @($map.Keys) | Should -Be @('npm')
+            $map.npm._settings.process | Should -Be 'npm'
         }
         finally {
             Pop-Location

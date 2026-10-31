@@ -103,7 +103,7 @@ function Invoke-ConfigMapExecProcess {
 }
 
 function Register-ConfigMapExecProcess {
-    Register-ConfigMapProcess -Name $script:ConfigMapDefaultProcessName -Invoke {
+    Register-ConfigMapProcess -Name $script:ConfigMapDefaultProcessName -InitTemplate "$PSScriptRoot/init.map.ps1" -Invoke {
         param($Context)
         Invoke-ConfigMapExecProcess -Context $Context
     } -GetDynamicParam {

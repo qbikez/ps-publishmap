@@ -74,16 +74,27 @@ function Invoke-PackageScriptProcess {
     }
 }
 
+$packageInitConditions = @{
+    bun = { param($Directory) Test-Path -LiteralPath (Join-Path $Directory 'bun.lock') }
+    npm = {
+        param($Directory)
+        (Test-Path -LiteralPath (Join-Path $Directory 'package.json')) -and
+        !(Test-Path -LiteralPath (Join-Path $Directory 'bun.lock'))
+    }
+}
+
 foreach ($packageManager in 'bun', 'npm') {
     $manager = $packageManager
     Register-ConfigMapProcess -Name $manager `
+        -InitTemplate "$PSScriptRoot/$manager.init.map.ps1" `
+        -InitCondition $packageInitConditions[$manager] `
         -Invoke { param($Context) Invoke-PackageScriptProcess -Manager (Get-ConfigMapSettingsForPath -Map $Context.Map -Path $Context.Entry).Process -Context $Context } `
         -GetDynamicParam { param($Context) $null } `
         -WriteListEntry {
         param($ListContext)
         $name = (Get-ConfigMapSettingsForPath -Map $ListContext.Map -Path $ListContext.Name).Process
         $description = if ($ListContext.Entry['description']) { $ListContext.Entry['description'] } else { "Run $name scripts from package.json" }
-        Write-Host ("  {0}  {1}" -f $ListContext.Name, $description)
+        Write-CommandHelpLine $ListContext.Name $description '' 0
     } `
         -Complete {
         param($CompleteContext)
@@ -93,4 +104,4 @@ foreach ($packageManager in 'bun', 'npm') {
         @('list') + $names | Where-Object { $_ -like "$($CompleteContext.Word)*" }
     }
 }
-Remove-Variable packageManager, manager
+Remove-Variable packageManager, manager, packageInitConditions
