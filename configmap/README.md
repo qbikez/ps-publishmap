@@ -11,9 +11,12 @@ ConfigMap is a PowerShell module that extends publishmap functionality to provid
 
 2. **Initialize a build map:**
    ```powershell
-   qbuild init
+   qbuild !init            # new map with the defaults detected for this directory
+   qbuild !init.options    # add one process type: exec, options, steps, bun or npm
    ```
-   This creates a `.build.map.ps1` file with sample build scripts.
+   `qbuild !init` creates `.build.map.ps1` with the `exec`, `options` and `steps` defaults, plus `bun` if `bun.lock` exists, or `npm` if `package.json` exists without a `bun.lock`. If the map already exists it changes nothing and lists the `!init.<type>` commands.
+
+   `qbuild !init.<type>` always adds that type's defaults, creating the map if needed. Entries the map already has are left untouched.
 
 3. **List available commands:**
    ```powershell
@@ -585,7 +588,7 @@ qbuild build -Configuration Release -NoRestore
 
 - **configmap.ps1** - Main module implementation
 - **configmap.psm1** - Module manifest and function exports
-- **samples/_default/** - Template files for `init` commands
+- **samples/_default/** - Template files for standalone `qconf !init` / `qrun !init`
 
 ## Testing
 

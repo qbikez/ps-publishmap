@@ -23,7 +23,8 @@ Invoke-Pester -Path "configmap.tests.ps1"
 Import-Module ./configmap.psm1 -Force
 
 # Test basic functionality
-qbuild init      # Creates sample .build.map.ps1
+qbuild !init     # Creates .build.map.ps1 with detected defaults; on an existing map, only lists !init.<type>
+qbuild !init.bun # Adds one process type's defaults to the map (creates it if missing)
 qconf init       # Creates sample .configuration.map.ps1
 qbuild list      # Shows available build commands
 ```
@@ -119,7 +120,7 @@ ConfigMap automatically discovers parameters from script blocks using AST parsin
 - Provides tab completion for parameter values
 - Special handling for `$_context` parameter (auto-injected, not exposed to CLI)
 - `[ValidateSet('@key')]` resolves its values from the entry's sibling `key` (array or scriptblock); `Invoke-EntryCommand` strips the literal attribute before running the block
-- Internal commands live in `Get-ConfigMapInternalCommands`; `list` has `list.<type>` sub-entries (one per process type in the map) and a `types` key feeding `qbuild list -Type`. `qbuild list -Internal` lists only those internal commands, including `list.<type>`. `!cache` has `!cache.status|clear|rebuild` sub-entries; each prints a summary, or returns an object with `-Porcelain`
+- Internal commands live in `Get-ConfigMapInternalCommands`; `list` has `list.<type>` sub-entries (one per process type in the map) and a `types` key feeding `qbuild list -Type`. `qbuild list -Internal` lists only those internal commands, including `list.<type>`. `!cache` has `!cache.status|clear|rebuild` sub-entries; each prints a summary, or returns an object with `-Porcelain`. `!init` has `!init.<type>` sub-entries, one per handler registered with `-InitTemplate` (a map file next to the handler, e.g. `handlers/qconf/init.map.ps1`); `Initialize-BuildMap` inserts the template entries missing from the local map as text, so comments and scriptblocks survive. An optional `-InitCondition` (`param($Directory)`) gates a handler for bare `!init` only, which never touches an existing map
 
 ### Process types (`_settings.process`)
 - `exec` - Default; runs the entry `exec` scriptblock (omit `_settings.process` for the same)
@@ -136,7 +137,7 @@ ConfigMap automatically discovers parameters from script blocks using AST parsin
 - `description` - Command documentation
 
 ### Sample Files Structure
-- `samples/_default/` - Template files for `init` commands
+- `samples/_default/` - Template files for standalone `qconf !init` / `qrun !init`
 - `samples/build/`, `samples/configure/`, `samples/install/` - Example configurations
 - Contains `.build.map.ps1` and `.configuration.map.ps1` templates
 

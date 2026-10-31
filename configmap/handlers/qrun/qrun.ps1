@@ -497,4 +497,4 @@ function Invoke-QRun {
 Set-Alias -Name "qrun" -Value "Invoke-QRun" -Force
 
 # Canonical process type for qbuild maps; CLI alias remains qrun.
-Register-ConfigMapCliProcess -Name 'steps' -CliName 'qrun'
+Register-ConfigMapCliProcess -Name 'steps' -CliName 'qrun' -InitTemplate "$PSScriptRoot/init.map.ps1"

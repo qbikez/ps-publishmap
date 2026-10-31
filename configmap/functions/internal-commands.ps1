@@ -36,18 +36,13 @@ function Get-ConfigMapInternalCommands {
             list        = New-ConfigMapListTypeEntries -Map $Map
         }
         '!init'              = @{
-            description = 'Create a build map in the current directory'
-            _internal   = @{
-                completeWhen = 'localMapMissing'
-            }
+            description = 'Create a build map with the defaults detected for this directory'
             exec        = {
                 param($_context)
-
-                if (Test-Path $_context.MapArgument) {
-                    throw "map file '$($_context.MapArgument)' already exists"
-                }
                 Initialize-BuildMap -file $_context.MapArgument
             }
+            # !init.<type> shorthands, one per process that declares an init template
+            list        = New-ConfigMapInitTypeEntries
         }
         '!agent.init'        = @{
             description = 'Install ConfigMap agent skills'
@@ -202,6 +197,20 @@ function New-ConfigMapListTypeEntries {
     return $entries
 }
 
+function New-ConfigMapInitTypeEntries {
+    $entries = [ordered]@{}
+    foreach ($handler in @(Get-ConfigMapInitProcesses)) {
+        $entries[$handler.Name] = @{
+            description = "Add default $($handler.Name) entries to the build map"
+            # Create() keeps the block bound to module scope; GetNewClosure() would lose private functions.
+            exec        = [scriptblock]::Create(
+                "param(`$_context) Initialize-BuildMap -file `$_context.MapArgument -Process '$($handler.Name -replace "'", "''")'"
+            )
+        }
+    }
+    return $entries
+}
+
 function Invoke-ConfigMapListCommand {
     param($Context, [string]$Type, [switch]$Internal)
 
@@ -272,22 +281,6 @@ function Merge-ConfigMapCommands {
 
     $result['list'] = $commands
     return $result
-}
-
-function Test-ConfigMapCommandCompletion {
-    param(
-        [System.Collections.IDictionary]$Entry,
-        [bool]$LocalMapExists
-    )
-
-    if (!$Entry -or !$Entry._internal -or !$Entry._internal.completeWhen) {
-        return $true
-    }
-
-    switch ($Entry._internal.completeWhen) {
-        'localMapMissing' { return !$LocalMapExists }
-        default { return $true }
-    }
 }
 
 function Test-ConfigMapInternalCommand {
