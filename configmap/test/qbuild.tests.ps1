@@ -90,6 +90,23 @@ Describe "qbuild multi-target" {
         $script:mtRan | Should -Be @("a")
     }
 
+    It "completes entries when configmap.ps1 is dot-sourced instead of imported as a module" {
+        $configmapScript = (Resolve-Path "$PSScriptRoot\..\configmap.ps1").Path
+        $output = pwsh -NoProfile -Command {
+            param($Script, $MapDir)
+            . $Script
+            Set-Location $MapDir
+            $completer = (Get-Command qbuild).Parameters['entry'].Attributes |
+                Where-Object { $_ -is [System.Management.Automation.ArgumentCompleterAttribute] } |
+                Select-Object -First 1
+            & $completer.ScriptBlock "qbuild" "entry" "" $null @{}
+        } -args $configmapScript, $script:mtMapDir
+
+        $output | Should -Contain "clean"
+        $output | Should -Contain "build"
+        $output | Should -Not -Match "^ERROR"
+    }
+
     It "completes the second target after a comma" {
         Push-Location $script:mtMapDir
         try {
