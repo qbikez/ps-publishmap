@@ -41,7 +41,13 @@ function Invoke-QBuild {
                     }
 
                     $configMapModule = (Get-Command Invoke-QBuild).Module
-                    $internalCommands = & $configMapModule { param($m) Get-ConfigMapInternalCommandPaths -Map $m } $userMap
+                    # Dot-sourced configmap.ps1 (no module) exposes the helpers in the caller's scope
+                    $internalCommands = if ($configMapModule) {
+                        & $configMapModule { param($m) Get-ConfigMapInternalCommandPaths -Map $m } $userMap
+                    }
+                    else {
+                        Get-ConfigMapInternalCommandPaths -Map $userMap
+                    }
                     foreach ($item in $internalCommands.GetEnumerator()) {
                         if (-not ([string]$item.Key).StartsWith($completionWord)) {
                             continue
