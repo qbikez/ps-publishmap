@@ -3,7 +3,7 @@
     RootModule           = 'configmap.psm1'
 
     # Version number of this module.
-    ModuleVersion = '1.3.17.0'
+    ModuleVersion = '1.3.18.0'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Core')
@@ -172,6 +172,7 @@ Initial release of ConfigMap module providing:
     # Default prefix for commands exported from this module. Override the default prefix using Import-Module -Prefix.
     # DefaultCommandPrefix = ''
 }
+
 
 
 
