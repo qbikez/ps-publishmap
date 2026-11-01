@@ -58,6 +58,14 @@ Describe 'qbuild package script proxy' {
             $global:PkgCalls.Count | Should -Be 0
         }
 
+        It 'lists scripts in the regular qbuild list format' {
+            $out = (qbuild web 6>&1) -join ''
+
+            $out | Should -Match 'COMMANDS:'
+            $out | Should -BeLike '*    dev    vite*'
+            $out | Should -BeLike '*    build  tsc -b*'
+        }
+
         It 'lists scripts with the list action' {
             $out = qbuild web list 6>&1 | Out-String
 
