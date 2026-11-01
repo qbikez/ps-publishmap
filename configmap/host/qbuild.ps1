@@ -4,9 +4,6 @@ function Invoke-QBuild {
         [ArgumentCompleter({
                 param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
                 try {
-                    $mapPath = if ($fakeBoundParameters.map) { $fakeBoundParameters.map } else { "./.build.map.ps1" }
-                    $localMapExists = Test-Path $mapPath
-
                     $userMap = try {
                         Import-ConfigMap -Map $fakeBoundParameters.map -Fallback "./.build.map.ps1" -ErrorAction Stop
                     }
@@ -44,16 +41,15 @@ function Invoke-QBuild {
                     }
 
                     $configMapModule = (Get-Command Invoke-QBuild).Module
-                    $internalCommands = & $configMapModule { param($m) Get-ConfigMapInternalCommandPaths -Map $m } $userMap
+                    # Dot-sourced configmap.ps1 (no module) exposes the helpers in the caller's scope
+                    $internalCommands = if ($configMapModule) {
+                        & $configMapModule { param($m) Get-ConfigMapInternalCommandPaths -Map $m } $userMap
+                    }
+                    else {
+                        Get-ConfigMapInternalCommandPaths -Map $userMap
+                    }
                     foreach ($item in $internalCommands.GetEnumerator()) {
                         if (-not ([string]$item.Key).StartsWith($completionWord)) {
-                            continue
-                        }
-                        $includeCompletion = & $configMapModule {
-                            param($commandEntry, $mapExists)
-                            Test-ConfigMapCommandCompletion -Entry $commandEntry -LocalMapExists $mapExists
-                        } $item.Value $localMapExists
-                        if (-not $includeCompletion) {
                             continue
                         }
                         if (-not $completions.Contains([string]$item.Key)) {

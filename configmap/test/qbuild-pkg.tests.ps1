@@ -31,6 +31,10 @@ Describe 'qbuild package script proxy' {
                 Set-Content (Join-Path $script:workDir '.build.map.ps1')
         }
 
+        It 'lists the entry with the same indent as other commands' {
+            ((qbuild list 6>&1) -join '') | Should -BeLike '*    web  Frontend*'
+        }
+
         It 'runs a script as bun run in the map directory' {
             qbuild web dev
 

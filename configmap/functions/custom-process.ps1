@@ -125,7 +125,11 @@ function Register-ConfigMapProcess {
         [scriptblock]$Invoke,
         [scriptblock]$GetDynamicParam,
         [scriptblock]$WriteListEntry,
-        [scriptblock]$Complete
+        [scriptblock]$Complete,
+        # Map file holding the entries `qbuild !init.<name>` adds. Without one the process has no !init.<name>.
+        [string]$InitTemplate,
+        # param($Directory): whether bare `qbuild !init` includes this process. Omitted means always.
+        [scriptblock]$InitCondition
     )
 
     if ([string]::IsNullOrWhiteSpace($Name)) {
@@ -138,6 +142,8 @@ function Register-ConfigMapProcess {
         GetDynamicParam = $GetDynamicParam
         WriteListEntry  = $WriteListEntry
         Complete        = $Complete
+        InitTemplate    = $InitTemplate
+        InitCondition   = $InitCondition
     }
 }
 
@@ -167,6 +173,14 @@ function Unregister-ConfigMapProcess {
     )
 
     [void]$script:ConfigMapProcessHandlers.Remove($Name)
+}
+
+function Get-ConfigMapInitProcesses {
+    <#
+    .SYNOPSIS
+        Handlers that declare an init template, in registration order.
+    #>
+    return @($script:ConfigMapProcessHandlers.Values | Where-Object { $_.InitTemplate })
 }
 
 function New-ConfigMapProcessContext {
@@ -424,12 +438,13 @@ function Register-ConfigMapCliProcess {
         [Parameter(Mandatory = $true)]
         [string]$Name,
         [Parameter(Mandatory = $true)]
-        [string]$CliName
+        [string]$CliName,
+        [string]$InitTemplate
     )
 
     $script:ConfigMapProcessCliNames[$Name] = $CliName
 
-    Register-ConfigMapProcess -Name $Name -Invoke {
+    Register-ConfigMapProcess -Name $Name -InitTemplate $InitTemplate -Invoke {
         param($Context)
         $cli = Get-ConfigMapProcessCliName -ProcessName (
             Get-ConfigMapSettingsForPath -Map $Context.Map -Path $Context.Entry -OperationContext $Context.OperationContext

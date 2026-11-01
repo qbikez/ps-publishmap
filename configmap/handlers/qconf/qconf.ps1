@@ -571,4 +571,4 @@ function ConvertTo-MapResult($value, $entryName, $entry, $options, $validate = $
 Set-Alias -Name "qconf" -Value "Invoke-QConf" -Force
 
 # Canonical process type for qbuild maps; CLI alias remains qconf.
-Register-ConfigMapCliProcess -Name 'options' -CliName 'qconf'
+Register-ConfigMapCliProcess -Name 'options' -CliName 'qconf' -InitTemplate "$PSScriptRoot/init.map.ps1"
