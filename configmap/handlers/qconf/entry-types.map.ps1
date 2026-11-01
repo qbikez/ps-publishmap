@@ -1,6 +1,6 @@
 # Built-in get/set implementations for Entry._template types.
 return [ordered]@{
-    appconfig = @{
+    appconfig      = @{
         get = {
             param($ctx, $options, $_context)
             $file = Get-ConfigEntryTemplateFile -Entry $_context.self -TypeName 'appconfig'
@@ -12,7 +12,7 @@ return [ordered]@{
             Set-AppConfigOption -File $file -Values $value
         }
     }
-    dotenv    = @{
+    dotenv         = @{
         get = {
             param($ctx, $options, $_context)
             $file = Get-ConfigEntryTemplateFile -Entry $_context.self -TypeName 'dotenv'
@@ -22,6 +22,18 @@ return [ordered]@{
             param($ctx, $key, $value, $_context)
             $file = Get-ConfigEntryTemplateFile -Entry $_context.self -TypeName 'dotenv'
             Set-DotEnvOption -File $file -Values $value
+        }
+    }
+    'user-secrets' = @{
+        get = {
+            param($ctx, $options, $_context)
+            $csproj = Get-ConfigEntryTemplateFile -Entry $_context.self -TypeName 'user-secrets' -Key 'csproj'
+            Find-ActiveSecretOption -Csproj $csproj -Options $options
+        }
+        set = {
+            param($ctx, $key, $value, $_context)
+            $csproj = Get-ConfigEntryTemplateFile -Entry $_context.self -TypeName 'user-secrets' -Key 'csproj'
+            Set-UserSecretOption -Csproj $csproj -Values $value
         }
     }
 }

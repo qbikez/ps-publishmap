@@ -38,6 +38,18 @@ function Get-ConfigEntryTemplate {
             }
         }
 
+        # Short form: "user-secrets:{csproj}" → @{ type = 'user-secrets'; csproj = ... }
+        if ($template -match '^(?i)user-secrets:(.*)$') {
+            $csproj = $Matches[1].Trim()
+            if ([string]::IsNullOrWhiteSpace($csproj)) {
+                throw "Config entry template 'user-secrets:' requires a csproj path."
+            }
+            return @{
+                type   = 'user-secrets'
+                csproj = $csproj
+            }
+        }
+
         throw "Unknown config entry template '$template'."
     }
 
@@ -50,12 +62,13 @@ function Resolve-ConfigEntryFile {
         [Parameter(Mandatory = $true)]
         [System.Collections.IDictionary]$Template,
         [Parameter(Mandatory = $true)]
-        [string]$TypeName
+        [string]$TypeName,
+        [string]$Key = 'file'
     )
 
-    $file = $Template.file
+    $file = $Template[$Key]
     if ($file -isnot [string] -or [string]::IsNullOrWhiteSpace($file)) {
-        throw "Config entry type '$TypeName' requires a file path."
+        throw "Config entry type '$TypeName' requires a $Key path."
     }
 
     if ([System.IO.Path]::IsPathRooted($file)) {
@@ -71,7 +84,8 @@ function Get-ConfigEntryTemplateFile {
         [Parameter(Mandatory = $true)]
         $Entry,
         [Parameter(Mandatory = $true)]
-        [string]$TypeName
+        [string]$TypeName,
+        [string]$Key = 'file'
     )
 
     $template = Get-ConfigEntryTemplate -Entry $Entry
@@ -79,7 +93,118 @@ function Get-ConfigEntryTemplateFile {
         throw "Config entry has no _template."
     }
 
-    return Resolve-ConfigEntryFile -Entry $Entry -Template $template -TypeName $TypeName
+    return Resolve-ConfigEntryFile -Entry $Entry -Template $template -TypeName $TypeName -Key $Key
+}
+
+function Assert-UserSecretsProject {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Csproj
+    )
+
+    # `dotnet user-secrets --project` accepts a project file or the directory containing one.
+    if (-not (Test-Path -LiteralPath $Csproj)) {
+        throw "user-secrets csproj not found: $Csproj"
+    }
+}
+
+function Resolve-UserSecretReference {
+    <#
+    .SYNOPSIS
+        Replace a `user-secrets:{name}` option value with that secret from the same project.
+        Returns $null when the secret does not exist.
+    #>
+    param(
+        $Value,
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Secrets
+    )
+
+    if ($Value -isnot [string] -or -not $Value.StartsWith('user-secrets:')) { return $Value }
+
+    return $Secrets[$Value.Substring('user-secrets:'.Length)]
+}
+
+function Find-ActiveSecretOption {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Csproj,
+        [Parameter(Mandatory = $true)]
+        $Options
+    )
+
+    Assert-UserSecretsProject -Csproj $Csproj
+
+    $secrets = get-user-secrets $Csproj
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to list user secrets for '$Csproj'. Does it define a UserSecretsId, and is 'dotnet user-secrets' available?"
+    }
+
+    $active = $null
+    $valueObject = [ordered]@{}
+
+    foreach ($optionSet in $Options.Keys) {
+        $option = $Options[$optionSet]
+        if ($option -isnot [System.Collections.IDictionary]) { continue }
+
+        $isMatch = $true
+        foreach ($key in @($option.Keys)) {
+            if ("$key".StartsWith('__')) { continue }
+
+            if (-not $valueObject.Contains($key)) {
+                $valueObject[$key] = $secrets[$key]
+            }
+            $currentValue = $valueObject[$key]
+            $optionValue = Resolve-UserSecretReference -Value $option[$key] -Secrets $secrets
+
+            if ($null -eq $currentValue) {
+                $isMatch = $false
+                continue
+            }
+
+            if ($isMatch -and $currentValue -ne $optionValue -and -not (test-isSpecialValue $optionValue)) {
+                $isMatch = $false
+            }
+        }
+
+        if ($isMatch) {
+            $active = $optionSet
+            break
+        }
+    }
+
+    return @{ Value = $valueObject; Active = $active }
+}
+
+function Set-UserSecretOption {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Csproj,
+        $Values
+    )
+
+    if ($Values -isnot [System.Collections.IDictionary]) {
+        throw "user-secrets option value must be a hashtable of secret keys."
+    }
+
+    Assert-UserSecretsProject -Csproj $Csproj
+
+    $secrets = get-user-secrets $Csproj
+    $directory = if (Test-Path -LiteralPath $Csproj -PathType Container) { $Csproj } else { Split-Path -Parent $Csproj }
+    foreach ($key in @($Values.Keys)) {
+        if ("$key".StartsWith('__')) { continue }
+
+        $secretValue = Resolve-UserSecretReference -Value $Values[$key] -Secrets $secrets
+        if ($null -eq $secretValue) {
+            throw "Cannot set user secret '$key': '$($Values[$key])' was not found for '$Csproj'."
+        }
+        $secretValue = resolve-value $secretValue -dir $directory
+
+        $null = dotnet user-secrets set "$key" "$secretValue" --project $Csproj 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to set user secret '$key' for '$Csproj'."
+        }
+    }
 }
 
 function Set-AppConfigOption {
@@ -180,8 +305,9 @@ function Add-ConfigEntryTypeCommands {
         Fill in get and set from Entry._template when the map did not supply them.
 
     .DESCRIPTION
-        Accepts `_template` as a hashtable (`type`/`file`) or short string
-        (`appsettings:{filepath}` or `dotenv:{filepath}`). Leaves an author-supplied
+        Accepts `_template` as a hashtable (`type`/`file`, or `type`/`csproj` for
+        `user-secrets`) or short string (`appsettings:{filepath}`, `dotenv:{filepath}`
+        or `user-secrets:{csproj}`). Leaves an author-supplied
         get or set in place. Always stashes the template get/set on
         Entry._internal.base so overrides can call them via $_context.base.
     #>
@@ -200,7 +326,8 @@ function Add-ConfigEntryTypeCommands {
         throw "Unknown config entry type '$typeName'."
     }
 
-    $null = Resolve-ConfigEntryFile -Entry $Entry -Template $template -TypeName $typeName
+    $pathKey = if ($typeName -eq 'user-secrets') { 'csproj' } else { 'file' }
+    $null = Resolve-ConfigEntryFile -Entry $Entry -Template $template -TypeName $typeName -Key $pathKey
     $commands = $typeCommands[$typeName]
 
     if (-not $Entry.Contains('_internal') -or $Entry._internal -isnot [System.Collections.IDictionary]) {

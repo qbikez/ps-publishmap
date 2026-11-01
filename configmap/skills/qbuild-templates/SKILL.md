@@ -2,14 +2,15 @@
 name: qbuild-templates
 description: >-
   Converts hand-written options get/set entries to built-in _template forms
-  (appsettings / dotenv), including get/set overrides via $_context.base.
-  Use when simplifying or modernizing .configuration.map.ps1 or options-process
-  map entries, or when get/set only wrap appsettings JSON or .env helpers.
+  (appsettings / dotenv / user-secrets), including get/set overrides via
+  $_context.base. Use when simplifying or modernizing .configuration.map.ps1 or
+  options-process map entries, or when get/set only wrap appsettings JSON, .env
+  or dotnet user-secrets helpers.
 ---
 
 # qbuild templates
 
-Built-in `_template` fills `get` / `set` for appsettings JSON and `.env` files. Prefer templates over hand-written helpers when the entry only reads/writes one of those files.
+Built-in `_template` fills `get` / `set` for appsettings JSON, `.env` files and `dotnet user-secrets`. Prefer templates over hand-written helpers when the entry only reads/writes one of those files.
 
 Load this recipe without installing:
 
@@ -76,6 +77,23 @@ Note: short prefix is `appsettings:`; long `type` is `appconfig`.
 ```
 
 Long form: `_template = @{ type = "dotenv"; file = ".env" }`.
+
+### User secrets → `user-secrets:`
+
+```powershell
+"mongo" = @{
+    description = "Mongo connection in user secrets"
+    _template   = "user-secrets:src/App/App.csproj"
+    options     = @{
+        local  = @{ "ConnectionStrings:mongo" = "" }
+        shared = @{ "ConnectionStrings:mongo" = "user-secrets:mongo_shared" }
+    }
+}
+```
+
+Long form: `_template = @{ type = "user-secrets"; csproj = "src/App/App.csproj" }`.
+
+`csproj` is a project file or its directory, and the project needs a `UserSecretsId`. A `user-secrets:{name}` value copies another secret from the same project; `set` throws if that secret is missing.
 
 ### Keep / remove
 

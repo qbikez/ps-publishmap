@@ -110,6 +110,16 @@ Settings management with get/set/validate operations, or a built-in `_template`:
             prod  = @{ "API_URL" = "https://api.example.com" }
         }
     }
+
+    "mongo" = @{
+        # Short form; long form is _template = @{ type = "user-secrets"; csproj = "..." }
+        # Runs `dotnet user-secrets`; csproj is a project file or its directory
+        _template = "user-secrets:src/App/App.csproj"
+        options = @{
+            local  = @{ "ConnectionStrings:mongo" = "" }
+            shared = @{ "ConnectionStrings:mongo" = "user-secrets:mongo_shared" }
+        }
+    }
 }
 ```
 
@@ -131,7 +141,7 @@ ConfigMap automatically discovers parameters from script blocks using AST parsin
 ### Reserved Keys
 - `exec` - Default execution command for qbuild
 - `get/set/validate` - Configuration operations for qconf / `process = options`
-- `_template` - Built-in entry type: hashtable (`type`/`file`) or short string (`appsettings:{filepath}` / `dotenv:{filepath}`) that fills get/set; author get/set win and can call `$_context.base.get` / `$_context.base.set`
+- `_template` - Built-in entry type: hashtable (`type`/`file`, or `type`/`csproj` for `user-secrets`) or short string (`appsettings:{filepath}` / `dotenv:{filepath}` / `user-secrets:{csproj}`) that fills get/set; author get/set win and can call `$_context.base.get` / `$_context.base.set`
 - `list` - Nested entry container
 - `options` - Available configuration values (map key; distinct from process type `options`)
 - `description` - Command documentation
