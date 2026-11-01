@@ -831,7 +831,7 @@ Describe 'qconf user-secrets _template' {
     }
 
     It 'writes no key when a later user-secrets: reference is missing' {
-        @'
+        Write-ConfigMapFile $script:mapFile @'
 @{
     partial = @{
         _template = 'user-secrets:App.csproj'
@@ -843,7 +843,7 @@ Describe 'qconf user-secrets _template' {
         }
     }
 }
-'@ | Set-Content -LiteralPath $script:mapFile -Encoding utf8
+'@
 
         { qconf -map $script:mapFile partial -value shared -ErrorAction Stop } |
             Should -Throw '*db_shared*'
@@ -859,8 +859,28 @@ Describe 'qconf user-secrets _template' {
         $result.Active | Should -BeNullOrEmpty
     }
 
+    It 'keeps unrelated secrets and non-ASCII values when setting an option' {
+        dotnet user-secrets set 'Other:Key' 'keep-me' --project $script:csproj | Out-Null
+        Write-ConfigMapFile $script:mapFile @'
+@{
+    text = @{
+        _template = 'user-secrets:App.csproj'
+        options = @{
+            polish = @{ 'Greeting' = 'zażółć "gęślą" jaźń' }
+        }
+    }
+}
+'@
+
+        qconf -map $script:mapFile text -value polish -ErrorAction Stop
+
+        $secrets = Read-UserSecrets $script:csproj
+        $secrets['Greeting'] | Should -Be 'zażółć "gęślą" jaźń'
+        $secrets['Other:Key'] | Should -Be 'keep-me'
+    }
+
     It 'stores an empty option value and reports it as active' {
-        @'
+        Write-ConfigMapFile $script:mapFile @'
 @{
     clearable = @{
         _template = 'user-secrets:App.csproj'
@@ -870,7 +890,7 @@ Describe 'qconf user-secrets _template' {
         }
     }
 }
-'@ | Set-Content -LiteralPath $script:mapFile -Encoding utf8
+'@
 
         qconf -map $script:mapFile clearable -value filled -ErrorAction Stop
         qconf -map $script:mapFile clearable -value empty -ErrorAction Stop

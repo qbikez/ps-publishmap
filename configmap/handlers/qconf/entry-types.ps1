@@ -62,13 +62,13 @@ function Resolve-ConfigEntryFile {
         [Parameter(Mandatory = $true)]
         [System.Collections.IDictionary]$Template,
         [Parameter(Mandatory = $true)]
-        [string]$TypeName,
-        [string]$Key = 'file'
+        [string]$TypeName
     )
 
-    $file = $Template[$Key]
+    $key = if ($TypeName -eq 'user-secrets') { 'csproj' } else { 'file' }
+    $file = $Template[$key]
     if ($file -isnot [string] -or [string]::IsNullOrWhiteSpace($file)) {
-        throw "Config entry type '$TypeName' requires a $Key path."
+        throw "Config entry type '$TypeName' requires a $key path."
     }
 
     if ([System.IO.Path]::IsPathRooted($file)) {
@@ -84,8 +84,7 @@ function Get-ConfigEntryTemplateFile {
         [Parameter(Mandatory = $true)]
         $Entry,
         [Parameter(Mandatory = $true)]
-        [string]$TypeName,
-        [string]$Key = 'file'
+        [string]$TypeName
     )
 
     $template = Get-ConfigEntryTemplate -Entry $Entry
@@ -93,7 +92,62 @@ function Get-ConfigEntryTemplateFile {
         throw "Config entry has no _template."
     }
 
-    return Resolve-ConfigEntryFile -Entry $Entry -Template $template -TypeName $TypeName -Key $Key
+    return Resolve-ConfigEntryFile -Entry $Entry -Template $template -TypeName $TypeName
+}
+
+function Find-MatchingOption {
+    <#
+    .SYNOPSIS
+        Find the first option whose keys all match the current values.
+
+    .PARAMETER GetValue
+        Reads the current value of a key; returns $null when it is not set.
+
+    .PARAMETER GetExpected
+        Maps an option value to the value to compare against; $null means it cannot match.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        $Options,
+        [Parameter(Mandatory = $true)]
+        [scriptblock]$GetValue,
+        [scriptblock]$GetExpected = { param($optionValue) $optionValue }
+    )
+
+    $active = $null
+    $valueObject = [ordered]@{}
+
+    foreach ($optionSet in $Options.Keys) {
+        $option = $Options[$optionSet]
+        if ($option -isnot [System.Collections.IDictionary]) { continue }
+
+        $isMatch = $true
+        foreach ($key in @($option.Keys)) {
+            if ("$key".StartsWith('__')) { continue }
+
+            if (-not $valueObject.Contains($key)) {
+                $valueObject[$key] = & $GetValue $key
+            }
+            $currentValue = $valueObject[$key]
+            $expectedValue = & $GetExpected $option[$key]
+
+            if ($null -eq $currentValue) {
+                $isMatch = $false
+                continue
+            }
+
+            if ($isMatch -and $currentValue -is [string] -and $currentValue -ne $expectedValue -and -not (test-isSpecialValue $expectedValue)) {
+                $isMatch = $false
+            }
+        }
+
+        if ($isMatch) {
+            $active = $optionSet
+            break
+        }
+    }
+
+    return @{ Value = $valueObject; Active = $active }
 }
 
 function Assert-UserSecretsProject {
@@ -108,6 +162,20 @@ function Assert-UserSecretsProject {
     }
 }
 
+function Get-ProjectUserSecret {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Csproj
+    )
+
+    $secrets = get-user-secrets $Csproj
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to list user secrets for '$Csproj'. Does it define a UserSecretsId, and is 'dotnet user-secrets' available?"
+    }
+
+    return $secrets
+}
+
 function Find-ActiveSecretOption {
     param(
         [Parameter(Mandatory = $true)]
@@ -117,51 +185,18 @@ function Find-ActiveSecretOption {
     )
 
     Assert-UserSecretsProject -Csproj $Csproj
+    $secrets = Get-ProjectUserSecret -Csproj $Csproj
 
-    $secrets = get-user-secrets $Csproj
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to list user secrets for '$Csproj'. Does it define a UserSecretsId, and is 'dotnet user-secrets' available?"
+    return Find-MatchingOption -Options $Options -GetValue { param($key) $secrets[$key] } -GetExpected {
+        param($optionValue)
+
+        if (-not "$optionValue".StartsWith('user-secrets:')) { return $optionValue }
+
+        $resolved = resolve-value $optionValue -secrets $secrets 3>$null
+        # Still a reference means the secret is missing, so this option cannot be active.
+        if (test-isSpecialValue $resolved) { return $null }
+        return $resolved
     }
-
-    $active = $null
-    $valueObject = [ordered]@{}
-
-    foreach ($optionSet in $Options.Keys) {
-        $option = $Options[$optionSet]
-        if ($option -isnot [System.Collections.IDictionary]) { continue }
-
-        $isMatch = $true
-        foreach ($key in @($option.Keys)) {
-            if ("$key".StartsWith('__')) { continue }
-
-            if (-not $valueObject.Contains($key)) {
-                $valueObject[$key] = $secrets[$key]
-            }
-            $currentValue = $valueObject[$key]
-            $optionValue = $option[$key]
-            if ("$optionValue".StartsWith('user-secrets:')) {
-                $optionValue = resolve-value $optionValue -secrets $secrets 3>$null
-                # Still a reference means the secret is missing, so this option cannot be active.
-                if (test-isSpecialValue $optionValue) { $isMatch = $false }
-            }
-
-            if ($null -eq $currentValue) {
-                $isMatch = $false
-                continue
-            }
-
-            if ($isMatch -and $currentValue -ne $optionValue -and -not (test-isSpecialValue $optionValue)) {
-                $isMatch = $false
-            }
-        }
-
-        if ($isMatch) {
-            $active = $optionSet
-            break
-        }
-    }
-
-    return @{ Value = $valueObject; Active = $active }
 }
 
 function Set-UserSecretOption {
@@ -177,7 +212,9 @@ function Set-UserSecretOption {
 
     Assert-UserSecretsProject -Csproj $Csproj
 
-    $secrets = get-user-secrets $Csproj
+    # Listing spawns dotnet, so skip it unless a value references another secret.
+    $hasReference = @($Values.Values | Where-Object { "$_".StartsWith('user-secrets:') }).Count -gt 0
+    $secrets = if ($hasReference) { Get-ProjectUserSecret -Csproj $Csproj } else { @{} }
 
     # Resolve everything first so a missing reference writes nothing.
     $resolved = [ordered]@{}
@@ -191,11 +228,10 @@ function Set-UserSecretOption {
         $resolved[$key] = $secretValue
     }
 
-    foreach ($key in $resolved.Keys) {
-        $null = dotnet user-secrets set "$key" "$($resolved[$key])" --project $Csproj 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            throw "Failed to set user secret '$key' for '$Csproj'."
-        }
+    # JSON on stdin merges every key into the store with a single dotnet spawn.
+    $null = $resolved | ConvertTo-Json -Compress | dotnet user-secrets set --project $Csproj 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to set user secrets for '$Csproj'."
     }
 }
 
@@ -227,40 +263,7 @@ function Find-ActiveEnvOption {
         $Options
     )
 
-    $active = $null
-    $valueObject = [ordered]@{}
-
-    foreach ($optionSet in $Options.Keys) {
-        $option = $Options[$optionSet]
-        if ($option -isnot [System.Collections.IDictionary]) { continue }
-
-        $isMatch = $true
-        foreach ($key in @($option.Keys)) {
-            if ("$key".StartsWith('__')) { continue }
-
-            if (-not $valueObject.Contains($key)) {
-                $valueObject[$key] = get-envsetting $key $File
-            }
-            $currentValue = $valueObject[$key]
-            $optionValue = $option[$key]
-
-            if ($null -eq $currentValue) {
-                $isMatch = $false
-                continue
-            }
-
-            if ($isMatch -and $currentValue -is [string] -and $currentValue -ne $optionValue -and -not (test-isSpecialValue $optionValue)) {
-                $isMatch = $false
-            }
-        }
-
-        if ($isMatch) {
-            $active = $optionSet
-            break
-        }
-    }
-
-    return @{ Value = $valueObject; Active = $active }
+    return Find-MatchingOption -Options $Options -GetValue { param($key) get-envsetting $key $File }
 }
 
 function Set-DotEnvOption {
@@ -318,8 +321,7 @@ function Add-ConfigEntryTypeCommands {
         throw "Unknown config entry type '$typeName'."
     }
 
-    $pathKey = if ($typeName -eq 'user-secrets') { 'csproj' } else { 'file' }
-    $null = Resolve-ConfigEntryFile -Entry $Entry -Template $template -TypeName $typeName -Key $pathKey
+    $null = Resolve-ConfigEntryFile -Entry $Entry -Template $template -TypeName $typeName
     $commands = $typeCommands[$typeName]
 
     if (-not $Entry.Contains('_internal') -or $Entry._internal -isnot [System.Collections.IDictionary]) {

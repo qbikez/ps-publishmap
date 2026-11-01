@@ -27,12 +27,12 @@ return [ordered]@{
     'user-secrets' = @{
         get = {
             param($ctx, $options, $_context)
-            $csproj = Get-ConfigEntryTemplateFile -Entry $_context.self -TypeName 'user-secrets' -Key 'csproj'
+            $csproj = Get-ConfigEntryTemplateFile -Entry $_context.self -TypeName 'user-secrets'
             Find-ActiveSecretOption -Csproj $csproj -Options $options
         }
         set = {
             param($ctx, $key, $value, $_context)
-            $csproj = Get-ConfigEntryTemplateFile -Entry $_context.self -TypeName 'user-secrets' -Key 'csproj'
+            $csproj = Get-ConfigEntryTemplateFile -Entry $_context.self -TypeName 'user-secrets'
             Set-UserSecretOption -Csproj $csproj -Values $value
         }
     }
