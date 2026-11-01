@@ -173,6 +173,21 @@
         }
     }
 
+    "secrets"           = [ordered]@{
+        _settings   = @{ process = "options" }
+        _template   = "user-secrets:App.csproj"
+        description = "API key in .NET user secrets (user-secrets template)"
+        options     = [ordered]@{
+            local  = [ordered]@{
+                "Api:Key" = "dev-key"
+            }
+            # Copies the shared_api_key secret; set it first with dotnet user-secrets.
+            shared = [ordered]@{
+                "Api:Key" = "user-secrets:shared_api_key"
+            }
+        }
+    }
+
     "env"               = [ordered]@{
         _settings   = @{ process = "options" }
         description = "Environment / tenant selection (opaque -tenant)"
