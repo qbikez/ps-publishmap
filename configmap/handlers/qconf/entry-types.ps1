@@ -108,23 +108,6 @@ function Assert-UserSecretsProject {
     }
 }
 
-function Resolve-UserSecretReference {
-    <#
-    .SYNOPSIS
-        Replace a `user-secrets:{name}` option value with that secret from the same project.
-        Returns $null when the secret does not exist.
-    #>
-    param(
-        $Value,
-        [Parameter(Mandatory = $true)]
-        [hashtable]$Secrets
-    )
-
-    if ($Value -isnot [string] -or -not $Value.StartsWith('user-secrets:')) { return $Value }
-
-    return $Secrets[$Value.Substring('user-secrets:'.Length)]
-}
-
 function Find-ActiveSecretOption {
     param(
         [Parameter(Mandatory = $true)]
@@ -155,7 +138,12 @@ function Find-ActiveSecretOption {
                 $valueObject[$key] = $secrets[$key]
             }
             $currentValue = $valueObject[$key]
-            $optionValue = Resolve-UserSecretReference -Value $option[$key] -Secrets $secrets
+            $optionValue = $option[$key]
+            if ("$optionValue".StartsWith('user-secrets:')) {
+                $optionValue = resolve-value $optionValue -secrets $secrets 3>$null
+                # Still a reference means the secret is missing, so this option cannot be active.
+                if (test-isSpecialValue $optionValue) { $isMatch = $false }
+            }
 
             if ($null -eq $currentValue) {
                 $isMatch = $false
@@ -190,17 +178,21 @@ function Set-UserSecretOption {
     Assert-UserSecretsProject -Csproj $Csproj
 
     $secrets = get-user-secrets $Csproj
-    $directory = if (Test-Path -LiteralPath $Csproj -PathType Container) { $Csproj } else { Split-Path -Parent $Csproj }
+
+    # Resolve everything first so a missing reference writes nothing.
+    $resolved = [ordered]@{}
     foreach ($key in @($Values.Keys)) {
         if ("$key".StartsWith('__')) { continue }
 
-        $secretValue = Resolve-UserSecretReference -Value $Values[$key] -Secrets $secrets
-        if ($null -eq $secretValue) {
+        $secretValue = resolve-value $Values[$key] -secrets $secrets 3>$null
+        if ($null -eq $secretValue -or (test-isSpecialValue $secretValue)) {
             throw "Cannot set user secret '$key': '$($Values[$key])' was not found for '$Csproj'."
         }
-        $secretValue = resolve-value $secretValue -dir $directory
+        $resolved[$key] = $secretValue
+    }
 
-        $null = dotnet user-secrets set "$key" "$secretValue" --project $Csproj 2>&1
+    foreach ($key in $resolved.Keys) {
+        $null = dotnet user-secrets set "$key" "$($resolved[$key])" --project $Csproj 2>&1
         if ($LASTEXITCODE -ne 0) {
             throw "Failed to set user secret '$key' for '$Csproj'."
         }

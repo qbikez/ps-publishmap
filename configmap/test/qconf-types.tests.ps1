@@ -830,6 +830,35 @@ Describe 'qconf user-secrets _template' {
         (Read-UserSecrets $script:csproj).ContainsKey('Db:Conn') | Should -BeFalse
     }
 
+    It 'writes no key when a later user-secrets: reference is missing' {
+        @'
+@{
+    partial = @{
+        _template = 'user-secrets:App.csproj'
+        options = @{
+            shared = [ordered]@{
+                'Db:Host' = 'localhost'
+                'Db:Conn' = 'user-secrets:db_shared'
+            }
+        }
+    }
+}
+'@ | Set-Content -LiteralPath $script:mapFile -Encoding utf8
+
+        { qconf -map $script:mapFile partial -value shared -ErrorAction Stop } |
+            Should -Throw '*db_shared*'
+
+        (Read-UserSecrets $script:csproj).ContainsKey('Db:Host') | Should -BeFalse
+    }
+
+    It 'does not report an option as active when its user-secrets: reference is missing' {
+        dotnet user-secrets set 'Db:Conn' 'server=other' --project $script:csproj | Out-Null
+
+        $result = qconf -map $script:mapFile reference -porcelain -ErrorAction Stop
+
+        $result.Active | Should -BeNullOrEmpty
+    }
+
     It 'stores an empty option value and reports it as active' {
         @'
 @{
