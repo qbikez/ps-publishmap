@@ -95,6 +95,8 @@ Long form: `_template = @{ type = "user-secrets"; csproj = "src/App/App.csproj" 
 
 `csproj` is a project file or its directory, and the project needs a `UserSecretsId`. A `user-secrets:{name}` value copies another secret from the same project; `set` throws if that secret is missing.
 
+`qbuild list` does not read these entries: it shows `<not read>` and the option names. Query the entry (`qbuild <entry>`) to see the active option and its value.
+
 ### Keep / remove
 
 - **Keep:** `description`, `options`, `validate`, `_settings`, `_dependsOn`.

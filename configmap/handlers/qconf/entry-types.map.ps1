@@ -25,12 +25,14 @@ return [ordered]@{
         }
     }
     'user-secrets' = @{
-        get = {
+        # `list` must not read or print these values; only an explicit get/show does.
+        sensitive = $true
+        get       = {
             param($ctx, $options, $_context)
             $csproj = Get-ConfigEntryTemplateFile -Entry $_context.self -TypeName 'user-secrets'
             Find-ActiveSecretOption -Csproj $csproj -Options $options
         }
-        set = {
+        set       = {
             param($ctx, $key, $value, $_context)
             $csproj = Get-ConfigEntryTemplateFile -Entry $_context.self -TypeName 'user-secrets'
             Set-UserSecretOption -Csproj $csproj -Values $value

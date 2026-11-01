@@ -294,6 +294,22 @@ function Get-ConfigEntryTypeCommands {
     return . "$PSScriptRoot\entry-types.map.ps1"
 }
 
+function Test-ConfigEntrySensitive {
+    <#
+    .SYNOPSIS
+        True when the entry's _template type keeps values that `list` must not read.
+    #>
+    param(
+        $Entry
+    )
+
+    $template = Get-ConfigEntryTemplate -Entry $Entry
+    if ($null -eq $template -or -not $template.type) { return $false }
+
+    $commands = (Get-ConfigEntryTypeCommands)[[string]$template.type]
+    return [bool]($commands -and $commands.sensitive)
+}
+
 function Add-ConfigEntryTypeCommands {
     <#
     .SYNOPSIS

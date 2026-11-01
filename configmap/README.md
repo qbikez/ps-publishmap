@@ -412,7 +412,8 @@ Creates a `.configuration.map.ps1` file with sample configuration entries.
     # Built-in user-secrets template backed by `dotnet user-secrets`
     # Short form below; long form is _template = @{ type = "user-secrets"; csproj = "..." }
     # csproj is a project file or its directory; a "user-secrets:{name}" value copies
-    # another secret from the same project
+    # another secret from the same project. `list` never reads these entries: it shows
+    # "<not read>" with the option names, so query the entry to see its value
     "mongo" = @{
         description = "Mongo connection in user secrets"
         _template   = "user-secrets:src/App/App.csproj"

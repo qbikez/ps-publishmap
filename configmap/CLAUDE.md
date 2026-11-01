@@ -114,6 +114,7 @@ Settings management with get/set/validate operations, or a built-in `_template`:
     "mongo" = @{
         # Short form; long form is _template = @{ type = "user-secrets"; csproj = "..." }
         # Runs `dotnet user-secrets`; csproj is a project file or its directory
+        # `list` never reads these entries (sensitive type); only get/show does
         _template = "user-secrets:src/App/App.csproj"
         options = @{
             local  = @{ "ConnectionStrings:mongo" = "" }

@@ -899,6 +899,39 @@ Describe 'qconf user-secrets _template' {
         @($result.Active) | Should -Contain 'empty'
     }
 
+    It 'does not read or show secrets when listing an entry' {
+        qconf -map $script:mapFile api -value prod -ErrorAction Stop
+
+        $output = qconf -map $script:mapFile list api 6>&1 | Out-String
+
+        $output | Should -Match '<not read>'
+        $output | Should -Match 'local'
+        $output | Should -Not -Match 'prod-key'
+        $output | Should -Not -Match 'Value'
+    }
+
+    It 'does not touch the project when listing an entry' {
+        Remove-Item -LiteralPath $script:csproj
+
+        { qconf -map $script:mapFile list api 6>&1 | Out-Null } | Should -Not -Throw
+    }
+
+    It 'marks the unknown active state in amber when listing an entry' {
+        $records = qconf -map $script:mapFile list api 6>&1
+
+        $notRead = $records | Where-Object { "$_" -match '<not read>' }
+        $notRead.MessageData.ForegroundColor | Should -Be 'DarkYellow'
+    }
+
+    It 'still reads the entry for show' {
+        qconf -map $script:mapFile api -value prod -ErrorAction Stop
+
+        $output = qconf -map $script:mapFile api show 6>&1 | Out-String
+
+        $output | Should -Match 'prod-key'
+        $output | Should -Not -Match '<not read>'
+    }
+
     It 'matches a user-secrets: reference by its resolved value' {
         dotnet user-secrets set 'db_shared' 'server=shared' --project $script:csproj | Out-Null
 
