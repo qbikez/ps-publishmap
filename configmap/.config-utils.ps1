@@ -267,7 +267,7 @@ function Find-ActiveOption(
     return @{ Value = $valueObject; Active = $active }
 }
 
-function resolve-value($v, [switch]$recurse, [string]$dir) {
+function resolve-value($v, [switch]$recurse, [string]$dir, [hashtable]$secrets) {
     if (!$v) { return $v }
 
     if ($v -is [string]) {
@@ -275,11 +275,13 @@ function resolve-value($v, [switch]$recurse, [string]$dir) {
 
         if ($v.StartsWith("user-secrets:")) {
             $secretName = $v.Substring("user-secrets:".Length)
-            
-            $secrets = get-user-secrets $dir
-            if ($LASTEXITCODE -ne 0) {
-                write-warning "cannot set '$secretName': failed to list user secrets for project in '$dir'. Do you have 'dotnet user-secrets' installed?"
-                return $v
+
+            if ($null -eq $secrets) {
+                $secrets = get-user-secrets $dir
+                if ($LASTEXITCODE -ne 0) {
+                    write-warning "cannot set '$secretName': failed to list user secrets for project in '$dir'. Do you have 'dotnet user-secrets' installed?"
+                    return $v
+                }
             }
             if (!$secrets.ContainsKey($secretName)) {
                 write-warning "secret '$secretName' not found in user secrets. Please run 'dotnet user-secrets -p $dir set $secretName <value>' to set the secret."
@@ -301,7 +303,7 @@ function resolve-value($v, [switch]$recurse, [string]$dir) {
         if ($recurse) {
             $result = [ordered]@{}
             foreach ($key in $v.keys) {
-                $result[$key] = resolve-value $v[$key] -recurse:$recurse -dir $dir
+                $result[$key] = resolve-value $v[$key] -recurse:$recurse -dir $dir -secrets $secrets
             }
             return $result
         }

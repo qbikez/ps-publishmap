@@ -339,6 +339,15 @@ function Invoke-QConf {
             Invoke-WithEntrySettings -Map $map -EntryKey $entryName -Entry $subEntry -OperationContext $operationContext -ScriptBlock {
                 Add-ConfigEntryTypeCommands -Entry $subEntry
                 $options = Get-CompletionList $subEntry -listKey "options" -language "conf" -maxDepth 1
+                if ($verb -eq 'list' -and (Test-ConfigEntrySensitive -Entry $subEntry)) {
+                    Write-QConfStatus `
+                        -EntryName $entryName `
+                        -Result ([pscustomobject]@{ Options = $options.Keys }) `
+                        -Description $subEntry.description `
+                        -NotRead
+                    return
+                }
+
                 $current = Invoke-Get $subEntry -bound @{ options = $options }
                 $result = ConvertTo-MapResult $current $entryName $subEntry $options
                 Write-QConfStatus `
@@ -457,7 +466,8 @@ function Write-QConfStatus {
         [Parameter(Mandatory = $true)]
         $Result,
         [string]$Description,
-        [bool]$HasValidation
+        [bool]$HasValidation,
+        [switch]$NotRead
     )
 
     Write-Host ""
@@ -471,7 +481,7 @@ function Write-QConfStatus {
     }
 
     $active = @($Result.Active) -join ', '
-    if (-not $active) { $active = '<none>' }
+    if (-not $active) { $active = if ($NotRead) { '<not read>' } else { '<none>' } }
 
     $value = if ($Result.Value -is [System.Collections.IDictionary] -or $Result.Value -is [array]) {
         $Result.Value | ConvertTo-Json -Compress -Depth 4
@@ -487,15 +497,17 @@ function Write-QConfStatus {
     $rows.Add([pscustomobject]@{
             Label = 'Active'
             Value = $active
-            Glyph = if ($active -eq '<none>') { [char]0x25CB } else { [char]0x25CF }
-            Color = if ($active -eq '<none>') { 'Yellow' } else { 'Green' }
+            Glyph = if ($NotRead -or $active -eq '<none>') { [char]0x25CB } else { [char]0x25CF }
+            Color = if ($NotRead) { 'DarkYellow' } elseif ($active -eq '<none>') { 'Yellow' } else { 'Green' }
         })
-    $rows.Add([pscustomobject]@{
-            Label = 'Value'
-            Value = $value
-            Glyph = ' '
-            Color = 'White'
-        })
+    if (-not $NotRead) {
+        $rows.Add([pscustomobject]@{
+                Label = 'Value'
+                Value = $value
+                Glyph = ' '
+                Color = 'White'
+            })
+    }
     $rows.Add([pscustomobject]@{
             Label = 'Options'
             Value = @($Result.Options) -join ', '

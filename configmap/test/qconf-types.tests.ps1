@@ -685,3 +685,259 @@ Describe 'qconf dotenv _template' {
     }
 }
 
+
+Describe 'qconf user-secrets _template' {
+    BeforeAll {
+        function script:Read-UserSecrets {
+            param([Parameter(Mandatory)][string]$Csproj)
+            $result = @{}
+            foreach ($line in dotnet user-secrets list --project $Csproj) {
+                if ($line -match '^(.+?)\s*=\s*(.*)$') { $result[$Matches[1]] = $Matches[2] }
+            }
+            return $result
+        }
+    }
+
+    BeforeEach {
+        $script:workDir = Join-Path $TestDrive ("secrets-" + [guid]::NewGuid().ToString('n'))
+        $script:projectDir = Join-Path $script:workDir 'project'
+        New-Item -ItemType Directory -Path $script:projectDir -Force | Out-Null
+        Push-Location $script:workDir
+
+        $script:secretsId = [guid]::NewGuid().ToString()
+        $script:csproj = Join-Path $script:projectDir 'App.csproj'
+        @"
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <UserSecretsId>$($script:secretsId)</UserSecretsId>
+  </PropertyGroup>
+</Project>
+"@ | Set-Content -LiteralPath $script:csproj -Encoding utf8
+
+        $script:mapFile = Join-Path $script:projectDir '.configuration.map.ps1'
+        Write-ConfigMapFile $script:mapFile @'
+@{
+    api = @{
+        _template = @{
+            type   = 'user-secrets'
+            csproj = 'App.csproj'
+        }
+        description = 'API secrets'
+        options = @{
+            local = @{
+                'Api:Url' = 'http://localhost:5000'
+                'Api:Key' = 'dev-key'
+            }
+            prod = @{
+                'Api:Url' = 'https://api.example.com'
+                'Api:Key' = 'prod-key'
+            }
+        }
+    }
+    short = @{
+        _template = 'user-secrets:App.csproj'
+        options = @{
+            local = @{ 'Api:Url' = 'http://localhost:5000' }
+            prod  = @{ 'Api:Url' = 'https://api.example.com' }
+        }
+    }
+    reference = @{
+        _template = 'user-secrets:.'
+        options = [ordered]@{
+            shared = @{ 'Db:Conn' = 'user-secrets:db_shared' }
+            local  = @{ 'Db:Conn' = 'server=localhost' }
+        }
+    }
+}
+'@
+    }
+
+    AfterEach {
+        if (Test-Path -LiteralPath $script:csproj) {
+            dotnet user-secrets clear --project $script:csproj 2>&1 | Out-Null
+        }
+        Pop-Location
+    }
+
+    It 'writes every key in the selected option as a user secret' {
+        qconf -map $script:mapFile api -value prod -ErrorAction Stop
+
+        $secrets = Read-UserSecrets $script:csproj
+        $secrets['Api:Url'] | Should -Be 'https://api.example.com'
+        $secrets['Api:Key'] | Should -Be 'prod-key'
+    }
+
+    It 'reads the active preset from the user secrets' {
+        qconf -map $script:mapFile api -value local -ErrorAction Stop
+
+        $result = qconf -map $script:mapFile api -porcelain -ErrorAction Stop
+
+        @($result.Active) | Should -Contain 'local'
+        $result.Value['Api:Url'] | Should -Be 'http://localhost:5000'
+        $result.Value['Api:Key'] | Should -Be 'dev-key'
+    }
+
+    It 'reports no active preset when the secrets match none' {
+        dotnet user-secrets set 'Api:Url' 'http://elsewhere' --project $script:csproj | Out-Null
+        dotnet user-secrets set 'Api:Key' 'other' --project $script:csproj | Out-Null
+
+        $result = qconf -map $script:mapFile api -porcelain -ErrorAction Stop
+
+        $result.Active | Should -BeNullOrEmpty
+        $result.Value['Api:Key'] | Should -Be 'other'
+    }
+
+    It 'accepts the short form user-secrets:{csproj}' {
+        qconf -map $script:mapFile short -value prod -ErrorAction Stop
+
+        (Read-UserSecrets $script:csproj)['Api:Url'] | Should -Be 'https://api.example.com'
+        $result = qconf -map $script:mapFile short -porcelain -ErrorAction Stop
+        @($result.Active) | Should -Contain 'prod'
+    }
+
+    It 'throws when the csproj does not exist' {
+        Remove-Item -LiteralPath $script:csproj
+        { qconf -map $script:mapFile api -value prod -ErrorAction Stop } |
+            Should -Throw '*csproj*'
+    }
+
+    It 'throws when the short form has no csproj' {
+        (Get-Content -LiteralPath $script:mapFile -Raw) -replace 'user-secrets:App.csproj', 'user-secrets:' |
+            Set-Content -LiteralPath $script:mapFile -Encoding utf8
+
+        { qconf -map $script:mapFile short -value prod -ErrorAction Stop } |
+            Should -Throw '*user-secrets:*csproj*'
+    }
+
+    It 'rejects an unknown option key' {
+        { qconf -map $script:mapFile api -value nope -ErrorAction Stop } |
+            Should -Throw '*option*nope*'
+    }
+
+    It 'copies a user-secrets: reference from the project when csproj is a directory' {
+        dotnet user-secrets set 'db_shared' 'server=shared' --project $script:csproj | Out-Null
+
+        qconf -map $script:mapFile reference -value shared -ErrorAction Stop
+
+        (Read-UserSecrets $script:csproj)['Db:Conn'] | Should -Be 'server=shared'
+    }
+
+    It 'throws and writes nothing when a user-secrets: reference is missing' {
+        { qconf -map $script:mapFile reference -value shared -ErrorAction Stop } |
+            Should -Throw '*db_shared*'
+
+        (Read-UserSecrets $script:csproj).ContainsKey('Db:Conn') | Should -BeFalse
+    }
+
+    It 'writes no key when a later user-secrets: reference is missing' {
+        Write-ConfigMapFile $script:mapFile @'
+@{
+    partial = @{
+        _template = 'user-secrets:App.csproj'
+        options = @{
+            shared = [ordered]@{
+                'Db:Host' = 'localhost'
+                'Db:Conn' = 'user-secrets:db_shared'
+            }
+        }
+    }
+}
+'@
+
+        { qconf -map $script:mapFile partial -value shared -ErrorAction Stop } |
+            Should -Throw '*db_shared*'
+
+        (Read-UserSecrets $script:csproj).ContainsKey('Db:Host') | Should -BeFalse
+    }
+
+    It 'does not report an option as active when its user-secrets: reference is missing' {
+        dotnet user-secrets set 'Db:Conn' 'server=other' --project $script:csproj | Out-Null
+
+        $result = qconf -map $script:mapFile reference -porcelain -ErrorAction Stop
+
+        $result.Active | Should -BeNullOrEmpty
+    }
+
+    It 'keeps unrelated secrets and non-ASCII values when setting an option' {
+        dotnet user-secrets set 'Other:Key' 'keep-me' --project $script:csproj | Out-Null
+        Write-ConfigMapFile $script:mapFile @'
+@{
+    text = @{
+        _template = 'user-secrets:App.csproj'
+        options = @{
+            polish = @{ 'Greeting' = 'zażółć "gęślą" jaźń' }
+        }
+    }
+}
+'@
+
+        qconf -map $script:mapFile text -value polish -ErrorAction Stop
+
+        $secrets = Read-UserSecrets $script:csproj
+        $secrets['Greeting'] | Should -Be 'zażółć "gęślą" jaźń'
+        $secrets['Other:Key'] | Should -Be 'keep-me'
+    }
+
+    It 'stores an empty option value and reports it as active' {
+        Write-ConfigMapFile $script:mapFile @'
+@{
+    clearable = @{
+        _template = 'user-secrets:App.csproj'
+        options = [ordered]@{
+            filled = @{ 'Db:Conn' = 'server=localhost' }
+            empty  = @{ 'Db:Conn' = '' }
+        }
+    }
+}
+'@
+
+        qconf -map $script:mapFile clearable -value filled -ErrorAction Stop
+        qconf -map $script:mapFile clearable -value empty -ErrorAction Stop
+
+        $result = qconf -map $script:mapFile clearable -porcelain -ErrorAction Stop
+        @($result.Active) | Should -Contain 'empty'
+    }
+
+    It 'does not read or show secrets when listing an entry' {
+        qconf -map $script:mapFile api -value prod -ErrorAction Stop
+
+        $output = qconf -map $script:mapFile list api 6>&1 | Out-String
+
+        $output | Should -Match '<not read>'
+        $output | Should -Match 'local'
+        $output | Should -Not -Match 'prod-key'
+        $output | Should -Not -Match 'Value'
+    }
+
+    It 'does not touch the project when listing an entry' {
+        Remove-Item -LiteralPath $script:csproj
+
+        { qconf -map $script:mapFile list api 6>&1 | Out-Null } | Should -Not -Throw
+    }
+
+    It 'marks the unknown active state in amber when listing an entry' {
+        $records = qconf -map $script:mapFile list api 6>&1
+
+        $notRead = $records | Where-Object { "$_" -match '<not read>' }
+        $notRead.MessageData.ForegroundColor | Should -Be 'DarkYellow'
+    }
+
+    It 'still reads the entry for show' {
+        qconf -map $script:mapFile api -value prod -ErrorAction Stop
+
+        $output = qconf -map $script:mapFile api show 6>&1 | Out-String
+
+        $output | Should -Match 'prod-key'
+        $output | Should -Not -Match '<not read>'
+    }
+
+    It 'matches a user-secrets: reference by its resolved value' {
+        dotnet user-secrets set 'db_shared' 'server=shared' --project $script:csproj | Out-Null
+
+        qconf -map $script:mapFile reference -value local -ErrorAction Stop
+
+        $result = qconf -map $script:mapFile reference -porcelain -ErrorAction Stop
+        @($result.Active) | Should -Contain 'local'
+    }
+}

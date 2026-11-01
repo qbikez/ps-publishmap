@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <UserSecretsId>6f1c2a7e-3b54-4e0d-9c1f-8a2d5e7b4c10</UserSecretsId>
+  </PropertyGroup>
+</Project>

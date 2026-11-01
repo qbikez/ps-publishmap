@@ -38,6 +38,18 @@ function Get-ConfigEntryTemplate {
             }
         }
 
+        # Short form: "user-secrets:{csproj}" → @{ type = 'user-secrets'; csproj = ... }
+        if ($template -match '^(?i)user-secrets:(.*)$') {
+            $csproj = $Matches[1].Trim()
+            if ([string]::IsNullOrWhiteSpace($csproj)) {
+                throw "Config entry template 'user-secrets:' requires a csproj path."
+            }
+            return @{
+                type   = 'user-secrets'
+                csproj = $csproj
+            }
+        }
+
         throw "Unknown config entry template '$template'."
     }
 
@@ -53,9 +65,10 @@ function Resolve-ConfigEntryFile {
         [string]$TypeName
     )
 
-    $file = $Template.file
+    $key = if ($TypeName -eq 'user-secrets') { 'csproj' } else { 'file' }
+    $file = $Template[$key]
     if ($file -isnot [string] -or [string]::IsNullOrWhiteSpace($file)) {
-        throw "Config entry type '$TypeName' requires a file path."
+        throw "Config entry type '$TypeName' requires a $key path."
     }
 
     if ([System.IO.Path]::IsPathRooted($file)) {
@@ -80,6 +93,146 @@ function Get-ConfigEntryTemplateFile {
     }
 
     return Resolve-ConfigEntryFile -Entry $Entry -Template $template -TypeName $TypeName
+}
+
+function Find-MatchingOption {
+    <#
+    .SYNOPSIS
+        Find the first option whose keys all match the current values.
+
+    .PARAMETER GetValue
+        Reads the current value of a key; returns $null when it is not set.
+
+    .PARAMETER GetExpected
+        Maps an option value to the value to compare against; $null means it cannot match.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        $Options,
+        [Parameter(Mandatory = $true)]
+        [scriptblock]$GetValue,
+        [scriptblock]$GetExpected = { param($optionValue) $optionValue }
+    )
+
+    $active = $null
+    $valueObject = [ordered]@{}
+
+    foreach ($optionSet in $Options.Keys) {
+        $option = $Options[$optionSet]
+        if ($option -isnot [System.Collections.IDictionary]) { continue }
+
+        $isMatch = $true
+        foreach ($key in @($option.Keys)) {
+            if ("$key".StartsWith('__')) { continue }
+
+            if (-not $valueObject.Contains($key)) {
+                $valueObject[$key] = & $GetValue $key
+            }
+            $currentValue = $valueObject[$key]
+            $expectedValue = & $GetExpected $option[$key]
+
+            if ($null -eq $currentValue) {
+                $isMatch = $false
+                continue
+            }
+
+            if ($isMatch -and $currentValue -is [string] -and $currentValue -ne $expectedValue -and -not (test-isSpecialValue $expectedValue)) {
+                $isMatch = $false
+            }
+        }
+
+        if ($isMatch) {
+            $active = $optionSet
+            break
+        }
+    }
+
+    return @{ Value = $valueObject; Active = $active }
+}
+
+function Assert-UserSecretsProject {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Csproj
+    )
+
+    # `dotnet user-secrets --project` accepts a project file or the directory containing one.
+    if (-not (Test-Path -LiteralPath $Csproj)) {
+        throw "user-secrets csproj not found: $Csproj"
+    }
+}
+
+function Get-ProjectUserSecret {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Csproj
+    )
+
+    $secrets = get-user-secrets $Csproj
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to list user secrets for '$Csproj'. Does it define a UserSecretsId, and is 'dotnet user-secrets' available?"
+    }
+
+    return $secrets
+}
+
+function Find-ActiveSecretOption {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Csproj,
+        [Parameter(Mandatory = $true)]
+        $Options
+    )
+
+    Assert-UserSecretsProject -Csproj $Csproj
+    $secrets = Get-ProjectUserSecret -Csproj $Csproj
+
+    return Find-MatchingOption -Options $Options -GetValue { param($key) $secrets[$key] } -GetExpected {
+        param($optionValue)
+
+        if (-not "$optionValue".StartsWith('user-secrets:')) { return $optionValue }
+
+        $resolved = resolve-value $optionValue -secrets $secrets 3>$null
+        # Still a reference means the secret is missing, so this option cannot be active.
+        if (test-isSpecialValue $resolved) { return $null }
+        return $resolved
+    }
+}
+
+function Set-UserSecretOption {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Csproj,
+        $Values
+    )
+
+    if ($Values -isnot [System.Collections.IDictionary]) {
+        throw "user-secrets option value must be a hashtable of secret keys."
+    }
+
+    Assert-UserSecretsProject -Csproj $Csproj
+
+    # Listing spawns dotnet, so skip it unless a value references another secret.
+    $hasReference = @($Values.Values | Where-Object { "$_".StartsWith('user-secrets:') }).Count -gt 0
+    $secrets = if ($hasReference) { Get-ProjectUserSecret -Csproj $Csproj } else { @{} }
+
+    # Resolve everything first so a missing reference writes nothing.
+    $resolved = [ordered]@{}
+    foreach ($key in @($Values.Keys)) {
+        if ("$key".StartsWith('__')) { continue }
+
+        $secretValue = resolve-value $Values[$key] -secrets $secrets 3>$null
+        if ($null -eq $secretValue -or (test-isSpecialValue $secretValue)) {
+            throw "Cannot set user secret '$key': '$($Values[$key])' was not found for '$Csproj'."
+        }
+        $resolved[$key] = $secretValue
+    }
+
+    # JSON on stdin merges every key into the store with a single dotnet spawn.
+    $null = $resolved | ConvertTo-Json -Compress | dotnet user-secrets set --project $Csproj 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to set user secrets for '$Csproj'."
+    }
 }
 
 function Set-AppConfigOption {
@@ -110,40 +263,7 @@ function Find-ActiveEnvOption {
         $Options
     )
 
-    $active = $null
-    $valueObject = [ordered]@{}
-
-    foreach ($optionSet in $Options.Keys) {
-        $option = $Options[$optionSet]
-        if ($option -isnot [System.Collections.IDictionary]) { continue }
-
-        $isMatch = $true
-        foreach ($key in @($option.Keys)) {
-            if ("$key".StartsWith('__')) { continue }
-
-            if (-not $valueObject.Contains($key)) {
-                $valueObject[$key] = get-envsetting $key $File
-            }
-            $currentValue = $valueObject[$key]
-            $optionValue = $option[$key]
-
-            if ($null -eq $currentValue) {
-                $isMatch = $false
-                continue
-            }
-
-            if ($isMatch -and $currentValue -is [string] -and $currentValue -ne $optionValue -and -not (test-isSpecialValue $optionValue)) {
-                $isMatch = $false
-            }
-        }
-
-        if ($isMatch) {
-            $active = $optionSet
-            break
-        }
-    }
-
-    return @{ Value = $valueObject; Active = $active }
+    return Find-MatchingOption -Options $Options -GetValue { param($key) get-envsetting $key $File }
 }
 
 function Set-DotEnvOption {
@@ -174,14 +294,31 @@ function Get-ConfigEntryTypeCommands {
     return . "$PSScriptRoot\entry-types.map.ps1"
 }
 
+function Test-ConfigEntrySensitive {
+    <#
+    .SYNOPSIS
+        True when the entry's _template type keeps values that `list` must not read.
+    #>
+    param(
+        $Entry
+    )
+
+    $template = Get-ConfigEntryTemplate -Entry $Entry
+    if ($null -eq $template -or -not $template.type) { return $false }
+
+    $commands = (Get-ConfigEntryTypeCommands)[[string]$template.type]
+    return [bool]($commands -and $commands.sensitive)
+}
+
 function Add-ConfigEntryTypeCommands {
     <#
     .SYNOPSIS
         Fill in get and set from Entry._template when the map did not supply them.
 
     .DESCRIPTION
-        Accepts `_template` as a hashtable (`type`/`file`) or short string
-        (`appsettings:{filepath}` or `dotenv:{filepath}`). Leaves an author-supplied
+        Accepts `_template` as a hashtable (`type`/`file`, or `type`/`csproj` for
+        `user-secrets`) or short string (`appsettings:{filepath}`, `dotenv:{filepath}`
+        or `user-secrets:{csproj}`). Leaves an author-supplied
         get or set in place. Always stashes the template get/set on
         Entry._internal.base so overrides can call them via $_context.base.
     #>

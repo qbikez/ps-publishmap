@@ -408,6 +408,20 @@ Creates a `.configuration.map.ps1` file with sample configuration entries.
             prod  = @{ "API_URL" = "https://api.example.com"; "API_KEY" = "prod-key" }
         }
     }
+
+    # Built-in user-secrets template backed by `dotnet user-secrets`
+    # Short form below; long form is _template = @{ type = "user-secrets"; csproj = "..." }
+    # csproj is a project file or its directory; a "user-secrets:{name}" value copies
+    # another secret from the same project. `list` never reads these entries: it shows
+    # "<not read>" with the option names, so query the entry to see its value
+    "mongo" = @{
+        description = "Mongo connection in user secrets"
+        _template   = "user-secrets:src/App/App.csproj"
+        options = @{
+            local  = @{ "ConnectionStrings:mongo" = "" }
+            shared = @{ "ConnectionStrings:mongo" = "user-secrets:mongo_shared" }
+        }
+    }
 }
 ```
 
@@ -535,7 +549,7 @@ The following keys have special meaning in map files:
 - `get` - Get configuration value (for qconf)
 - `set` - Set configuration value (for qconf)
 - `validate` - Validation function (for qconf)
-- `_template` - Built-in entry type: `@{ type; file }` or `"appsettings:{filepath}"` / `"dotenv:{filepath}"` that fills get/set when omitted; author get/set override the fill-in and can call `$_context.base`
+- `_template` - Built-in entry type: `@{ type; file }` or `"appsettings:{filepath}"` / `"dotenv:{filepath}"`, or `@{ type = "user-secrets"; csproj }` / `"user-secrets:{csproj}"`, that fills get/set when omitted; author get/set override the fill-in and can call `$_context.base`
 - `description` - Command description
 - `completions` - Custom tab completion values
 
