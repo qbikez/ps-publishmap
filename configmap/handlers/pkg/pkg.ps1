@@ -35,10 +35,13 @@ function Get-PackageScripts {
 function Write-PackageScriptList {
     param([string]$Manager, [System.Collections.IDictionary]$Scripts)
 
-    Write-Host "$Manager scripts (package.json)" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "$Manager scripts (package.json)" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "COMMANDS:" -ForegroundColor Yellow
     $width = ($Scripts.Keys | Measure-Object -Property Length -Maximum).Maximum
     foreach ($item in $Scripts.GetEnumerator()) {
-        Write-Host ("  {0}  {1}" -f ([string]$item.Key).PadRight($width), $item.Value)
+        Write-CommandHelpLine ([string]$item.Key) $item.Value '' $width
     }
 }
 
