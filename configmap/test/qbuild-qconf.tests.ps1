@@ -291,7 +291,7 @@ Describe 'qconf as a qbuild process' {
         $scriptPath = (Resolve-Path (Join-Path $PSScriptRoot '..\configmap.ps1')).Path
         $line = "qbuild -map '$script:mapFile' storage "
         $command = '$script = ''{0}''; {1}; $l = ''{2}''; (TabExpansion2 $l $l.Length).CompletionMatches.CompletionText' -f
-            $scriptPath, $load, $line.Replace("'", "''")
+        $scriptPath, $load, $line.Replace("'", "''")
 
         $completions = @(pwsh -NoProfile -Command $command)
 
