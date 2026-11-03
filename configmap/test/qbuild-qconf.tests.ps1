@@ -132,6 +132,20 @@ Describe 'qconf as a qbuild process' {
         @($result.Active) | Should -Contain 'prod'
     }
 
+    It 'shows the updated value after set through qbuild' {
+        $output = (qbuild -map $script:mapFile storage set prod 6>&1 | Out-String)
+
+        $output | Should -Match 'storage'
+        $output | Should -Match 'Active\s+prod'
+        $output | Should -Match 'Value\s+P'
+    }
+
+    It 'shows the updated value after the -value shorthand' {
+        $output = (qbuild -map $script:mapFile storage -value prod 6>&1 | Out-String)
+
+        $output | Should -Match 'Active\s+prod'
+    }
+
     It 'supports explicit get and set verbs through qconf directly' {
         qconf -map $script:mapFile storage set local
         $result = qconf -map $script:mapFile storage get -porcelain
