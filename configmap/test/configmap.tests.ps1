@@ -530,10 +530,11 @@ Describe "qbuild dynamic parameters" {
         $validateSetAttr.ValidValues | Should -Be @("debug")
     }
 
-    It "should resolve ValidateSet @__siblingKey when sibling is a scriptblock that returns a list" {
+    It "should resolve ValidateSet @__siblingKey from a scriptblock lazily, only when completing" {
+        $calls = @{ count = 0 }
         $mapWithScriptBlockOptions = @{
             "build" = @{
-                "__configOptions" = { @("debug", "release") }
+                "__configOptions" = { $calls.count++; @("debug", "release", "two words") }.GetNewClosure()
                 "exec"            = {
                     param([ValidateSet("@__configOptions")][string]$config)
                     Write-Host "building config $config"
@@ -542,10 +543,18 @@ Describe "qbuild dynamic parameters" {
         }
         $parameters = Get-EntryDynamicParam $mapWithScriptBlockOptions "build" "exec"
         $parameters.Keys | Should -Contain "config"
+        $calls.count | Should -Be 0
+
         $configParam = $parameters["config"]
-        $validateSetAttr = $configParam.Attributes | Where-Object { $_ -is [System.Management.Automation.ValidateSetAttribute] }
-        $validateSetAttr | Should -Not -BeNullOrEmpty
-        $validateSetAttr.ValidValues | Should -Be @("debug", "release")
+        $configParam.Attributes | Where-Object { $_ -is [System.Management.Automation.ValidateSetAttribute] } |
+            Should -BeNullOrEmpty
+        $completer = $configParam.Attributes | Where-Object { $_ -is [System.Management.Automation.ArgumentCompleterAttribute] }
+        $completer | Should -Not -BeNullOrEmpty
+
+        $completions = @(& $completer.ScriptBlock 'qbuild' 'config' 'r' $null @{})
+        $completions.CompletionText | Should -Be @('release')
+        @(& $completer.ScriptBlock 'qbuild' 'config' "'two" $null @{}).CompletionText | Should -Be @("'two words'")
+        $calls.count | Should -Be 2
     }
 
     It "should handle <EntryType> command with -path parameter" -TestCases @(
