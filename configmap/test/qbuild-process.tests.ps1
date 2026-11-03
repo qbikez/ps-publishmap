@@ -391,6 +391,41 @@ Describe 'qbuild _settings.process=steps forwarding' {
         { qbuild -map $localMap deploy -Env nope } | Should -Throw '*nope*'
     }
 
+    It 'resolves an @sibling ValidateSet from a scriptblock sibling in a map file' {
+        $localMap = Join-Path $script:workDir 'sibling-sb.build.map.ps1'
+        @'
+[ordered]@{
+    deploy = [ordered]@{
+        envs = { Add-Content -LiteralPath (Join-Path $PSScriptRoot 'envs-calls.txt') -Value 'call'; 'dev', 'prod' }
+        exec = {
+            param([ValidateSet('@envs')][string]$Env)
+            "deployed:$Env" | Set-Content 'deployed.txt'
+        }
+    }
+}
+'@ | Set-Content -LiteralPath $localMap -Encoding utf8
+        $callsFile = Join-Path $script:workDir 'envs-calls.txt'
+        $countCalls = { @(Get-Content -LiteralPath $callsFile -ErrorAction SilentlyContinue).Count }
+
+        $map = Import-ConfigMap -Map $localMap
+        @(Get-EntryCompletion $map -language build -wordToComplete '') | Should -Be @('deploy')
+
+        $line = "qbuild -map $localMap deploy "
+        $null = TabExpansion2 $line $line.Length
+        & $countCalls | Should -Be 0
+
+        $line = "qbuild -map $localMap deploy -Env "
+        (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText | Should -Be @('dev', 'prod')
+        & $countCalls | Should -Be 1
+
+        $catalog = Get-ConfigMapCommandCatalog -Map $map -Path deploy -Language build
+        ($catalog.Parameters | Where-Object Name -EQ 'Env').ValidateSet | Should -Be @('dev', 'prod')
+
+        qbuild -map $localMap deploy -Env prod
+        Get-Content (Join-Path $script:workDir 'deployed.txt') | Should -Be 'deployed:prod'
+        { qbuild -map $localMap deploy -Env nope } | Should -Throw '*nope*does not belong to the set*'
+    }
+
     It 'completes list types for -Type and the list.<type> shorthand' {
         $localMap = Join-Path $script:workDir 'mixed.build.map.ps1'
         @'
