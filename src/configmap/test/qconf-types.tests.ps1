@@ -857,4 +857,17 @@ Describe 'qbuild dotenv _template per-key entries' {
         @($result.Keys) | Should -Contain 'api.ONLY_KEY'
         @($result.Keys) | Should -Not -Contain 'api.API_URL'
     }
+
+    It 'works against the dotenv sample' {
+        $sampleDir = Join-Path $PSScriptRoot '..' 'samples' 'dotenv'
+        Copy-Item -Path (Join-Path $sampleDir '*') -Destination $script:workDir -Recurse -Force
+        Copy-Item -Path (Join-Path $sampleDir '.*') -Destination $script:workDir -Recurse -Force -ErrorAction SilentlyContinue
+        $sampleMap = Join-Path $script:workDir '.build.map.ps1'
+
+        $presets = qbuild -map $sampleMap api_presets -porcelain -ErrorAction Stop
+        @($presets.Options) | Should -Be @('prod', 'stg', 'example')
+
+        qbuild -map $sampleMap api.API_URL -value 'https://staging.example.com' -ErrorAction Stop
+        (Read-DotEnvFile (Join-Path $script:workDir '.env'))['API_URL'] | Should -Be 'https://staging.example.com'
+    }
 }
