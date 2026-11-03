@@ -46,7 +46,7 @@ ConfigMap is a PowerShell module that extends publishmap functionality to provid
 
 ### Dynamic `ValidateSet` values
 
-A `ValidateSet` whose single value is `'@key'` takes its values from the sibling key `key` of the same entry (an array, or a scriptblock returning one). The set drives tab completion and validation of the CLI parameter:
+A `ValidateSet` whose single value is `'@key'` takes its values from the sibling key `key` of the same entry (an array, or a scriptblock returning one). The set drives tab completion and validation of the CLI parameter. A scriptblock is run lazily: only when that parameter is tab-completed, or when a run passes it (to validate the value), so it may do slow work such as test discovery (see `samples/playwright`):
 
 ```powershell
 @{

@@ -42,6 +42,7 @@ function Get-ScriptParameterInfo {
         $defaultsByName[$paramName] = $defaultValue
     }
 
+    $valueSources = Get-ScriptValueSource $Func
     $result = [System.Collections.Generic.List[object]]::new()
     foreach ($name in $scriptArgs.Keys) {
         $dynParam = $scriptArgs[$name]
@@ -51,6 +52,12 @@ function Get-ScriptParameterInfo {
                 $validateSet = @($attr.ValidValues)
                 break
             }
+        }
+        # Scriptblock ValidateSet('@key') sources are lazy on the dynamic parameter; the catalog
+        # still reports their values.
+        if ($validateSet.Count -eq 0 -and $Entry -and $valueSources.Contains($name) -and
+            $Entry[$valueSources[$name]] -is [scriptblock]) {
+            $validateSet = @(Get-EntryValueSourceValue -Entry $Entry -Key $valueSources[$name])
         }
 
         $isSwitch = $dynParam.ParameterType -eq [switch]

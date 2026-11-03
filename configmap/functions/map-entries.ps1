@@ -269,6 +269,24 @@ function Get-EntryHasExec {
     return $true
 }
 
+function Get-EntryValueSourceKey {
+    <#
+    .SYNOPSIS
+        Returns the sibling keys that the entry's exec references through [ValidateSet('@key')].
+    .DESCRIPTION
+        Those keys hold parameter values (an array or a scriptblock), not child commands,
+        so map walking must not treat a scriptblock stored under them as a nested entry.
+    #>
+    [OutputType([string[]])]
+    param($Entry)
+
+    if ($Entry -isnot [System.Collections.IDictionary] -or $Entry.exec -isnot [scriptblock]) {
+        return @()
+    }
+
+    return @((Get-ScriptValueSource $Entry.exec).Values)
+}
+
 function Get-EntryCommand(
     [ValidateScript({
             $_ -is [System.Collections.IDictionary] -or $_ -is [array] -or $_ -is [scriptblock]
@@ -326,8 +344,9 @@ function Test-IsParentEntry {
     }
 
     # Check if entry contains nested commands (hashtables or scriptblocks)
+    $valueSourceKeys = Get-EntryValueSourceKey $Entry
     foreach ($subKvp in $Entry.GetEnumerator()) {
-        if ($subKvp.Key -in $reservedKeys) {
+        if ($subKvp.Key -in $reservedKeys -or $subKvp.Key -in $valueSourceKeys) {
             continue
         }
         if ($subKvp.Value -is [System.Collections.IDictionary] -or $subKvp.Value -is [scriptblock]) {

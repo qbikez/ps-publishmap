@@ -399,10 +399,11 @@ function Get-ScriptArgs {
                                     $values = @($resolved | ForEach-Object { [string]$_ })
                                 }
                                 elseif ($resolved -is [scriptblock]) {
-                                    $fromSb = & $resolved
-                                    if ($null -ne $fromSb) {
-                                        $values = @(@($fromSb) | ForEach-Object { [string]$_ })
-                                    }
+                                    # Scriptblock sources may be slow (e.g. test discovery), and dynamicparam
+                                    # runs on every Tab press; run the source only when this parameter is
+                                    # completed. Invoke-EntryCommand validates the bound value instead.
+                                    $values = @()
+                                    $paramAttributesCollect.Add((New-EntryValueSourceCompleter -Source $resolved))
                                 } else {
                                     throw "resolved value is not an array or scriptblock"
                                 }
@@ -448,4 +449,103 @@ function Get-ScriptArgs {
     }
     
     return $paramDictionary
+}
+
+function Get-ScriptValueSource {
+    <#
+    .SYNOPSIS
+        Maps each parameter declared as [ValidateSet('@key')] to the sibling key holding its values.
+    #>
+    [OutputType([System.Collections.Specialized.OrderedDictionary])]
+    param([scriptblock]$Func)
+
+    $sources = [ordered]@{}
+    $paramBlock = $Func ? $Func.Ast.ParamBlock : $null
+    if (!$paramBlock) { return $sources }
+
+    foreach ($param in $paramBlock.Parameters) {
+        foreach ($attribute in $param.Attributes) {
+            if ($attribute -isnot [System.Management.Automation.Language.AttributeAst]) { continue }
+            if (($attribute.TypeName.ToString() -replace '^.*\.', '') -ne 'ValidateSet') { continue }
+            $arguments = @($attribute.PositionalArguments)
+            if ($arguments.Count -eq 1 -and
+                $arguments[0] -is [System.Management.Automation.Language.StringConstantExpressionAst] -and
+                $arguments[0].Value -match '^@(.+)$') {
+                $sources[$param.Name.VariablePath.UserPath] = $Matches[1]
+            }
+        }
+    }
+
+    return $sources
+}
+
+function Get-EntryValueSourceValue {
+    <#
+    .SYNOPSIS
+        Returns the values held by an entry's ValidateSet('@key') source, running it if it is a scriptblock.
+    #>
+    [OutputType([string[]])]
+    param(
+        [System.Collections.IDictionary]$Entry,
+        [string]$Key
+    )
+
+    $source = $Entry[$Key]
+    if ($source -is [scriptblock]) { $source = & $source }
+    return @(@($source) | Where-Object { $null -ne $_ } | ForEach-Object { [string]$_ })
+}
+
+function New-EntryValueSourceCompleter {
+    <#
+    .SYNOPSIS
+        Builds an ArgumentCompleter that runs a ValidateSet('@key') scriptblock source on demand.
+    #>
+    [OutputType([System.Management.Automation.ArgumentCompleterAttribute])]
+    param([scriptblock]$Source)
+
+    $completer = {
+        param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+
+        $word = "$wordToComplete".Trim("'", '"')
+        foreach ($value in @(& $Source)) {
+            $text = [string]$value
+            if ($null -eq $value -or !$text.StartsWith($word, [System.StringComparison]::OrdinalIgnoreCase)) { continue }
+            $completionText = $text -match '[\s''"`$;,(){}|&<>@#]' ? "'$($text -replace "'", "''")'" : $text
+            [System.Management.Automation.CompletionResult]::new($completionText, $text, 'ParameterValue', $text)
+        }
+    }.GetNewClosure()
+
+    return [System.Management.Automation.ArgumentCompleterAttribute]::new($completer)
+}
+
+function Assert-EntryValueSourceArgument {
+    <#
+    .SYNOPSIS
+        Validates bound values of [ValidateSet('@key')] parameters whose source is a scriptblock.
+    .DESCRIPTION
+        Array sources become real ValidateSets on the dynamic parameter, so the binder checks them.
+        Scriptblock sources only get a completer, so their values are checked here, once per run.
+    #>
+    param(
+        $Entry,
+        [scriptblock]$Command,
+        [System.Collections.IDictionary]$Bound
+    )
+
+    if ($Entry -isnot [System.Collections.IDictionary] -or !$Bound) { return }
+
+    $sources = Get-ScriptValueSource $Command
+    foreach ($paramName in $sources.Keys) {
+        $key = $sources[$paramName]
+        if (!$Bound.Contains($paramName) -or $Entry[$key] -isnot [scriptblock]) { continue }
+
+        $allowed = @(Get-EntryValueSourceValue -Entry $Entry -Key $key)
+        if ($allowed.Count -eq 0) { continue }
+
+        foreach ($value in @($Bound[$paramName])) {
+            if ($allowed -notcontains [string]$value) {
+                throw "Cannot validate argument on parameter '$paramName'. The argument `"$value`" does not belong to the set `"$($allowed -join ',')`" specified by the ValidateSet attribute. Supply an argument that is in the set and then try the command again."
+            }
+        }
+    }
 }

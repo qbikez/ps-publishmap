@@ -128,12 +128,13 @@ function Add-BaseDir {
     $map._baseDir = $baseDir
 
     $reservedKeys = (Get-MapLanguage build).reservedKeys
-    
+    $valueSourceKeys = Get-EntryValueSourceKey $map
+
     foreach ($key in @($map.Keys)) {
         $value = $map[$key]
-        
-        # Skip reserved keys
-        if ($key -in $reservedKeys) {
+
+        # Skip reserved keys and ValidateSet('@key') value sources, which are not entries
+        if ($key -in $reservedKeys -or $key -in $valueSourceKeys) {
             continue
         }
         
