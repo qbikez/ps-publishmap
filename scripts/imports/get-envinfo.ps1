@@ -9,7 +9,7 @@ function get-envinfo($checkcommands) {
         $commands = $checkcommands
     }
         
-    $commands| % {
+    $commands | % {
         $c = $_
         try {
             $cmd = get-command $c -ErrorAction SilentlyContinue
@@ -20,7 +20,7 @@ function get-envinfo($checkcommands) {
             write-warning "$($c):`t MISSING"            
         }
         else {
-             write-host "$($c):`t $(($cmd | format-table -HideTableHeaders | out-string) -replace ""`r`n"",'')"
+            write-host "$($c):`t $(($cmd | format-table -HideTableHeaders | out-string) -replace ""`r`n"",'')"
         }
     }
     

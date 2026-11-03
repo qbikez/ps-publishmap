@@ -119,7 +119,7 @@
             "type": "shell",
             "command": "c:/windows/sysnative/WindowsPowerShell/v1.0/powershell.exe",
             "args": [
-                "Invoke-Pester test"
+                "Invoke-Pester publishmap/test"
             ],
             "problemMatcher": [
                 {

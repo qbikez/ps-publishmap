@@ -6,4 +6,4 @@ artifacts/
 node_modules/
 .env.ps1
 .configmap/
-
+*.log

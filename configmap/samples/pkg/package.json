@@ -1,0 +1,8 @@
+{
+  "name": "qbuild-pkg-sample",
+  "private": true,
+  "scripts": {
+    "build": "node -e \"console.log('building')\"",
+    "greet": "node -e \"console.log('hello', process.argv.slice(1).join(' '))\""
+  }
+}

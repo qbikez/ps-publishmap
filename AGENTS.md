@@ -8,9 +8,9 @@ This repository contains **publishmap**, a PowerShell module for creating declar
 
 ### Core Modules
 
-- **publishmap** (`src/publishmap/`) - Main module for processing publish maps with inheritance and variable substitution
-- **configmap** (`src/configmap/`) - Extended module that adds build/configuration management functionality on top of publishmap
-- **publishmap.native** (`src/publishmap.native/`) - C# .NET components providing core functionality
+- **publishmap** (`publishmap/`) - Main module for processing publish maps with inheritance and variable substitution
+- **configmap** (`configmap/`) - Extended module that adds build/configuration management functionality on top of publishmap
+- **publishmap.native** (`publishmap.native/`) - C# .NET components providing core functionality
 
 ## Development Commands
 
@@ -32,11 +32,8 @@ npm run restore  # Restore packages/dependencies
 # Run tests via npm
 npm test
 
-# Run tests via Grunt
-grunt test
-
 # Run just C# tests
-cd src/publishmap.native/publishmap.test
+cd publishmap.native/publishmap.test
 dotnet test
 ```
 
@@ -44,7 +41,6 @@ dotnet test
 ```powershell
 # Push/publish module (runs tests first)
 npm run push
-grunt push
 
 # Install module locally
 npm run install
@@ -103,6 +99,7 @@ VSCode tasks are configured for running individual test files with Pester integr
 ## Code Quality
 
 - **PSScriptAnalyzer** settings defined in `PSScriptAnalyzerSettings.psd1`
+- Format with `Invoke-Formatter -ScriptDefinition (Get-Content <file> -Raw) -Settings ./PSScriptAnalyzerSettings.psd1`; lint with `Invoke-ScriptAnalyzer -Path <path> -Recurse -Settings ./PSScriptAnalyzerSettings.psd1`. `qbuild lint` checks formatting (CI runs it); `qbuild lint -Fix` applies it
 - PowerShell aliases permitted by `PSScriptAnalyzerSettings.psd1` are acceptable; do not replace them solely for style
 - CI/CD via AppVeyor with automatic testing and deployment
 

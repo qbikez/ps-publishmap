@@ -7,7 +7,7 @@ on:
   push:
     branches: [master]
     paths:
-      - 'src/configmap/**'
+      - 'configmap/**'
       - '.github/workflows/configmap-deploy.yml'
 
   workflow_dispatch:
@@ -38,8 +38,8 @@ jobs:
       - name: Run tests
         uses: PSModule/Invoke-Pester@v3
         with:
-          Path: ./src/configmap/test
-          Run_Path: ./src/configmap/test
+          Path: ./configmap/test
+          Run_Path: ./configmap/test
 
       - name: Publish configmap
         if: ${{ !inputs.dryRun }}
@@ -47,14 +47,14 @@ jobs:
         env:
           PS_PUBLISH_REPO_KEY: ${{ secrets.PS_PUBLISH_REPO_KEY }}
         run: |
-          scripts/lib/push.ps1 -path ./src/configmap/configmap.psd1 -newversion -Verbose
+          scripts/lib/push.ps1 -path ./configmap/configmap.psd1 -newversion -Verbose
 
       - name: Commit version bump
         if: ${{ !inputs.dryRun }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add src/configmap/configmap.psd1
+          git add configmap/configmap.psd1
           git diff --cached --quiet || git commit -m "bump configmap version"
           git push
 
@@ -64,7 +64,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $version = (Import-PowerShellDataFile ./src/configmap/configmap.psd1).ModuleVersion
+          $version = (Import-PowerShellDataFile ./configmap/configmap.psd1).ModuleVersion
           $tag = "configmap-v$version"
           git tag $tag
           git push origin $tag

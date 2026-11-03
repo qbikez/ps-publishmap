@@ -1,0 +1,628 @@
+# ConfigMap
+
+ConfigMap is a PowerShell module that extends publishmap functionality to provide build and configuration management capabilities through declarative map files. Execute build scripts and manage configurations with simple commands like `qbuild` and `qconf`.
+
+## Quick Start
+
+1. **Install the module:**
+   ```powershell
+   Import-Module configmap
+   ```
+
+2. **Initialize a build map:**
+   ```powershell
+   qbuild !init            # new map with the defaults detected for this directory
+   qbuild !init.options    # add one process type: exec, options, steps, bun or npm
+   ```
+   `qbuild !init` creates `.build.map.ps1` with the `exec`, `options` and `steps` defaults, plus `bun` if `bun.lock` exists, or `npm` if `package.json` exists without a `bun.lock`. If the map already exists it changes nothing and lists the `!init.<type>` commands.
+
+   `qbuild !init.<type>` always adds that type's defaults, creating the map if needed. Entries the map already has are left untouched.
+
+3. **List available commands:**
+   ```powershell
+   qbuild          # Shows all available build commands
+   qbuild help     # Shows help information
+   ```
+
+   Filter the listing by process type (`exec`, `qconf`, `qrun`, …); both forms tab-complete:
+   ```powershell
+   qbuild list -Type qconf   # only entries with process type qconf (options)
+   qbuild list.qrun          # shorthand for -Type qrun (steps)
+   qbuild list -Internal     # only internal commands, including list.<type>
+   ```
+
+4. **Run build commands:**
+   ```powershell
+   qbuild build    # Runs the build script
+   qbuild test     # Runs the test script
+   qbuild clean    # Runs the clean script
+   ```
+
+5. **Use with parameters:**
+   ```powershell
+   qbuild build -Configuration Release
+   qbuild deploy -Environment staging
+   ```
+
+### Dynamic `ValidateSet` values
+
+A `ValidateSet` whose single value is `'@key'` takes its values from the sibling key `key` of the same entry (an array, or a scriptblock returning one). The set drives tab completion and validation of the CLI parameter:
+
+```powershell
+@{
+    deploy = @{
+        envs = @('dev', 'prod')               # or: envs = { Get-EnvNames }
+        exec = { param([ValidateSet('@envs')][string]$Env) ... }
+    }
+}
+```
+
+## Agent / automation
+
+AI agents and scripts should discover commands via structured catalog output, not by scraping `qbuild list` host text:
+
+```powershell
+qbuild !describe                          # all commands as objects
+qbuild !describe build                    # one command
+qbuild !describe | ConvertTo-Json -Depth 6
+```
+
+Programmatic equivalent:
+
+```powershell
+$map = Import-ConfigMap ".build.map.ps1"
+Get-ConfigMapCommandCatalog -Map $map -Language build
+Get-ConfigMapCommandCatalog -Map $map -Path build -Language build
+```
+
+Each catalog object includes `Name`, `Description`, `IsParent`, and `Parameters` (`Name`, `Type`, `IsSwitch`, `ValidateSet`, `DefaultValue`).
+
+### Agent skills
+
+Install all shipped ConfigMap agent skills (`qbuild-discover`, `qbuild-templates`, …):
+
+```powershell
+qbuild !agent.init                         # Cursor, project scope (default)
+qbuild !agent.init -Agent claude           # Claude Code, project scope
+qbuild !agent.init -Agent copilot          # GitHub Copilot (.github/skills)
+qbuild !agent.init -Scope user -Agent cursor
+```
+
+Print skill markdown without installing (useful for agents in-session):
+
+```powershell
+qbuild !agent.skills                       # all shipped skills
+qbuild !agent.skills qbuild-templates       # one skill by name
+```
+
+| Agent | Project skills parent | User skills parent |
+|-------|----------------------|--------------------|
+| `cursor` | `.cursor/skills/` | `~/.cursor/skills/` |
+| `claude` | `.claude/skills/` | `~/.claude/skills/` |
+| `copilot` | `.github/skills/` | `~/.copilot/skills/` |
+
+## Sample Map File
+
+Here's a sample build map file (`.build.map.ps1`):
+
+```powershell
+@{
+    # Simple script block - just PowerShell code
+    "clean" = {
+        Remove-Item "bin", "obj" -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    
+    # Command object with exec and description
+    "restore" = @{
+        exec = {
+            dotnet restore
+        }
+        description = "Restore NuGet packages"
+    }
+    
+    # Command with parameters
+    "build" = @{
+        exec = {
+            param([string]$Configuration = "Debug")
+            dotnet build --configuration $Configuration --no-restore
+        }
+        description = "Build the project"
+    }
+    
+    # Command with multiple parameters including switches
+    "test" = @{
+        exec = {
+            param([switch]$Coverage, [string]$Filter)
+            $args = @("test", "--no-build")
+            if ($Coverage) { $args += "--collect:`"XPlat Code Coverage`"" }
+            if ($Filter) { $args += "--filter", $Filter }
+            & dotnet @args
+        }
+        description = "Run unit tests"
+    }
+    
+    # Advanced command with typed parameters and validation
+    "deploy" = @{
+        exec = {
+            param(
+                [ValidateSet("dev", "staging", "prod")]$Environment = "dev",
+                [switch]$Force,
+                [int]$Timeout = 300
+            )
+            Write-Host "Deploying to $Environment environment (timeout: ${Timeout}s)..."
+            if ($Force) { Write-Host "Force deployment enabled" }
+            # Deployment logic here
+        }
+        description = "Deploy to specified environment"
+    }
+}
+```
+
+### Advanced Map Features
+
+- **Parameters**: Commands can accept typed parameters with defaults
+- **Script Blocks**: Direct PowerShell execution with full language support
+- **Command Objects**: Structured entries with `exec`, `description`, and other properties
+- **Dynamic Execution**: Commands are evaluated at runtime with current context
+
+### Usage Examples
+
+```powershell
+# Basic commands
+qbuild clean
+qbuild restore
+qbuild build
+
+# Commands with parameters
+qbuild build -Configuration Release
+qbuild test -Coverage -Filter "Category=Unit"
+qbuild deploy -Environment prod -Force -Timeout 600
+```
+
+## Autocompletion
+
+ConfigMap provides rich tab completion for `qbuild` commands:
+
+### Command Completion
+```powershell
+qbuild <TAB>              # Shows: clean, restore, build, test, deploy
+qbuild bu<TAB>            # Completes to: build
+qbuild de<TAB>            # Completes to: deploy
+```
+
+### Parameter Completion
+```powershell
+qbuild build -<TAB>                     # Shows: Configuration
+qbuild test -<TAB>                      # Shows: Coverage, Filter
+qbuild deploy -<TAB>                    # Shows: Environment, Force, Timeout
+qbuild deploy -Environment <TAB>        # Shows: dev, staging, prod
+```
+
+### Setup Autocompletion
+
+Autocompletion works automatically when the configmap module is imported:
+
+1. **Add to your PowerShell profile:**
+   ```powershell
+   Import-Module configmap
+   ```
+
+2. **Verify completion is working:**
+   ```powershell
+   qbuild <TAB>    # Should show available commands
+   ```
+
+### Discovery cache
+
+Entry discovery for tab completion and `list`/`help` is cached as JSON (for example `discovery.build.cache.json`). Non-canonical maps use `discovery.<name>.<language>.cache.json` so build and conf caches stay separate. The cache stores entry keys plus lightweight metadata (description, parameter names/types). It is invalidated when the root map, any transitively `#include`d map file, or any path listed in `_dependsOn` changes. Safe to delete or gitignore; it is rebuilt on demand.
+
+Lookup probes both cache files from the map path alone (no map settings). A hit is valid when dependency mtimes in the cache still match. `DiscoveryCacheLocation` (default `local`) only chooses where a miss is written:
+
+- `local` — `.configmap/` next to the map file
+- `user` — `%USERPROFILE%\.configmap\<project>` (or `$HOME/.configmap/<project>`), where `<project>` is a Cursor-style sanitized path of the map directory (`C:\git\demo` → `C-git-demo`)
+
+```powershell
+@{
+    _settings = @{ DiscoveryCacheLocation = 'user' }
+    build     = { dotnet build }
+}
+```
+
+```powershell
+$env:QCONF_DiscoveryCacheLocation = 'user'
+```
+
+Maps that generate entries from other files should declare those files with `_dependsOn` on the map root (or on an individual target). Relative paths resolve against that node's `_baseDir`:
+
+```powershell
+@{
+    _dependsOn = @('install.yaml', 'helpers.ps1')
+    # generated entries...
+}
+```
+
+Enabled by default. Opt out per map or for the whole process:
+
+```powershell
+@{
+    _settings = @{ DiscoveryCache = $false }
+    build     = { dotnet build }
+}
+```
+
+```powershell
+$env:QCONF_DiscoveryCache = '0'
+```
+
+`qbuild !settings` shows the effective value.
+
+Inspect or reset the cache for the current build map:
+
+```powershell
+qbuild !cache              # status (path, validity, source)
+qbuild !cache.status
+qbuild !cache.clear        # delete this map's cache file and memory entry
+qbuild !cache.rebuild      # clear, then rebuild
+```
+
+These print a formatted summary. Add `-Porcelain` to get a PowerShell object for scripting:
+
+```powershell
+(qbuild !cache.status -Porcelain).Valid
+```
+
+### Dynamic Parameter Discovery
+
+ConfigMap automatically discovers parameters from your script blocks:
+
+```powershell
+@{
+    "deploy" = @{
+        exec = {
+            param(
+                [string]$Environment = "dev",
+                [switch]$Force,
+                [ValidateSet("fast", "full")]$Mode = "fast"
+            )
+            # Deployment logic
+        }
+    }
+}
+```
+
+## Performance benchmark
+
+Run the opt-in performance harness from the module directory:
+
+```powershell
+.\test\Measure-ConfigMapPerformance.ps1
+```
+
+It measures warm `Get-MapEntries`, a no-op `qbuild` command, included-map
+resolution with and without an operation cache, and tab completion with and
+without the file-backed discovery cache (cold miss, disk hit, memory hit).
+In-memory maps skip discovery cache. The generated maps contain 100 and 1,000
+entries. The output includes median, p95, minimum and maximum latency, plus
+median and p95 allocated bytes.
+
+Use larger fixtures or emit structured output for comparison in CI:
+
+```powershell
+.\test\Measure-ConfigMapPerformance.ps1 -EntryCount 100, 1000, 5000 -Iterations 100 -AsJson
+```
+
+Tab completion will automatically provide:
+- `-Environment` with no suggestions (string parameter)
+- `-Force` as a switch parameter
+- `-Mode` with validation set values: "fast", "full"
+
+### Custom Completions
+
+Enhance autocompletion by adding completion metadata:
+
+```powershell
+@{
+    "deploy" = @{
+        exec = { param([string]$Environment) }
+        completions = @{
+            Environment = @("dev", "staging", "prod")
+        }
+        description = "Deploy to specified environment"
+    }
+}
+```
+
+## Configuration Management
+
+ConfigMap also provides `qconf` for managing configuration settings:
+
+### Initialize Configuration Map
+```powershell
+qconf init
+```
+Creates a `.configuration.map.ps1` file with sample configuration entries.
+
+### Sample Configuration Map
+```powershell
+@{
+    "database" = @{
+        get = { return $env:DATABASE_URL }
+        set = { param($_context, $value, $key) 
+            $env:DATABASE_URL = $value
+            Write-Host "Database URL set to: $value"
+        }
+        options = @{
+            "local" = "Server=localhost;Database=MyApp;Trusted_Connection=true;"
+            "staging" = "Server=staging-db;Database=MyApp;Uid=app;Pwd=****;"
+            "prod" = "Server=prod-db;Database=MyApp;Uid=app;Pwd=****;"
+        }
+    }
+    
+    "api" = @{
+        get = { return $env:API_ENDPOINT }
+        set = { param($_context, $value, $key)
+            $env:API_ENDPOINT = $value
+        }
+        validate = { param($path, $value, $key)
+            return $value -match "^https?://"
+        }
+        options = @{
+            "dev" = "https://api-dev.example.com"
+            "staging" = "https://api-staging.example.com"
+            "prod" = "https://api.example.com"
+        }
+    }
+
+    # Built-in appconfig template: no hand-written get/set needed
+    # Short form below; long form is _template = @{ type = "appconfig"; file = "..." }
+    "storage" = @{
+        description = "Storage endpoint in appsettings JSON"
+        _template   = "appsettings:src/appsettings.Development.json"
+        options = @{
+            local = @{ "Storage:BaseUrl" = "https://127.0.0.1:10000/devstoreaccount1" }
+            prod  = @{ "Storage:BaseUrl" = "https://prod.example" }
+        }
+    }
+
+    # Same template with a set override: author get/set win; call the template via $_context.base
+    "storage_hook" = @{
+        _template   = "appsettings:src/appsettings.Development.json"
+        options     = @{
+            local = @{ "Storage:BaseUrl" = "https://127.0.0.1:10000/devstoreaccount1" }
+            prod  = @{ "Storage:BaseUrl" = "https://prod.example" }
+        }
+        set = {
+            param($ctx, $key, $value, $_context)
+            & $_context.base.set $ctx $key $value $_context
+            Write-Host "storage set to $key"
+        }
+    }
+
+    # Built-in dotenv template for .env files
+    # Short form below; long form is _template = @{ type = "dotenv"; file = "..." }
+    "envfile" = @{
+        description = "API settings in .env"
+        _template   = "dotenv:.env"
+        options = @{
+            local = @{ "API_URL" = "http://localhost:5000"; "API_KEY" = "dev-key" }
+            prod  = @{ "API_URL" = "https://api.example.com"; "API_KEY" = "prod-key" }
+        }
+    }
+
+    # Omit `options` and the dotenv template discovers them from sibling files:
+    # .env.prod -> "prod", .env.dev.example -> "dev", .env.example -> "example".
+    # A real .env.<name> wins over .env.<name>.example; explicit `options` disable discovery.
+    "auto_envfile" = @{
+        description = "API settings, options discovered from .env.* files"
+        _template   = "dotenv:.env"
+    }
+
+    # keys = "auto" (reads .env.example/.sample/.template) or keys = "<file>" also adds one entry
+    # per key: `qbuild keyed.API_URL -value https://staging`. A comment line above a key becomes
+    # its description. Presets keep working on the parent entry.
+    "keyed" = @{
+        description = "API settings, one entry per key in .env.example"
+        _template   = @{ type = "dotenv"; file = ".env"; keys = "auto" }
+    }
+
+    # Built-in user-secrets template backed by `dotnet user-secrets`
+    # Short form below; long form is _template = @{ type = "user-secrets"; csproj = "..." }
+    # csproj is a project file or its directory; a "user-secrets:{name}" value copies
+    # another secret from the same project. `list` never reads these entries: it shows
+    # "<not read>" with the option names, so query the entry to see its value
+    "mongo" = @{
+        description = "Mongo connection in user secrets"
+        _template   = "user-secrets:src/App/App.csproj"
+        options = @{
+            local  = @{ "ConnectionStrings:mongo" = "" }
+            shared = @{ "ConnectionStrings:mongo" = "user-secrets:mongo_shared" }
+        }
+    }
+}
+```
+
+Author-supplied `get` / `set` always win over the template fill-in. Template implementations stay on `$_context.base` (`$_context.base.get` / `$_context.base.set`) so overrides can wrap them. See `samples/process-mixed` (`endpoint_override`) and `qbuild !agent.skills qbuild-templates`.
+
+### Configuration Usage
+```powershell
+# Prefer qbuild when the entry lives in a build map with process = "options"
+qbuild storage
+qbuild storage -value local
+
+# Standalone qconf (deprecated; still works for .configuration.map.ps1)
+qconf get -entry database
+qconf get -entry api
+qconf set -entry database -value local
+qconf set -entry api -value dev
+
+# Tab completion works for entries and options
+qconf set -entry <TAB>           # Shows: database, api
+qconf set -entry database -value <TAB>  # Shows: local, staging, prod
+```
+
+## Core Functions
+
+### Import-ConfigMap
+Loads and validates map files. This is the supported programmatic map-import
+command. The legacy `$ImportConfigMap` script block remains available for
+compatibility with map files that dot-source helper functions:
+```powershell
+$buildMap = Import-ConfigMap ".build.map.ps1"
+$configMap = Import-ConfigMap ".configuration.map.ps1"
+```
+
+### Get-MapEntry / Get-MapEntries
+Retrieves specific entries:
+```powershell
+$entry = Get-MapEntry $buildMap "build"
+$entries = Get-MapEntries $buildMap @("build", "test")
+```
+
+### Invoke-EntryCommand
+Executes commands defined in map entries:
+```powershell
+Invoke-EntryCommand $entry "exec" -bound $parameters
+```
+
+### Get-CompletionList
+Extracts available entries for tab completion:
+```powershell
+$entries = Get-CompletionList $buildMap -flatten
+```
+
+### Get-ConfigMapCommandCatalog
+Returns structured command metadata for agents and automation:
+```powershell
+Get-ConfigMapCommandCatalog -Map $buildMap -Language build
+Get-ConfigMapCommandCatalog -Map $buildMap -Path build -Language build
+```
+
+## Entry Types
+
+### Script Blocks
+Direct PowerShell execution:
+```powershell
+"mytask" = { Write-Host "Hello World" }
+```
+
+### Command Objects
+Structured entries with multiple properties:
+```powershell
+"mytask" = @{
+    exec = { Write-Host "Executing..." }
+    description = "My custom task"
+    validate = { param($path, $value, $key) return $true }
+}
+```
+
+### Nested Lists
+Hierarchical command organization:
+```powershell
+"category" = @{
+    list = @{
+        "item1" = { Write-Host "Item 1" }
+        "item2" = { Write-Host "Item 2" }
+    }
+}
+```
+
+## Requirements
+
+- PowerShell 7.0 or higher
+- publishmap module (automatically loaded)
+
+## Error Handling
+
+ConfigMap provides detailed error messages for:
+- Missing map files
+- Invalid entry names  
+- Missing commands in entries
+- Parameter validation errors
+- Type validation errors
+
+## Process types
+
+Build-map entries can set `_settings.process` to select a runner:
+
+| Process | Role | Standalone CLI |
+|---------|------|----------------|
+| `exec` (default) | Run the entry `exec` scriptblock | — |
+| `steps` | Multi-step process with persisted state | `qrun` |
+| `options` | Configuration get/set/show | `qconf` |
+| `bun`, `npm` | Run `package.json` scripts | — |
+
+`bun` / `npm` entries proxy to `<tool> run`: `qbuild web` (or `qbuild web list`) lists the scripts, `qbuild web dev -- --watch` runs `bun run dev --watch` in the entry's directory. `package.json` is read only when you invoke the entry.
+
+Legacy map values `qrun` and `qconf` still normalize to `steps` / `options`.
+Standalone `qrun` / `qconf` CLIs are **deprecated** — prefer unified `qbuild` with the process types above. See [docs/process-cli.md](docs/process-cli.md).
+
+## Reserved Keys
+
+The following keys have special meaning in map files:
+- `exec` - Default execution command
+- `list` - Nested entry container
+- `options` - Configuration options list (for qconf; also the process type name above)
+- `get` - Get configuration value (for qconf)
+- `set` - Set configuration value (for qconf)
+- `validate` - Validation function (for qconf)
+- `_template` - Built-in entry type: `@{ type; file }` or `"appsettings:{filepath}"` / `"dotenv:{filepath}"`, or `@{ type = "user-secrets"; csproj }` / `"user-secrets:{csproj}"`, that fills get/set when omitted; author get/set override the fill-in and can call `$_context.base`
+- `description` - Command description
+- `completions` - Custom tab completion values
+
+## Examples
+
+### Simple Build Workflow
+```powershell
+# .build.map.ps1
+@{
+    "clean" = { Remove-Item bin,obj -Recurse -Force -ErrorAction Ignore }
+    "restore" = { dotnet restore }
+    "build" = { dotnet build --no-restore }
+    "test" = { dotnet test --no-build }
+    "package" = { dotnet pack --no-build }
+}
+```
+
+Usage:
+```powershell
+qbuild clean
+qbuild restore  
+qbuild build
+qbuild test
+qbuild package
+```
+
+### Multi-Stage Build with Parameters
+```powershell
+@{
+    "build" = @{
+        exec = {
+            param(
+                [ValidateSet("Debug", "Release")]$Configuration = "Debug",
+                [switch]$NoRestore
+            )
+            $args = @("build", "--configuration", $Configuration)
+            if ($NoRestore) { $args += "--no-restore" }
+            & dotnet @args
+        }
+    }
+}
+```
+
+Usage:
+```powershell
+qbuild build -Configuration Release -NoRestore
+```
+
+## Module Structure
+
+- **configmap.ps1** - Main module implementation
+- **configmap.psm1** - Module manifest and function exports
+- **samples/_default/** - Template files for standalone `qconf !init` / `qrun !init`
+
+## Testing
+
+Run the test suite:
+```powershell
+Invoke-Pester .\configmap.tests.ps1
+```
