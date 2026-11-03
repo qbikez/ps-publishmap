@@ -1,8 +1,0 @@
-is_global = true
-build_property.RootNamespace = Publishmap.Utils.Inheritance
-build_property.ProjectDir = C:\git\hmdev\ps-modules\publishmap_wt1\src\publishmap.native\publishmap.core\
-build_property.EnableComHosting = 
-build_property.EnableGeneratedComInterfaceComImportInterop = 
-build_property.CsWinRTUseWindowsUIXamlProjections = false
-build_property.EffectiveAnalysisLevelStyle = 
-build_property.EnableCodeStyleSeverity = 
