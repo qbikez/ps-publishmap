@@ -686,6 +686,7 @@ Describe 'qconf dotenv _template' {
 }
 
 
+
 Describe 'qconf user-secrets _template' {
     BeforeAll {
         function script:Read-UserSecrets {
@@ -939,5 +940,194 @@ Describe 'qconf user-secrets _template' {
 
         $result = qconf -map $script:mapFile reference -porcelain -ErrorAction Stop
         @($result.Active) | Should -Contain 'local'
+    }
+}
+
+Describe 'qconf dotenv _template option discovery' {
+    BeforeEach {
+        $script:workDir = Join-Path $TestDrive ("dotenv-auto-" + [guid]::NewGuid().ToString('n'))
+        New-Item -ItemType Directory -Path $script:workDir -Force | Out-Null
+        Push-Location $script:workDir
+
+        $script:envFile = Join-Path $script:workDir '.env'
+        Write-DotEnvFile $script:envFile @{ API_URL = 'http://localhost:5000'; API_KEY = 'dev-key' }
+
+        $script:mapFile = Join-Path $script:workDir '.configuration.map.ps1'
+        Write-ConfigMapFile $script:mapFile @'
+@{
+    api = @{
+        _template = 'dotenv:.env'
+        description = 'API settings'
+    }
+}
+'@
+    }
+
+    AfterEach {
+        Pop-Location
+    }
+
+    It 'lists sibling .env.<name> files as options' {
+        Write-DotEnvFile (Join-Path $script:workDir '.env.prod') @{ API_URL = 'https://api.example.com'; API_KEY = 'prod-key' }
+
+        $result = qconf -map $script:mapFile api -porcelain -ErrorAction Stop
+
+        @($result.Options) | Should -Contain 'prod'
+    }
+
+    It 'sets the .env file from a discovered option' {
+        Write-DotEnvFile (Join-Path $script:workDir '.env.prod') @{ API_URL = 'https://api.example.com'; API_KEY = 'prod-key' }
+
+        qconf -map $script:mapFile api -value prod -ErrorAction Stop
+
+        $envValues = Read-DotEnvFile $script:envFile
+        $envValues['API_URL'] | Should -Be 'https://api.example.com'
+        $envValues['API_KEY'] | Should -Be 'prod-key'
+    }
+
+    It 'treats .env.example as the option "example" and parses comments, export and quotes' {
+        Set-Content -LiteralPath (Join-Path $script:workDir '.env.example') -Encoding utf8 -Value @(
+            '# all the knobs'
+            'API_URL=http://example.test'
+            'export API_KEY="some key"'
+            'FLAG=on # inline comment'
+        )
+
+        qconf -map $script:mapFile api -value example -ErrorAction Stop
+
+        $envValues = Read-DotEnvFile $script:envFile
+        $envValues['API_URL'] | Should -Be 'http://example.test'
+        $envValues['API_KEY'] | Should -Be 'some key'
+        $envValues['FLAG'] | Should -Be 'on'
+    }
+
+    It 'strips the .example suffix and prefers the real file over its example' {
+        Write-DotEnvFile (Join-Path $script:workDir '.env.stg.example') @{ API_URL = 'from-example' }
+        Write-DotEnvFile (Join-Path $script:workDir '.env.stg') @{ API_URL = 'from-real' }
+
+        $result = qconf -map $script:mapFile api -porcelain -ErrorAction Stop
+        @($result.Options) | Should -Contain 'stg'
+        @($result.Options) | Should -Not -Contain 'stg.example'
+
+        qconf -map $script:mapFile api -value stg -ErrorAction Stop
+        (Read-DotEnvFile $script:envFile)['API_URL'] | Should -Be 'from-real'
+    }
+
+    It 'keeps explicit options instead of discovering files' {
+        Write-DotEnvFile (Join-Path $script:workDir '.env.prod') @{ API_URL = 'https://api.example.com' }
+        Write-ConfigMapFile $script:mapFile @'
+@{
+    api = @{
+        _template = 'dotenv:.env'
+        options = @{ local = @{ API_URL = 'http://localhost:5000' } }
+    }
+}
+'@
+
+        $result = qconf -map $script:mapFile api -porcelain -ErrorAction Stop
+
+        @($result.Options) | Should -Contain 'local'
+        @($result.Options) | Should -Not -Contain 'prod'
+    }
+}
+
+Describe 'qbuild dotenv _template per-key entries' {
+    BeforeEach {
+        $script:workDir = Join-Path $TestDrive ("dotenv-keys-" + [guid]::NewGuid().ToString('n'))
+        New-Item -ItemType Directory -Path $script:workDir -Force | Out-Null
+        Push-Location $script:workDir
+
+        $script:envFile = Join-Path $script:workDir '.env'
+        Write-DotEnvFile $script:envFile @{ API_URL = 'http://localhost:5000'; API_KEY = 'k' }
+        Set-Content -LiteralPath (Join-Path $script:workDir '.env.example') -Encoding utf8 -Value @(
+            '# Base URL of the backend'
+            'API_URL=http://localhost:5000'
+            'API_KEY=dev-key'
+            'FLAG=on'
+        )
+        Write-DotEnvFile (Join-Path $script:workDir '.env.prod') @{ API_URL = 'https://prod'; API_KEY = 'prod' }
+
+        $script:buildMap = Join-Path $script:workDir '.build.map.ps1'
+        Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options' }
+        _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto' }
+    }
+}
+'@
+    }
+
+    AfterEach {
+        Pop-Location
+    }
+
+    It 'creates one child entry per key in .env.example' {
+        $buildMap = $script:buildMap
+        $result = InModuleScope configmap -Parameters @{ map = $buildMap } { Get-MapEntryList (Import-ConfigMap -Map $map) -language build }
+
+        @($result.Keys) | Should -Contain 'api.API_URL'
+        @($result.Keys) | Should -Contain 'api.API_KEY'
+        @($result.Keys) | Should -Contain 'api.FLAG'
+        $result['api.API_URL'].description | Should -Match 'Base URL of the backend'
+    }
+
+    It 'reads the current value of one key' {
+        $result = qbuild -map $script:buildMap api.API_URL -porcelain -ErrorAction Stop
+
+        $result.Value | Should -Be 'http://localhost:5000'
+    }
+
+    It 'writes one key and leaves the others untouched' {
+        qbuild -map $script:buildMap api.API_URL -value 'https://staging.example.com' -ErrorAction Stop
+
+        $envValues = Read-DotEnvFile $script:envFile
+        $envValues['API_URL'] | Should -Be 'https://staging.example.com'
+        $envValues['API_KEY'] | Should -Be 'k'
+    }
+
+    It 'adds a key that is missing from .env' {
+        qbuild -map $script:buildMap api.FLAG -value off -ErrorAction Stop
+
+        (Read-DotEnvFile $script:envFile)['FLAG'] | Should -Be 'off'
+    }
+
+    It 'keeps presets working on the parent entry' {
+        qbuild -map $script:buildMap api -value prod -ErrorAction Stop
+
+        $envValues = Read-DotEnvFile $script:envFile
+        $envValues['API_URL'] | Should -Be 'https://prod'
+        $envValues['API_KEY'] | Should -Be 'prod'
+    }
+
+    It 'reads keys from an explicit file' {
+        Set-Content -LiteralPath (Join-Path $script:workDir 'keys.txt') -Value 'ONLY_KEY=1'
+        Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options' }
+        _template = @{ type = 'dotenv'; file = '.env'; keys = 'keys.txt' }
+    }
+}
+'@
+
+        $buildMap = $script:buildMap
+        $result = InModuleScope configmap -Parameters @{ map = $buildMap } { Get-MapEntryList (Import-ConfigMap -Map $map) -language build }
+
+        @($result.Keys) | Should -Contain 'api.ONLY_KEY'
+        @($result.Keys) | Should -Not -Contain 'api.API_URL'
+    }
+
+    It 'works against the dotenv sample' {
+        $sampleDir = Join-Path $PSScriptRoot '..' 'samples' 'dotenv'
+        Copy-Item -Path (Join-Path $sampleDir '*') -Destination $script:workDir -Recurse -Force
+        Copy-Item -Path (Join-Path $sampleDir '.*') -Destination $script:workDir -Recurse -Force -ErrorAction SilentlyContinue
+        $sampleMap = Join-Path $script:workDir '.build.map.ps1'
+
+        $presets = qbuild -map $sampleMap api_presets -porcelain -ErrorAction Stop
+        @($presets.Options) | Should -Be @('prod', 'stg', 'example')
+
+        qbuild -map $sampleMap api.API_URL -value 'https://staging.example.com' -ErrorAction Stop
+        (Read-DotEnvFile (Join-Path $script:workDir '.env'))['API_URL'] | Should -Be 'https://staging.example.com'
     }
 }

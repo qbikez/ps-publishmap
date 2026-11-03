@@ -286,6 +286,212 @@ function Set-DotEnvOption {
     }
 }
 
+function ConvertFrom-DotEnvLine {
+    <#
+    .SYNOPSIS
+        Parse one dotenv line into @{ Key; Value }, or $null for blanks, comments and non-assignments.
+    #>
+    param([string]$Line)
+
+    if ($Line -notmatch '^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_.]*)\s*=\s*(.*?)\s*$') { return $null }
+
+    $key = $Matches[1]
+    $value = $Matches[2]
+    if ($value -match '^"(.*)"$' -or $value -match "^'(.*)'$") {
+        $value = $Matches[1]
+    }
+    else {
+        # An unquoted value ends at an inline comment.
+        $value = ($value -replace '\s+#.*$', '')
+    }
+
+    return @{ Key = $key; Value = $value }
+}
+
+function Read-DotEnvOptionValues {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$File
+    )
+
+    $values = [ordered]@{}
+    foreach ($line in @(Get-Content -LiteralPath $File)) {
+        $parsed = ConvertFrom-DotEnvLine $line
+        if ($parsed) { $values[$parsed.Key] = $parsed.Value }
+    }
+    return $values
+}
+
+function Get-DotEnvEntryOptions {
+    <#
+    .SYNOPSIS
+        Derive options from the dotenv files that sit next to a dotenv _template entry's file.
+
+    .DESCRIPTION
+        For `_template = "dotenv:.env"` every sibling `.env.<name>` becomes option `<name>`.
+        A `.example`, `.sample` or `.template` suffix is ignored (`.env.dev.example` is option
+        `dev`); a bare `.env.example` becomes option `example`. When both `.env.dev` and
+        `.env.dev.example` exist, the real file wins. Returns $null when the entry is not a
+        dotenv template or nothing usable is found, so explicit `options` are never replaced.
+    #>
+    param(
+        $Entry
+    )
+
+    if ($Entry -isnot [System.Collections.IDictionary] -or -not $Entry.Contains('_template')) { return $null }
+
+    try {
+        $template = Get-ConfigEntryTemplate -Entry $Entry
+        if ($null -eq $template -or $template.type -ne 'dotenv') { return $null }
+        $target = Resolve-ConfigEntryFile -Entry $Entry -Template $template -TypeName 'dotenv'
+    }
+    catch {
+        Write-Verbose "dotenv option discovery skipped: $($_.Exception.Message)"
+        return $null
+    }
+
+    $directory = Split-Path -Parent $target
+    $leaf = Split-Path -Leaf $target
+    if (-not (Test-Path -LiteralPath $directory -PathType Container)) { return $null }
+
+    $templateSuffix = '\.(example|sample|template)$'
+    $candidates = Get-ChildItem -LiteralPath $directory -File -Force |
+        Where-Object { $_.Name -ne $leaf -and $_.Name.StartsWith("$leaf.", [System.StringComparison]::OrdinalIgnoreCase) } |
+        Sort-Object { $_.Name -match $templateSuffix }, Name
+
+    $options = [ordered]@{}
+    foreach ($file in $candidates) {
+        $name = $file.Name.Substring($leaf.Length + 1) -replace $templateSuffix, ''
+        if ($options.Contains($name)) { continue }
+
+        $values = Read-DotEnvOptionValues -File $file.FullName
+        if ($values.Count -gt 0) { $options[$name] = $values }
+    }
+
+    if ($options.Count -eq 0) { return $null }
+    return $options
+}
+
+function Read-DotEnvKeyInfo {
+    <#
+    .SYNOPSIS
+        Read a dotenv file as key -> @{ Value; Description }, where Description is the
+        comment line(s) directly above the key.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$File
+    )
+
+    $info = [ordered]@{}
+    $comments = [System.Collections.Generic.List[string]]::new()
+    foreach ($line in @(Get-Content -LiteralPath $File)) {
+        if ($line -match '^\s*#\s?(.*)$') {
+            $comments.Add($Matches[1].Trim())
+            continue
+        }
+
+        $parsed = ConvertFrom-DotEnvLine $line
+        if ($parsed) {
+            $info[$parsed.Key] = @{ Value = $parsed.Value; Description = ($comments -join ' ') }
+        }
+        $comments.Clear()
+    }
+    return $info
+}
+
+function Resolve-DotEnvKeysFile {
+    param(
+        $Keys,
+        [Parameter(Mandatory = $true)]
+        [string]$Target
+    )
+
+    $directory = Split-Path -Parent $Target
+    if ($Keys -is [string] -and $Keys -ne 'auto') {
+        $candidates = @([System.IO.Path]::IsPathRooted($Keys) ? $Keys : (Join-Path $directory $Keys))
+    }
+    else {
+        $candidates = 'example', 'sample', 'template' | ForEach-Object { "$Target.$_" }
+    }
+
+    return $candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+}
+
+function New-DotEnvKeyEntry {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Key,
+        [Parameter(Mandatory = $true)]
+        $Info,
+        [Parameter(Mandatory = $true)]
+        [string]$File,
+        [string]$BaseDir
+    )
+
+    # No _template here: it would make the child discover the parent's .env.<name> presets as options.
+    $description = $Info.Description ? $Info.Description : "$Key"
+    $entry = [ordered]@{
+        description = "$description (example: $($Info.Value))"
+        _internal   = @{ envKey = $Key; envFile = $File }
+        get         = {
+            param($ctx, $options, $_context)
+            get-envsetting $_context.self._internal.envKey $_context.self._internal.envFile
+        }
+        set         = {
+            param($ctx, $key, $value, $_context)
+            set-envsetting $_context.self._internal.envKey $key $_context.self._internal.envFile
+        }
+    }
+    if ($BaseDir) { $entry._baseDir = $BaseDir }
+    return $entry
+}
+
+function Expand-DotEnvKeyEntries {
+    <#
+    .SYNOPSIS
+        Prepare dotenv _template entries when a map loads: attach lazily discovered
+        options and add one child entry per key for entries that set `keys`.
+
+    .DESCRIPTION
+        `keys = 'auto'` reads `<file>.example` (or `.sample` / `.template`); any other string
+        names the file to read keys from. Children are named after the key (`api.API_URL`),
+        read and write just that key, and never replace an entry the map already defines.
+        Explicit `options` are left alone; otherwise `options` becomes a scriptblock that
+        reads the sibling `.env.*` files when asked, so completion sees file changes.
+    #>
+    param(
+        [System.Collections.IDictionary]$Map
+    )
+
+    foreach ($name in @($Map.Keys)) {
+        $entry = $Map[$name]
+        if ($entry -isnot [System.Collections.IDictionary] -or "$name".StartsWith('_') -or $name -eq 'options') { continue }
+
+        $template = $null
+        try { $template = Get-ConfigEntryTemplate -Entry $entry } catch { Write-Verbose "dotenv key discovery skipped: $($_.Exception.Message)" }
+        if ($template -and $template.type -eq 'dotenv' -and -not $entry.Contains('options')) {
+            # A closure runs outside this module's scope, so it must carry the command object itself.
+            $presetEntry = $entry
+            $discover = Get-Command Get-DotEnvEntryOptions
+            $entry.options = { $discovered = & $discover -Entry $presetEntry; $discovered ? $discovered : [ordered]@{} }.GetNewClosure()
+        }
+        if ($template -and $template.type -eq 'dotenv' -and $template.Contains('keys') -and $template.keys) {
+            $target = Resolve-ConfigEntryFile -Entry $entry -Template $template -TypeName 'dotenv'
+            $keysFile = Resolve-DotEnvKeysFile -Keys $template.keys -Target $target
+            if ($keysFile) {
+                $info = Read-DotEnvKeyInfo -File $keysFile
+                foreach ($key in $info.Keys) {
+                    if ($entry.Contains($key)) { continue }
+                    $entry[$key] = New-DotEnvKeyEntry -Key $key -Info $info[$key] -File $target -BaseDir $entry._baseDir
+                }
+            }
+        }
+
+        Expand-DotEnvKeyEntries -Map $entry
+    }
+}
+
 function Get-ConfigEntryTypeCommands {
     <#
     .SYNOPSIS

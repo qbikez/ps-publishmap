@@ -402,6 +402,9 @@ function Invoke-QConf {
                 Invoke-WithEntrySettings -Map $map -EntryKey "$confEntry" -Entry $subEntry -OperationContext $operationContext -ScriptBlock {
                     Add-ConfigEntryTypeCommands -Entry $subEntry
                     Invoke-Set $subEntry -bound $bound -extra $setExtras
+                    if (-not $porcelain) {
+                        Write-QConfEntryStatus -EntryName "$confEntry" -Entry $subEntry
+                    }
                 }
             }
             "get" {
@@ -457,6 +460,32 @@ function Invoke-QConf {
         }
 
     }
+}
+
+function Write-QConfEntryStatus {
+    <#
+    .SYNOPSIS
+        Print an entry's current state, as `show` does. Sensitive entries are listed without reading their values.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$EntryName,
+        [Parameter(Mandatory = $true)]
+        $Entry
+    )
+
+    $options = Get-CompletionList $Entry -listKey "options" -language "conf" -maxDepth 1
+    if (Test-ConfigEntrySensitive -Entry $Entry) {
+        Write-QConfStatus -EntryName $EntryName -Result ([pscustomobject]@{ Options = $options.Keys }) -Description $Entry.description -NotRead
+        return
+    }
+
+    $current = Invoke-Get $Entry -bound @{ options = $options }
+    Write-QConfStatus `
+        -EntryName $EntryName `
+        -Result (ConvertTo-MapResult $current $EntryName $Entry $options) `
+        -Description $Entry.description `
+        -HasValidation ([bool]$Entry.validate)
 }
 
 function Write-QConfStatus {
@@ -584,3 +613,5 @@ Set-Alias -Name "qconf" -Value "Invoke-QConf" -Force
 
 # Canonical process type for qbuild maps; CLI alias remains qconf.
 Register-ConfigMapCliProcess -Name 'options' -CliName 'qconf' -InitTemplate "$PSScriptRoot/init.map.ps1"
+
+Register-ConfigMapLoadHook -Name 'dotenv-entries' -Hook { param($Map) Expand-DotEnvKeyEntries -Map $Map }

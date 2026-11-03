@@ -132,6 +132,20 @@ Describe 'qconf as a qbuild process' {
         @($result.Active) | Should -Contain 'prod'
     }
 
+    It 'shows the updated value after set through qbuild' {
+        $output = (qbuild -map $script:mapFile storage set prod 6>&1 | Out-String)
+
+        $output | Should -Match 'storage'
+        $output | Should -Match 'Active\s+prod'
+        $output | Should -Match 'Value\s+P'
+    }
+
+    It 'shows the updated value after the -value shorthand' {
+        $output = (qbuild -map $script:mapFile storage -value prod 6>&1 | Out-String)
+
+        $output | Should -Match 'Active\s+prod'
+    }
+
     It 'supports explicit get and set verbs through qconf directly' {
         qconf -map $script:mapFile storage set local
         $result = qconf -map $script:mapFile storage get -porcelain
@@ -246,6 +260,43 @@ Describe 'qconf as a qbuild process' {
         $completions | Should -Contain 'get'
         $completions | Should -Contain 'set'
         $completions | Should -Contain 'show'
+    }
+
+    It 'completes qconf verbs for a nested entry through qbuild' {
+        @'
+[ordered]@{
+    api = [ordered]@{
+        description = 'Manually configured keys'
+        API_KEY     = [ordered]@{
+            _settings   = @{ process = 'options' }
+            description = 'Secret'
+            get         = { param($ctx, $options) 'k' }
+            set         = { param($ctx, $key, $value) }
+        }
+    }
+}
+'@ | Set-Content -LiteralPath $script:mapFile -Encoding utf8
+
+        $line = "qbuild -map '$script:mapFile' api.API_KEY "
+        $completions = @(TabExpansion2 $line $line.Length).CompletionMatches.CompletionText
+
+        $completions | Should -Contain 'get'
+        $completions | Should -Contain 'set'
+    }
+
+    It 'completes qconf verbs when configmap is loaded from configmap.ps1 (<how>)' -ForEach @(
+        @{ how = 'dot-sourced'; load = '. $script' }
+        @{ how = 'Import-Module'; load = 'Import-Module $script -Force' }
+    ) {
+        $scriptPath = (Resolve-Path (Join-Path $PSScriptRoot '..\configmap.ps1')).Path
+        $line = "qbuild -map '$script:mapFile' storage "
+        $command = '$script = ''{0}''; {1}; $l = ''{2}''; (TabExpansion2 $l $l.Length).CompletionMatches.CompletionText' -f
+        $scriptPath, $load, $line.Replace("'", "''")
+
+        $completions = @(pwsh -NoProfile -Command $command)
+
+        $completions | Should -Contain 'get'
+        $completions | Should -Contain 'set'
     }
 
     It 'completes qconf option keys through qbuild' {

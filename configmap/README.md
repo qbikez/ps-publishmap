@@ -409,6 +409,22 @@ Creates a `.configuration.map.ps1` file with sample configuration entries.
         }
     }
 
+    # Omit `options` and the dotenv template discovers them from sibling files:
+    # .env.prod -> "prod", .env.dev.example -> "dev", .env.example -> "example".
+    # A real .env.<name> wins over .env.<name>.example; explicit `options` disable discovery.
+    "auto_envfile" = @{
+        description = "API settings, options discovered from .env.* files"
+        _template   = "dotenv:.env"
+    }
+
+    # keys = "auto" (reads .env.example/.sample/.template) or keys = "<file>" also adds one entry
+    # per key: `qbuild keyed.API_URL -value https://staging`. A comment line above a key becomes
+    # its description. Presets keep working on the parent entry.
+    "keyed" = @{
+        description = "API settings, one entry per key in .env.example"
+        _template   = @{ type = "dotenv"; file = ".env"; keys = "auto" }
+    }
+
     # Built-in user-secrets template backed by `dotnet user-secrets`
     # Short form below; long form is _template = @{ type = "user-secrets"; csproj = "..." }
     # csproj is a project file or its directory; a "user-secrets:{name}" value copies

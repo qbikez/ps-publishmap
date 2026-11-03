@@ -78,6 +78,10 @@ Note: short prefix is `appsettings:`; long `type` is `appconfig`.
 
 Long form: `_template = @{ type = "dotenv"; file = ".env" }`.
 
+Omit `options` to discover them from sibling files: `.env.prod` → `prod`, `.env.dev.example` → `dev`, `.env.example` → `example` (real file wins over its `.example`; `#` comments, `export` and quotes are parsed). Explicit `options` turn discovery off.
+
+Add `keys = "auto"` to the long form (`.env.example` / `.sample` / `.template`) or `keys = "<file>"` to also get one child entry per key, e.g. `api.API_URL`; `qbuild api.API_URL -value x` writes just that key. Presets still work on the parent.
+
 ### User secrets → `user-secrets:`
 
 ```powershell

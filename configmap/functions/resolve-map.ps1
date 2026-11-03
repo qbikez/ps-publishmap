@@ -199,6 +199,35 @@ function Import-IncludedConfigMap {
     }
 }
 
+# Handlers use load hooks to enrich entries they understand (extra child entries, lazy options)
+# without core knowing their entry types. Hooks run on maps loaded from a file.
+$script:ConfigMapLoadHooks = [System.Collections.Generic.Dictionary[string, scriptblock]]::new(
+    [StringComparer]::OrdinalIgnoreCase
+)
+
+function Register-ConfigMapLoadHook {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+        # param([System.Collections.IDictionary]$Map): mutates the freshly loaded map
+        [Parameter(Mandatory = $true)]
+        [scriptblock]$Hook
+    )
+
+    $script:ConfigMapLoadHooks[$Name] = $Hook
+}
+
+function Invoke-ConfigMapLoadHook {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Collections.IDictionary]$Map
+    )
+
+    foreach ($hook in $script:ConfigMapLoadHooks.Values) {
+        $null = & $hook $Map
+    }
+}
+
 # Dot-source this scriptblock. A function would drop map-file imports when it returned.
 # . $ImportConfigMap -Map $map -Fallback './.build.map.ps1'
 $script:ImportConfigMap = {
@@ -215,6 +244,7 @@ $script:ImportConfigMap = {
         if ($importConfigMapResolved.source -eq 'file') {
             $importConfigMapSourceFile = $importConfigMapResolved.sourceFile
             $importConfigMapResult = . $importConfigMapSourceFile | Add-BaseDir -baseDir $importConfigMapSourceFile
+            Invoke-ConfigMapLoadHook -Map $importConfigMapResult
             $importConfigMapResult._sourceFile = [System.IO.Path]::GetFullPath($importConfigMapSourceFile)
         }
         else {
