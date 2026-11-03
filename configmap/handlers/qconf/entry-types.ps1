@@ -450,12 +450,15 @@ function New-DotEnvKeyEntry {
 function Expand-DotEnvKeyEntries {
     <#
     .SYNOPSIS
-        Add one child entry per key to dotenv _template entries that set `keys`.
+        Prepare dotenv _template entries when a map loads: attach lazily discovered
+        options and add one child entry per key for entries that set `keys`.
 
     .DESCRIPTION
         `keys = 'auto'` reads `<file>.example` (or `.sample` / `.template`); any other string
         names the file to read keys from. Children are named after the key (`api.API_URL`),
         read and write just that key, and never replace an entry the map already defines.
+        Explicit `options` are left alone; otherwise `options` becomes a scriptblock that
+        reads the sibling `.env.*` files when asked, so completion sees file changes.
     #>
     param(
         [System.Collections.IDictionary]$Map
@@ -467,6 +470,12 @@ function Expand-DotEnvKeyEntries {
 
         $template = $null
         try { $template = Get-ConfigEntryTemplate -Entry $entry } catch { Write-Verbose "dotenv key discovery skipped: $($_.Exception.Message)" }
+        if ($template -and $template.type -eq 'dotenv' -and -not $entry.Contains('options')) {
+            # A closure runs outside this module's scope, so it must carry the command object itself.
+            $presetEntry = $entry
+            $discover = Get-Command Get-DotEnvEntryOptions
+            $entry.options = { $discovered = & $discover -Entry $presetEntry; $discovered ? $discovered : [ordered]@{} }.GetNewClosure()
+        }
         if ($template -and $template.type -eq 'dotenv' -and $template.Contains('keys') -and $template.keys) {
             $target = Resolve-ConfigEntryFile -Entry $entry -Template $template -TypeName 'dotenv'
             $keysFile = Resolve-DotEnvKeysFile -Keys $template.keys -Target $target
