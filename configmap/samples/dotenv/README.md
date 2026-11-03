@@ -25,6 +25,9 @@ qbuild api -value prod             # .env now holds .env.prod's keys
 qbuild api.API_URL                 # show the current value
 qbuild api.API_URL -value https://staging.example.com   # change only that key
 qbuild api.FLAG -value off         # adds FLAG to .env if it was missing
+
+# 3. Hand-written sub-entries (api_manual): each key has its own get/set in the map
+qbuild api_manual.API_URL set https://manual.example.com
 ```
 
 Tab completion works for both: `qbuild api.<TAB>` lists `API_KEY API_URL FLAG`.

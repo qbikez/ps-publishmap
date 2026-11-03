@@ -102,16 +102,20 @@ function Invoke-QBuild {
         [ArgumentCompleter({
                 param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
                 try {
-                    $module = Get-Module ConfigMap | Select-Object -First 1
-                    if (-not $module) { return @() }
-                    return & $module {
+                    $complete = {
                         param($Ast, $Bound, $Word)
                         Get-QBuildProcessArgumentCompletion `
                             -CommandAst $Ast `
                             -FakeBoundParameters $Bound `
                             -Word $Word `
                             -Position Action
-                    } $commandAst $fakeBoundParameters $wordToComplete
+                    }
+                    # Loaded from configmap.ps1 there is no module to enter: the helpers are already in scope.
+                    $configMapModule = (Get-Command Invoke-QBuild).Module
+                    if ($configMapModule) {
+                        return & $configMapModule $complete $commandAst $fakeBoundParameters $wordToComplete
+                    }
+                    return & $complete $commandAst $fakeBoundParameters $wordToComplete
                 }
                 catch {
                     return @()
@@ -123,16 +127,20 @@ function Invoke-QBuild {
         [ArgumentCompleter({
                 param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
                 try {
-                    $module = Get-Module ConfigMap | Select-Object -First 1
-                    if (-not $module) { return @() }
-                    return & $module {
+                    $complete = {
                         param($Ast, $Bound, $Word)
                         Get-QBuildProcessArgumentCompletion `
                             -CommandAst $Ast `
                             -FakeBoundParameters $Bound `
                             -Word $Word `
                             -Position Value
-                    } $commandAst $fakeBoundParameters $wordToComplete
+                    }
+                    # Loaded from configmap.ps1 there is no module to enter: the helpers are already in scope.
+                    $configMapModule = (Get-Command Invoke-QBuild).Module
+                    if ($configMapModule) {
+                        return & $configMapModule $complete $commandAst $fakeBoundParameters $wordToComplete
+                    }
+                    return & $complete $commandAst $fakeBoundParameters $wordToComplete
                 }
                 catch {
                     return @()
@@ -144,9 +152,7 @@ function Invoke-QBuild {
         [ArgumentCompleter({
                 param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
                 try {
-                    $module = Get-Module ConfigMap | Select-Object -First 1
-                    if (-not $module) { return @() }
-                    return & $module {
+                    $complete = {
                         param($Ast, $Bound, $Word)
                         $position = Get-QBuildRemainingArgumentPosition `
                             -CommandAst $Ast `
@@ -158,7 +164,12 @@ function Invoke-QBuild {
                             -FakeBoundParameters $Bound `
                             -Word $Word `
                             -Position $position
-                    } $commandAst $fakeBoundParameters $wordToComplete
+                    }
+                    $configMapModule = (Get-Command Invoke-QBuild).Module
+                    if ($configMapModule) {
+                        return & $configMapModule $complete $commandAst $fakeBoundParameters $wordToComplete
+                    }
+                    return & $complete $commandAst $fakeBoundParameters $wordToComplete
                 }
                 catch {
                     return @()
