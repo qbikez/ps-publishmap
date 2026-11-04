@@ -34,7 +34,7 @@ jobs:
         id: compare
         shell: pwsh
         run: |
-          & ./configmap/test/perf/Compare-Perf.ps1 -Base "origin/${{ github.base_ref }}" -OutDir "$env:RUNNER_TEMP/perf"
+          & ./configmap/test/perf/Compare-Perf.ps1 -Base "origin/${{ github.base_ref }}" -Fixture workspace-M, samples -OutDir "$env:RUNNER_TEMP/perf"
           "regressed=$($LASTEXITCODE -eq 1)" >> $env:GITHUB_OUTPUT
           Get-Content "$env:RUNNER_TEMP/perf/perf-report.md" -Raw >> $env:GITHUB_STEP_SUMMARY
           exit 0

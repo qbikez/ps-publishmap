@@ -331,7 +331,8 @@ older checkout. To measure a single revision (it runs on a temporary copy of the
 .\test\perf\Invoke-PerfSuite.ps1
 ```
 
-On GitHub, add the `perf` label to a PR to run the comparison. It reruns on every
+On GitHub, add the `perf` label to a PR to run the comparison on `workspace-M` and
+`samples`; run the other fixtures locally. It reruns on every
 push while the label is present and posts the table as a PR comment. To accept a
 regression, add `perf-ok` and re-run the failed job.
 

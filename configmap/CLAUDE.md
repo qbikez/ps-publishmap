@@ -160,7 +160,7 @@ Uses **Pester** for PowerShell testing:
 - Custom `Should-MatchObject` matcher for hashtable comparison
 - Tests cover parameter discovery, command execution, and error handling
 - when running tests, report back the status of failed tests
-- Performance: `test/perf/Compare-Perf.ps1 -Base master` A/B-compares `qbuild list` and TAB completion against a base revision (fixtures: `workspace-M`, `workspace-XL`, `flat-1k`, `samples`). On GitHub it runs when the `perf` label is on a PR; `perf-ok` accepts a regression
+- Performance: `test/perf/Compare-Perf.ps1 -Base master` A/B-compares `qbuild list` and TAB completion against a base revision (fixtures: `workspace-M`, `workspace-XL`, `flat-1k`, `samples`). On GitHub it runs `workspace-M` and `samples` when the `perf` label is on a PR; `perf-ok` accepts a regression
 
 ## CLI Features
 
