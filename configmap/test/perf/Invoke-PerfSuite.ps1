@@ -92,15 +92,15 @@ function New-ScenarioResult {
     $a = @($Allocs | Sort-Object)
     $p95 = [math]::Ceiling($t.Count * 0.95) - 1
     [pscustomobject]@{
-        Scenario       = $Name
-        Fixture        = $Fixture
-        Gate           = $Gate
-        Iterations     = $t.Count
-        MedianMs       = [math]::Round($t[[int]($t.Count / 2)], 3)
-        P95Ms          = [math]::Round($t[$p95], 3)
-        MinMs          = [math]::Round($t[0], 3)
-        MedianAllocKB  = if ($a.Count) { [math]::Round($a[[int]($a.Count / 2)] / 1KB, 1) } else { $null }
-        Error          = $null
+        Scenario      = $Name
+        Fixture       = $Fixture
+        Gate          = $Gate
+        Iterations    = $t.Count
+        MedianMs      = [math]::Round($t[[int]($t.Count / 2)], 3)
+        P95Ms         = [math]::Round($t[$p95], 3)
+        MinMs         = [math]::Round($t[0], 3)
+        MedianAllocKB = if ($a.Count) { [math]::Round($a[[int]($a.Count / 2)] / 1KB, 1) } else { $null }
+        Error         = $null
     }
 }
 

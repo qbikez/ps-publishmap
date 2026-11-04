@@ -1,5 +1,5 @@
 [ordered]@{
-    "build" = {
+    "build"  = {
         param(
             [ValidateSet('Debug', 'Release')]
             [string]$Configuration = 'Debug',
@@ -8,12 +8,12 @@
         )
         Write-Host "build $Configuration"
     }
-    "test" = @{
+    "test"   = @{
         exec        = { param([switch]$Watch, [string]$Filter) Write-Host "test" }
         description = "Run tests"
     }
-    "tools" = [ordered]@{
-        "db" = [ordered]@{
+    "tools"  = [ordered]@{
+        "db"  = [ordered]@{
             "migrate" = @{
                 exec        = { param([ValidateSet('up', 'down')][string]$Direction = 'up') Write-Host "migrate" }
                 description = "Apply database migrations"
@@ -29,7 +29,7 @@
         "upload"    = { param([ValidateSet('dev', 'prod')][string]$Environment = 'dev') Write-Host "upload" }
         "verify"    = { Write-Host "verify" }
     }
-    "env" = [ordered]@{
+    "env"    = [ordered]@{
         _settings   = @{ process = "options" }
         _template   = "dotenv:.env"
         description = "API settings in .env"
@@ -38,13 +38,13 @@
             prod  = [ordered]@{ "API_URL" = "https://api.example"; "API_KEY" = "prod" }
         }
     }
-    "web" = [ordered]@{
+    "web"    = [ordered]@{
         _settings   = @{ process = "npm" }
         description = "package.json scripts"
     }
-    "task1" = { param([string]$Name = 'x1') Write-Host "task1" }
-    "task2" = { param([string]$Name = 'x2') Write-Host "task2" }
-    "task3" = { param([string]$Name = 'x3') Write-Host "task3" }
-    "task4" = { param([string]$Name = 'x4') Write-Host "task4" }
+    "task1"  = { param([string]$Name = 'x1') Write-Host "task1" }
+    "task2"  = { param([string]$Name = 'x2') Write-Host "task2" }
+    "task3"  = { param([string]$Name = 'x3') Write-Host "task3" }
+    "task4"  = { param([string]$Name = 'x4') Write-Host "task4" }
 }
 
