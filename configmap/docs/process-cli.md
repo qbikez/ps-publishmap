@@ -103,7 +103,8 @@ bootstrap = [ordered]@{
 }
 ```
 
-- Each run first does what `-Check` does for the targeted steps, then runs as usual: steps whose check failed are reset to `Pending` and executed; steps whose check passed are skipped.
+- Steps are handled one at a time: each step's `check` runs right before the step, so it sees the effects of earlier steps. A failed check resets the step to `Pending` and it is executed; a passed check skips it.
+- A process-level `check` (whole-process runs only) still runs once up front, since it judges the process as a whole.
 - A failed check does not fail the run; only a failing `exec` does.
 - Steps without a `check` handler keep their cached status.
 - `-Force` skips the checks, since it reruns every step anyway.
