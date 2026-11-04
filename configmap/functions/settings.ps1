@@ -14,6 +14,7 @@ function New-ConfigMapSettings {
         DiscoveryCacheLocation = 'local'
         Process                = $script:ConfigMapDefaultProcessName
         ForceCheck             = $false
+        UseWorkDir             = $false
     }
 
     foreach ($propertyName in @($settings.Keys)) {
@@ -98,20 +99,28 @@ function Find-ConfigMapAncestorSettings {
         return $notFound
     }
 
-    $segment = $Segments[0]
-    $rest = if ($Segments.Count -gt 1) { $Segments[1..($Segments.Count - 1)] } else { @() }
-    $isLast = $rest.Count -eq 0
-    $visitKey = '{0}|{1}' -f [System.Runtime.CompilerServices.RuntimeHelpers]::GetHashCode($Node), $segment
-    if (-not $Visited.Add($visitKey)) {
-        return $notFound
-    }
-
     $baseDir = $Node._baseDir
     $list = $Node
     if ($Node.list) {
         $list = $Node.list
     }
     if ($list -isnot [System.Collections.IDictionary]) {
+        return $notFound
+    }
+
+    # Keys may contain dots (e.g. 'build.incremental'): prefer the longest matching key.
+    $take = 1
+    for ($count = $Segments.Count; $count -gt 1; $count--) {
+        if ($list.Contains(($Segments[0..($count - 1)] -join '.'))) {
+            $take = $count
+            break
+        }
+    }
+    $segment = $Segments[0..($take - 1)] -join '.'
+    $rest = if ($Segments.Count -gt $take) { $Segments[$take..($Segments.Count - 1)] } else { @() }
+    $isLast = $rest.Count -eq 0
+    $visitKey = '{0}|{1}' -f [System.Runtime.CompilerServices.RuntimeHelpers]::GetHashCode($Node), $segment
+    if (-not $Visited.Add($visitKey)) {
         return $notFound
     }
 
@@ -334,7 +343,7 @@ function Get-ConfigMapSetting {
 function Test-ConfigMapFeatureEnabled {
     param(
         [Parameter(Mandatory)]
-        [ValidateSet('TmuxAutoWindow', 'Concurrently', 'DiscoveryCache', 'ForceCheck')]
+        [ValidateSet('TmuxAutoWindow', 'Concurrently', 'DiscoveryCache', 'ForceCheck', 'UseWorkDir')]
         [string]$Name
     )
 

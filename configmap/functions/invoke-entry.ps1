@@ -86,6 +86,12 @@ function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}
         $baseDir = Get-Location
     }
     if (!$bound._context.workDir) { $bound._context.workDir = (Get-Location).Path }
+    # Directory of the map file that defined this entry, even when running in workDir.
+    $bound._context.mapDir = "$baseDir"
+    # useWorkDir: run in the caller's directory instead of the map's.
+    if (Test-ConfigMapFeatureEnabled -Name UseWorkDir) {
+        $baseDir = $bound._context.workDir
+    }
 
     # Always pass special parameters (_context, _self) plus any that match script params
     $specialParams = @("_context", "_self") | ? { $scriptArgs.Keys -contains $_ }
