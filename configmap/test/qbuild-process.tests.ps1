@@ -509,6 +509,81 @@ Describe 'qbuild _settings.process=steps forwarding' {
     }
 }
 
+Describe 'nested qbuild does not inherit the caller''s settings' {
+    BeforeEach {
+        $script:workDir = Join-Path $TestDrive ("qbuild-nested-" + [guid]::NewGuid().ToString('n'))
+        New-Item -ItemType Directory -Path $script:workDir -Force | Out-Null
+        Push-Location $script:workDir
+        $script:mapFile = Join-Path $script:workDir '.build.map.ps1'
+    }
+
+    AfterEach {
+        Pop-Location
+    }
+
+    It 'Given a steps step exec that calls qbuild, when the process runs, then the nested target runs as a plain exec entry' {
+        @"
+[ordered]@{
+    outer = [ordered]@{
+        _settings = @{ process = 'steps' }
+        step1     = { qbuild -map '$script:mapFile' inner }
+    }
+    inner = { 'inner' | Set-Content '$script:workDir/inner.txt' }
+}
+"@ | Set-Content -LiteralPath $script:mapFile -Encoding utf8
+
+        { qbuild -map $script:mapFile outer 6>$null } | Should -Not -Throw
+
+        Test-Path (Join-Path $script:workDir 'inner.txt') | Should -BeTrue
+    }
+
+    It 'Given a steps step check that calls qbuild, when the process is checked, then the nested target runs as a plain exec entry' {
+        @"
+[ordered]@{
+    outer = [ordered]@{
+        _settings = @{ process = 'steps' }
+        step1     = @{
+            exec  = { }
+            check = {
+                qbuild -map '$script:mapFile' inner
+                `$true
+            }
+        }
+    }
+    inner = { 'inner' | Set-Content '$script:workDir/inner.txt' }
+}
+"@ | Set-Content -LiteralPath $script:mapFile -Encoding utf8
+        qbuild -map $script:mapFile outer 6>$null
+
+        { qbuild -map $script:mapFile outer -check 6>$null } | Should -Not -Throw
+
+        Test-Path (Join-Path $script:workDir 'inner.txt') | Should -BeTrue
+    }
+
+    It 'Given an entry with useWorkDir that calls qbuild from a subdirectory, when it runs, then the nested target runs in its own map directory' {
+        $subDir = New-Item -ItemType Directory -Path (Join-Path $script:workDir 'sub') -Force
+        @"
+[ordered]@{
+    outer = @{
+        _settings = @{ useWorkDir = `$true }
+        exec      = { qbuild -map '$script:mapFile' inner }
+    }
+    inner = { 'inner' | Set-Content 'inner.txt' }
+}
+"@ | Set-Content -LiteralPath $script:mapFile -Encoding utf8
+        Push-Location $subDir
+        try {
+            qbuild -map $script:mapFile outer
+        }
+        finally {
+            Pop-Location
+        }
+
+        Test-Path (Join-Path $subDir 'inner.txt') | Should -BeFalse
+        Test-Path (Join-Path $script:workDir 'inner.txt') | Should -BeTrue
+    }
+}
+
 Describe 'deprecated standalone process CLIs' {
     BeforeEach {
         $script:workDir = Join-Path $TestDrive ("deprecated-cli-" + [guid]::NewGuid().ToString('n'))
