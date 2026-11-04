@@ -10,3 +10,4 @@ node_modules/
 bin/
 obj/
 .timestamp
+.claude/settings.local.json
