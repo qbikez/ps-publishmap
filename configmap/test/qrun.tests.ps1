@@ -458,6 +458,23 @@ Describe 'qrun process runner' {
             }
         }
 
+        It 'Given step-b check depends on step-a exec, when both are pending, then step-b is checked after step-a ran' {
+            $map = [ordered]@{
+                setup = [ordered]@{
+                    _settings = @{ forceCheck = $true }
+                    'step-a'  = @{ exec = { 'a' | Set-Content 'a.txt' } }
+                    'step-b'  = @{
+                        exec  = { 'b' | Set-Content 'b.txt' }
+                        check = { Test-Path 'a.txt' }
+                    }
+                }
+            }
+
+            qrun -map $map setup
+
+            Test-Path 'b.txt' | Should -BeFalse
+        }
+
         It 'Given step-a succeeded, when its check now fails, then the next run reruns it' {
             qrun -map $script:forceCheckMap setup
             Remove-Item 'a.txt' -Force

@@ -1,0 +1,20 @@
+{
+  "scripts": {
+    "script1": "echo p37-1",
+    "script2": "echo p37-2",
+    "script3": "echo p37-3",
+    "script4": "echo p37-4",
+    "script5": "echo p37-5",
+    "script6": "echo p37-6",
+    "script7": "echo p37-7",
+    "script8": "echo p37-8",
+    "script9": "echo p37-9",
+    "script10": "echo p37-10",
+    "script11": "echo p37-11",
+    "script12": "echo p37-12",
+    "script13": "echo p37-13",
+    "script14": "echo p37-14",
+    "script15": "echo p37-15"
+  },
+  "name": "p37"
+}

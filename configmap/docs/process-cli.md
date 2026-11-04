@@ -34,3 +34,7 @@ bootstrap = [ordered]@{
     prepare   = @{ exec = { ./prepare.ps1 }; check = { Test-Path prepared.txt } }
 }
 ```
+
+With `forceCheck`, each step's `check` runs right before that step, so it sees the effects of earlier steps; a process-level `check` still runs once up front.
+
+`check` is a handler only in a steps context (on a steps process entry, or next to a scriptblock `exec`). Elsewhere it is an ordinary entry name, so `qbuild check` can run a `check = { ... }` entry.

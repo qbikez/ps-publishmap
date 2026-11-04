@@ -10,7 +10,9 @@ function Get-ProcessStepNames {
         [System.Collections.IDictionary]$ProcessEntry
     )
 
-    $reservedKeys = Get-ProcessReservedKeys
+    # A process without _settings.process (standalone qrun map) is still a steps process,
+    # so its `check` is always the process-level handler, never a step.
+    $reservedKeys = @(Get-ProcessReservedKeys) + 'check'
 
     if ($ProcessEntry.exec -is [array] -and $ProcessEntry.exec.Count -gt 0) {
         return @($ProcessEntry.exec)
@@ -737,27 +739,55 @@ function Invoke-ProcessCheckRun {
 
     foreach ($stepName in $StepsToCheck) {
         $prefix = "[$([array]::IndexOf($StepNames, $stepName) + 1)/$total]"
-        $stepEntry = Get-ProcessStepEntry -ProcessEntry $ProcessEntry -StepName $stepName
 
         $result = $processResult
         if (-not $result) {
-            $handlerEntry = Get-ProcessCheckHandler $stepEntry
-            if (-not $handlerEntry) {
-                $cached = if ($State.steps[$stepName]) { [string]$State.steps[$stepName].status } else { 'Pending' }
-                Write-ProcessCheckLine -Prefix $prefix -Label 'UNCHECKED' -Name $stepName -Detail "cached: $cached" -Color DarkYellow
-                continue
-            }
-            $result = Invoke-ProcessCheck @checkArgs -CheckEntry $handlerEntry -SettingsEntry $stepEntry -EntryKey "$ProcessKey.$stepName"
-            $label = if ($result.Ok) { 'OK' } else { 'MISSING' }
-            $color = if ($result.Ok) { 'Green' } else { 'Red' }
-            Write-ProcessCheckLine -Prefix $prefix -Label $label -Name $stepName -Detail $result.Error -Color $color
+            $result = Invoke-ProcessStepCheck @checkArgs -ProcessKey $ProcessKey -ProcessEntry $ProcessEntry -StepName $stepName -State $State -Prefix $prefix
+            if (-not $result) { continue }
+        }
+        else {
+            Set-ProcessStepCheckedState -State $State -StepName $stepName -Ok $result.Ok
         }
 
-        Set-ProcessStepCheckedState -State $State -StepName $stepName -Ok $result.Ok
         if (-not $result.Ok) { $failed++ }
     }
 
     Write-ProcessState -StatePath $StatePath -State $State
     Write-Host ""
     return $failed
+}
+
+function Invoke-ProcessStepCheck {
+    <#
+    .SYNOPSIS
+        Check one step with its own `check` handler, report it and sync its cached status in $State
+        (the caller persists). Returns the check result, or $null when the step has no handler
+        (reported as UNCHECKED, cached status untouched).
+    #>
+    param(
+        [hashtable]$RunContext,
+        [string]$ProcessKey,
+        [System.Collections.IDictionary]$ProcessEntry,
+        [string]$StepName,
+        [string]$BaseDir,
+        $Bound,
+        $State,
+        [string]$Prefix
+    )
+
+    $stepEntry = Get-ProcessStepEntry -ProcessEntry $ProcessEntry -StepName $StepName
+    $handlerEntry = Get-ProcessCheckHandler $stepEntry
+    if (-not $handlerEntry) {
+        $cached = if ($State.steps[$StepName]) { [string]$State.steps[$StepName].status } else { 'Pending' }
+        Write-ProcessCheckLine -Prefix $Prefix -Label 'UNCHECKED' -Name $StepName -Detail "cached: $cached" -Color DarkYellow
+        return $null
+    }
+
+    $result = Invoke-ProcessCheck -RunContext $RunContext -BaseDir $BaseDir -Bound $Bound `
+        -CheckEntry $handlerEntry -SettingsEntry $stepEntry -EntryKey "$ProcessKey.$StepName"
+    $label = if ($result.Ok) { 'OK' } else { 'MISSING' }
+    $color = if ($result.Ok) { 'Green' } else { 'Red' }
+    Write-ProcessCheckLine -Prefix $Prefix -Label $label -Name $StepName -Detail $result.Error -Color $color
+    Set-ProcessStepCheckedState -State $State -StepName $StepName -Ok $result.Ok
+    return $result
 }

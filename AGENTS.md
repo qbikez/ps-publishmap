@@ -2,6 +2,30 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Workflow for Behavior Changes and Bug Fixes
+
+Test first. For any behavior change or bug fix, in this order:
+
+1. Write the failing test **before editing any non-test file**.
+2. Run it and confirm it fails for the expected reason. Keep the failure message.
+3. Make the smallest production change that turns it green, then refactor with the suite green.
+4. At handoff (including PR descriptions), quote the failure observed in step 2. If you did not observe one, say explicitly that TDD was not followed; never imply it was.
+
+The size of a change is not a reason to skip this. The only exceptions are:
+- documentation-only changes
+- pure refactors already covered by existing tests (run them before and after)
+- formatting-only changes
+
+See "Tests" under Coding Guidelines for test-writing conventions.
+
+## Pull Requests
+
+- Describe what changed and why, then list verification honestly (what was and was not run)
+- For any change to user-visible behavior (CLI output, run order, settings, map semantics), include a concrete **Before / After** example in the PR description: a minimal map or command plus the **real** output from running it on `master` and on the branch. Never write the output by hand
+- Create the "before" output by running the same script against a checkout of `master` (e.g. a temporary `git worktree`), and remove the worktree afterwards
+- Trim the output to the lines that show the difference; say what the difference means in one sentence
+- For documentation, refactor, or test-only changes, an example is not needed
+
 ## Project Overview
 
 This repository contains **publishmap**, a PowerShell module for creating declarative publish configurations using nested hashtables with three levels: group → project → profile. The module processes these maps to enable inheritance and variable substitution for deployment scenarios.
@@ -103,6 +127,8 @@ Uses **Pester** for PowerShell testing. Test files follow the pattern `*.Tests.p
 
 configmap tests live in `configmap/test`. Load the working copy with `Import-Module ./configmap/configmap.psm1 -Force`, then run `Invoke-Pester ./configmap/test` (or a single `*.tests.ps1` file). When running tests, report the status of any failed tests.
 
+Performance: `configmap/test/perf/Compare-Perf.ps1 -Base master` A/B-compares `qbuild list` and TAB completion against a base revision (fixtures: `workspace-M`, `workspace-XL`, `flat-1k`, `samples`). On GitHub it runs `workspace-M` and `samples` when the `perf` label is on a PR; `perf-ok` accepts a regression.
+
 VSCode tasks are configured for running individual test files with Pester integration and proper problem matching.
 
 ## Code Quality
@@ -149,7 +175,7 @@ VSCode tasks are configured for running individual test files with Pester integr
 - Prefer pure transformations for business rules and keep side effects near orchestration boundaries where practical
 
 #### Tests
-- Use test-driven development for behavior changes and bug fixes, following the red-green-refactor cycle:
+- Use test-driven development for behavior changes and bug fixes (see "Workflow for Behavior Changes and Bug Fixes" at the top), following the red-green-refactor cycle:
   1. **Red:** write a focused test for the desired behavior and confirm that it fails for the expected reason
   2. **Green:** make the smallest production-code change that makes the test pass
   3. **Refactor:** improve the implementation and tests while keeping the suite green

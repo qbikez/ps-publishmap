@@ -1,0 +1,20 @@
+{
+  "scripts": {
+    "script1": "echo p40-1",
+    "script2": "echo p40-2",
+    "script3": "echo p40-3",
+    "script4": "echo p40-4",
+    "script5": "echo p40-5",
+    "script6": "echo p40-6",
+    "script7": "echo p40-7",
+    "script8": "echo p40-8",
+    "script9": "echo p40-9",
+    "script10": "echo p40-10",
+    "script11": "echo p40-11",
+    "script12": "echo p40-12",
+    "script13": "echo p40-13",
+    "script14": "echo p40-14",
+    "script15": "echo p40-15"
+  },
+  "name": "p40"
+}

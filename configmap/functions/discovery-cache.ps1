@@ -1,7 +1,7 @@
 #requires -version 7.0
 
 $script:discoveryCacheMemory = @{}
-$script:discoveryCacheVersion = 1
+$script:discoveryCacheVersion = 2
 
 function Get-ConfigMapUserHome {
     if ($env:HOME) {
