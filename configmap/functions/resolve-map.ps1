@@ -170,20 +170,20 @@ function Import-IncludedConfigMap {
     }
 
     $includePath = Join-Path $BaseDir $DirectoryName
-    if (!(Test-Path $includePath -PathType Container)) {
-        return $null
-    }
-
     $mapFile = Join-Path $includePath '.build.map.ps1'
-    if (!(Test-Path $mapFile -PathType Leaf)) {
-        return $null
-    }
-
     $cacheKey = [System.IO.Path]::GetFullPath($mapFile)
+    # Checked before Test-Path: map walks hit the same include once per entry, and provider calls dominate their cost.
     if ($Cache.ContainsKey($cacheKey)) {
         return $Cache[$cacheKey]
     }
     if ($Loading.ContainsKey($cacheKey)) {
+        return $null
+    }
+
+    if (!(Test-Path $includePath -PathType Container)) {
+        return $null
+    }
+    if (!(Test-Path $mapFile -PathType Leaf)) {
         return $null
     }
 
