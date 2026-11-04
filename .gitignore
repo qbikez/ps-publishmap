@@ -7,3 +7,6 @@ node_modules/
 .env.ps1
 .configmap/
 *.log
+bin/
+obj/
+.timestamp
