@@ -64,8 +64,15 @@ npm run install
 - `qbuild` - Unified build/configure/run CLI; prefer this over standalone process CLIs
 - `qconf`, `qrun` - Deprecated standalone CLIs (still work; warn on direct use)
 - Process types (`_settings.process`): `exec` (default), `steps` (legacy map `qrun`), `options` (legacy map `qconf`)
-- `Get-MapModules` - Discover available map modules
-- `Invoke-ModuleCommand` - Execute commands defined in map configurations
+
+Layout (see `configmap/README.md` for features and architecture):
+- `host/qbuild.ps1` - The `qbuild` entry point
+- `functions/` - Map resolution, settings and run context, completion, discovery cache, internal commands
+- `handlers/<type>/` - Process handlers (`exec`, `qrun` = steps, `qconf` = options, `pkg` = bun/npm) and their `init.map.ps1` templates
+- `plugins/` - `concurrently` and `tmux` dispatch hooks
+- `samples/` - Runnable example maps
+- `skills/` - Agent skills shipped by `qbuild !agent.init`
+- `vscode-qbuild/` - Editor extension for map files
 
 ### C# Components (publishmap.native)
 The native components provide performance-critical functionality:
@@ -93,6 +100,8 @@ group
 ## Testing Framework
 
 Uses **Pester** for PowerShell testing. Test files follow the pattern `*.Tests.ps1` or `*.tests.ps1`.
+
+configmap tests live in `configmap/test`. Load the working copy with `Import-Module ./configmap/configmap.psm1 -Force`, then run `Invoke-Pester ./configmap/test` (or a single `*.tests.ps1` file). When running tests, report the status of any failed tests.
 
 VSCode tasks are configured for running individual test files with Pester integration and proper problem matching.
 
