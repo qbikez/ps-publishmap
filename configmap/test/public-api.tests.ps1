@@ -40,8 +40,8 @@ Describe 'ConfigMap public API' {
 
     It 'does not load unrelated legacy helpers into module scope' {
         $legacy = 'Create-JWT', 'execute-sql', 'Get-SSOToken', 'make-alias', 'inherit-base',
-            'replace-values', 'test-httpUrl', 'get-xmlconfiguration', 'set-xmlconfiguration',
-            'compare-optionsWithValues', 'get-dockerContainerVersion', 'start-dockerContainer'
+        'replace-values', 'test-httpUrl', 'get-xmlconfiguration', 'set-xmlconfiguration',
+        'compare-optionsWithValues', 'get-dockerContainerVersion', 'start-dockerContainer'
 
         & (Get-Module ConfigMap) { param($names) $names | Where-Object { Get-Command $_ -ErrorAction Ignore } } $legacy |
             Should -BeNullOrEmpty
