@@ -50,7 +50,8 @@ function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}
             }
 
             $subEntry = $entry.$subCommandName
-            Invoke-WithEntrySettings -Map $entry -EntryKey "$subCommandName" -Entry $subEntry -ScriptBlock {
+            # $entry is a sub-entry, not the root map, so its subcommands build on the parent's settings.
+            Invoke-WithEntrySettings -Map $entry -EntryKey "$subCommandName" -Entry $subEntry -BaseSettings (Get-ConfigMapSettings) -ScriptBlock {
                 Invoke-EntryCommand -entry $subEntry -ordered $ordered -bound $bound
             }
         }

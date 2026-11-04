@@ -209,37 +209,6 @@ function Find-ConfigMapAncestorSettings {
     return $notFound
 }
 
-function Enter-ConfigMapAncestorSettingsScopes {
-    param(
-        [System.Collections.IDictionary]$Map,
-        [string]$EntryKey,
-        [switch]$IncludeTarget,
-        [hashtable]$OperationContext
-    )
-
-    $entered = [System.Collections.Generic.List[object]]::new()
-    try {
-        $segments = @($EntryKey -split '\.')
-        $visited = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
-        $includeCache = if ($OperationContext) { $OperationContext.IncludeCache } else { @{} }
-        $loadingIncludes = if ($OperationContext) { $OperationContext.LoadingIncludes } else { @{} }
-        $found = Find-ConfigMapAncestorSettings -Node $Map -Segments $segments -IncludeTarget:$IncludeTarget -Visited $visited -Cache $includeCache -Loading $loadingIncludes
-        if ($found.Found) {
-            foreach ($settings in $found.Settings) {
-                $entered.Add((Enter-ConfigMapSettingsScope -Settings $settings))
-            }
-        }
-    }
-    catch {
-        Exit-ConfigMapSettingsScopes -Scopes $entered
-        throw
-    }
-
-    foreach ($scope in $entered) {
-        , $scope
-    }
-}
-
 function Resolve-ConfigMapEntrySettings {
     <#
     .SYNOPSIS
@@ -282,56 +251,42 @@ function Resolve-ConfigMapEntrySettings {
 }
 
 function Invoke-WithEntrySettings {
+    <#
+    .SYNOPSIS
+        Run a scriptblock with an entry's effective settings, resolved from -BaseSettings and the map.
+        The caller's current settings are ignored, so a nested qbuild never inherits them.
+        -BaseSettings defaults to the module's base settings; pass the parent entry's settings when
+        -Map is a sub-entry rather than the root map.
+    #>
     param(
         [System.Collections.IDictionary]$Map,
         [string]$EntryKey,
         $Entry,
         [hashtable]$OperationContext,
+        $BaseSettings = $script:ConfigMapBaseSettings,
         [Parameter(Mandatory)]
         [scriptblock]$ScriptBlock
     )
 
+    $entrySettings = Resolve-ConfigMapEntrySettings `
+        -BaseSettings $BaseSettings `
+        -Map $Map `
+        -EntryKey $EntryKey `
+        -Entry $Entry `
+        -OperationContext $OperationContext
+
     # Parameter names would hide the caller's $map and $entry from the scriptblock.
-    $settingsMap = $Map
-    $settingsEntryKey = $EntryKey
-    $settingsEntry = $Entry
     $settingsScript = $ScriptBlock
-    $settingsOperationContext = $OperationContext
-    Remove-Variable Map, EntryKey, Entry, OperationContext, ScriptBlock -ErrorAction SilentlyContinue
+    Remove-Variable Map, EntryKey, Entry, OperationContext, BaseSettings, ScriptBlock -ErrorAction SilentlyContinue
 
-    $scopes = [System.Collections.Generic.List[object]]::new()
+    # Readers still use Get-ConfigMapSetting, so the resolved settings stay installed for the call.
+    $previousSettings = $script:ConfigMapSettings
+    $script:ConfigMapSettings = $entrySettings
     try {
-        $mapSettings = $null
-        if ($settingsMap -is [System.Collections.IDictionary]) {
-            $mapSettings = $settingsMap._settings
-        }
-        $scopes.Add((Enter-ConfigMapSettingsScope -Settings $mapSettings))
-
-        if (-not [string]::IsNullOrEmpty($settingsEntryKey)) {
-            $ancestorScopes = @(Enter-ConfigMapAncestorSettingsScopes -Map $settingsMap -EntryKey $settingsEntryKey -OperationContext $settingsOperationContext)
-            foreach ($ancestorScope in $ancestorScopes) {
-                $scopes.Add($ancestorScope)
-            }
-        }
-
-        $leafSettings = $null
-        if ($settingsEntry -is [System.Collections.IDictionary]) {
-            $leafSettings = $settingsEntry._settings
-        }
-        $scopes.Add((Enter-ConfigMapSettingsScope -Settings $leafSettings))
-
         & $settingsScript
     }
     finally {
-        Exit-ConfigMapSettingsScopes -Scopes $scopes
-    }
-}
-
-function Exit-ConfigMapSettingsScopes {
-    param($Scopes)
-
-    for ($index = $Scopes.Count - 1; $index -ge 0; $index--) {
-        Exit-ConfigMapSettingsScope -PreviousSettings $Scopes[$index]
+        $script:ConfigMapSettings = $previousSettings
     }
 }
 
