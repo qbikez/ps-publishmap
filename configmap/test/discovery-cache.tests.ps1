@@ -283,9 +283,9 @@ Describe 'Discovery cache' {
         }
 
         & (Get-Module ConfigMap) {
-            param($Cache)
-            Test-ConfigMapDiscoveryCacheValid -Cache $Cache -Language build
-        } $cache | Should -BeTrue
+            param($Cache, $SourceFile)
+            Test-ConfigMapDiscoveryCacheValid -Cache $Cache -SourceFile $SourceFile -Language build
+        } $cache $mapFile | Should -BeTrue
     }
 
     It 'does not create a cache file for in-memory maps' {
