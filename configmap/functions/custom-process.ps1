@@ -188,7 +188,7 @@ function New-ConfigMapProcessContext {
     .SYNOPSIS
         Context passed to an in-process handler.
 
-        dynamicparam leaves OperationContext empty. process fills every field.
+        dynamicparam leaves OperationContext and RunContext empty. process fills every field.
     #>
     param(
         $Map,
@@ -198,6 +198,7 @@ function New-ConfigMapProcessContext {
         $Command,
         $Invocation,
         $OperationContext,
+        [hashtable]$RunContext,
         $BoundParameters,
         [AllowEmptyString()]
         [string]$ProcessAction,
@@ -216,6 +217,7 @@ function New-ConfigMapProcessContext {
         Command            = $Command
         Invocation         = $Invocation
         OperationContext   = $OperationContext
+        RunContext         = $RunContext
         BoundParameters    = $BoundParameters
         ProcessAction      = $ProcessAction
         ProcessValue       = $ProcessValue

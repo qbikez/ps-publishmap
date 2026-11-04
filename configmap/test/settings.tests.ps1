@@ -294,6 +294,67 @@ Describe 'ConfigMap settings' {
         }
     }
 
+    It 'passes the entry''s effective settings to scripts as $_context.settings' {
+        $map = @{
+            _settings = @{ Debug = 'map' }
+            group     = @{
+                _settings = @{ Concurrently = 'group' }
+                run       = {
+                    param($_context)
+                    "$($_context.settings.Debug)|$($_context.settings.Concurrently)|$($_context.settings.Process)"
+                }
+            }
+        }
+
+        qbuild -map $map group.run | Should -Be 'map|group|exec'
+    }
+
+    It 'passes each step''s settings to steps scripts as $_context.settings' {
+        $workDir = New-Item -ItemType Directory -Path (Join-Path $TestDrive ('steps-settings-' + [guid]::NewGuid().ToString('n')))
+        $mapFile = Join-Path $workDir '.build.map.ps1'
+        @'
+[ordered]@{
+    setup = [ordered]@{
+        _settings = @{ process = 'steps'; Debug = 'process' }
+        plain     = {
+            param($_context)
+            "plain:$($_context.settings.Debug)" | Out-File -Append 'out.txt'
+        }
+        tuned     = @{
+            _settings = @{ Debug = 'step' }
+            exec      = {
+                param($_context)
+                "tuned:$($_context.settings.Debug)" | Out-File -Append 'out.txt'
+            }
+        }
+    }
+}
+'@ | Set-Content -LiteralPath $mapFile -Encoding utf8
+
+        qbuild -map $mapFile setup 6>$null
+
+        Get-Content (Join-Path $workDir 'out.txt') | Should -Be @('plain:process', 'tuned:step')
+    }
+
+    It 'makes $_context.settings read-only' {
+        $map = @{
+            _settings = @{ Debug = 'map' }
+            first     = {
+                param($_context)
+                $access = try {
+                    $_context.settings['Debug'] = 'changed'
+                    'writable'
+                }
+                catch {
+                    'read-only'
+                }
+                "$access|$($_context.settings.Debug)"
+            }
+        }
+
+        qbuild -map $map first | Should -Be 'read-only|map'
+    }
+
     It 'makes child settings available to InvokeEntryWrapper hook' {
         InModuleScope ConfigMap {
             $previousPlugins = $script:ConfigMapPlugins

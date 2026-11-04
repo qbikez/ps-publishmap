@@ -194,7 +194,7 @@ try {
             }
 
             Get-MapEntry $Map 'child.run' -language build | Out-Null
-            Invoke-WithEntrySettings -Map $Map -EntryKey 'child.run' -Entry $target.Value -ScriptBlock { }
+            New-ConfigMapEntryContext -Parent (New-ConfigMapRunContext -Map $Map) -EntryKey 'child.run' -Entry $target.Value | Out-Null
         } $includeMap
     }
 
@@ -209,7 +209,7 @@ try {
             }
 
             Get-MapEntry $Map 'child.run' -language build -OperationContext $context | Out-Null
-            Invoke-WithEntrySettings -Map $Map -EntryKey 'child.run' -Entry $target.Value -OperationContext $context -ScriptBlock { }
+            New-ConfigMapEntryContext -Parent (New-ConfigMapRunContext -Map $Map -OperationContext $context) -EntryKey 'child.run' -Entry $target.Value | Out-Null
         } $includeMap
     }
 

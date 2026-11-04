@@ -639,20 +639,20 @@ function Invoke-ProcessCheck {
         [Parameter(Mandatory = $true)]
         $SettingsEntry,
         [Parameter(Mandatory = $true)]
-        $Map,
+        [hashtable]$RunContext,
         [Parameter(Mandatory = $true)]
         [string]$EntryKey,
         [Parameter(Mandatory = $true)]
         [string]$BaseDir,
-        $Bound = @{},
-        $OperationContext
+        $Bound = @{}
     )
 
+    $checkContext = New-ConfigMapEntryContext -Parent $RunContext -EntryKey $EntryKey -Entry $SettingsEntry
     try {
         Push-Location $BaseDir
         try {
-            $result = @(Invoke-WithEntrySettings -Map $Map -EntryKey $EntryKey -Entry $SettingsEntry -OperationContext $OperationContext -ScriptBlock {
-                    Invoke-EntryCommand -entry $CheckEntry -key "check" -bound $Bound
+            $result = @(Invoke-WithRunContext -Context $checkContext -ScriptBlock {
+                    Invoke-EntryCommand -entry $CheckEntry -key "check" -bound $Bound -RunContext $checkContext
                 })
         }
         finally {
@@ -706,12 +706,11 @@ function Invoke-ProcessCheckRun {
         Returns the number of failed checks.
     #>
     param(
-        $Map,
+        [hashtable]$RunContext,
         [string]$ProcessKey,
         [System.Collections.IDictionary]$ProcessEntry,
         [string]$BaseDir,
         $Bound,
-        $OperationContext,
         $State,
         [string]$StatePath,
         [string[]]$StepNames,
@@ -726,7 +725,7 @@ function Invoke-ProcessCheckRun {
     Write-Host $ProcessKey -ForegroundColor White
     Write-Host ""
 
-    $checkArgs = @{ Map = $Map; BaseDir = $BaseDir; Bound = $Bound; OperationContext = $OperationContext }
+    $checkArgs = @{ RunContext = $RunContext; BaseDir = $BaseDir; Bound = $Bound }
 
     $processResult = $null
     if ($WholeProcess -and (Get-ProcessCheckHandler $ProcessEntry)) {

@@ -168,7 +168,7 @@ function Format-TmuxCommand {
 function Test-TmuxBatchDispatchEnabled {
     param($Context)
 
-    if (-not (Test-ConfigMapFeatureEnabled -Name TmuxAutoWindow)) {
+    if (-not (Test-ConfigMapFeatureEnabled -Name TmuxAutoWindow -Settings $Context.Settings)) {
         return $false
     }
 
