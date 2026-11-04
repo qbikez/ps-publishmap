@@ -56,15 +56,9 @@ function Invoke-ConfigMapExecProcess {
         $bound._context['additionalArgs'] = @($passthrough)
     }
 
-    $hookContext = @{
-        MainCommand        = 'qbuild'
-        Entry              = $entry
-        Targets            = @($targets)
-        Map                = $map
-        MapPath            = $mapPath
-        Command            = $command
-        Bound              = $bound
-        RemainingArguments = $passthrough
+    $runContext = $Context.RunContext
+    if (-not $runContext) {
+        $runContext = New-ConfigMapRunContext -Map $map -OperationContext $operationContext
     }
 
     $hookEntryKey = if ($entry -match '^(.*)\.all$') { $Matches[1] } else { [string]$entry }
@@ -75,8 +69,22 @@ function Invoke-ConfigMapExecProcess {
             $hookEntry = $resolvedHookEntry
         }
     }
+    $hookRunContext = New-ConfigMapEntryContext -Parent $runContext -EntryKey $hookEntryKey -Entry $hookEntry
 
-    $hookResult = Invoke-WithEntrySettings -Map $map -EntryKey $hookEntryKey -Entry $hookEntry -OperationContext $operationContext -ScriptBlock {
+    $hookContext = @{
+        MainCommand        = 'qbuild'
+        Entry              = $entry
+        Targets            = @($targets)
+        Map                = $map
+        MapPath            = $mapPath
+        Command            = $command
+        Bound              = $bound
+        RemainingArguments = $passthrough
+        RunContext         = $runContext
+        Settings           = $hookRunContext.Settings
+    }
+
+    $hookResult = Invoke-WithRunContext -Context $hookRunContext -ScriptBlock {
         Invoke-ConfigMapPluginHooks -HookName 'InvokeQBuildTargets' -Context $hookContext
     }
     if ($hookResult.Handled) {
@@ -96,8 +104,9 @@ function Invoke-ConfigMapExecProcess {
             return
         }
 
-        Invoke-WithEntrySettings -Map $map -EntryKey $targetKey -Entry $targetEntry -OperationContext $operationContext -ScriptBlock {
-            Invoke-EntryWrapper -MainCommand 'qbuild' -TargetKey $targetKey -TargetEntry $targetEntry -Command $command -Bound $bound -RemainingArguments $passthrough
+        $targetContext = New-ConfigMapEntryContext -Parent $runContext -EntryKey $targetKey -Entry $targetEntry
+        Invoke-WithRunContext -Context $targetContext -ScriptBlock {
+            Invoke-EntryWrapper -MainCommand 'qbuild' -TargetKey $targetKey -TargetEntry $targetEntry -Command $command -Bound $bound -RemainingArguments $passthrough -RunContext $targetContext
         }
     }
 }

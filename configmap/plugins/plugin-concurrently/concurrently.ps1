@@ -1,7 +1,9 @@
 function Test-ConcurrentlyEnabled {
-    $toggle = Get-ConfigMapSetting -Name Concurrently
+    param($Settings)
+
+    $toggle = Get-ConfigMapSetting -Name Concurrently -Settings $Settings
     Write-Verbose "[concurrently] Checking plugin toggle from QCONF_Concurrently='$toggle'"
-    $enabled = Test-ConfigMapFeatureEnabled -Name Concurrently
+    $enabled = Test-ConfigMapFeatureEnabled -Name Concurrently -Settings $Settings
     if ($enabled) {
         Write-Verbose "[concurrently] Plugin enabled."
     }

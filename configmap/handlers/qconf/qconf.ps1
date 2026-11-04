@@ -336,7 +336,9 @@ function Invoke-QConf {
                 throw "Entry '$entryName' not found. Run 'qconf list' to see all available entries."
             }
 
-            Invoke-WithEntrySettings -Map $map -EntryKey $entryName -Entry $subEntry -OperationContext $operationContext -ScriptBlock {
+            $runContext = New-ConfigMapRunContext -Map $map -OperationContext $operationContext
+            $entryContext = New-ConfigMapEntryContext -Parent $runContext -EntryKey $entryName -Entry $subEntry
+            Invoke-WithRunContext -Context $entryContext -ScriptBlock {
                 Add-ConfigEntryTypeCommands -Entry $subEntry
                 $options = Get-CompletionList $subEntry -listKey "options" -language "conf" -maxDepth 1
                 if ($verb -eq 'list' -and (Test-ConfigEntrySensitive -Entry $subEntry)) {
@@ -348,7 +350,7 @@ function Invoke-QConf {
                     return
                 }
 
-                $current = Invoke-Get $subEntry -bound @{ options = $options }
+                $current = Invoke-Get $subEntry -bound @{ options = $options } -RunContext $entryContext
                 $result = ConvertTo-MapResult $current $entryName $subEntry $options
                 Write-QConfStatus `
                     -EntryName $entryName `
@@ -366,6 +368,7 @@ function Invoke-QConf {
 
         Write-Verbose "entry=$confEntry command=$verb"
         $operationContext = New-ConfigMapOperationContext
+        $runContext = New-ConfigMapRunContext -Map $map -OperationContext $operationContext
 
         switch ($verb) {
             "set" {
@@ -399,9 +402,10 @@ function Invoke-QConf {
                 $bound.key = $optionKey
                 $bound.value = $optionValue
                 $setExtras = @($operationArgs | Where-Object { $null -ne $_ -and "$_" -ne '' })
-                Invoke-WithEntrySettings -Map $map -EntryKey "$confEntry" -Entry $subEntry -OperationContext $operationContext -ScriptBlock {
+                $entryContext = New-ConfigMapEntryContext -Parent $runContext -EntryKey "$confEntry" -Entry $subEntry
+                Invoke-WithRunContext -Context $entryContext -ScriptBlock {
                     Add-ConfigEntryTypeCommands -Entry $subEntry
-                    Invoke-Set $subEntry -bound $bound -extra $setExtras
+                    Invoke-Set $subEntry -bound $bound -extra $setExtras -RunContext $entryContext
                     if (-not $porcelain) {
                         Write-QConfEntryStatus -EntryName "$confEntry" -Entry $subEntry
                     }
@@ -421,7 +425,8 @@ function Invoke-QConf {
                         $bound[$boundKey] = $PSBoundParameters[$boundKey]
                     }
 
-                    Invoke-WithEntrySettings -Map $map -EntryKey "$entryName" -Entry $subEntry -OperationContext $operationContext -ScriptBlock {
+                    $entryContext = New-ConfigMapEntryContext -Parent $runContext -EntryKey "$entryName" -Entry $subEntry
+                    Invoke-WithRunContext -Context $entryContext -ScriptBlock {
                         try {
                             if (!$subEntry) {
                                 throw "Entry '$entryName' not found. Run 'qconf list' to see all available entries."
@@ -431,7 +436,7 @@ function Invoke-QConf {
                             $bound.options = $options
                             Add-ConfigEntryTypeCommands -Entry $subEntry
 
-                            $value = Invoke-Get $subEntry -bound $bound
+                            $value = Invoke-Get $subEntry -bound $bound -RunContext $entryContext
 
                             $result = ConvertTo-MapResult $value $entryName $subEntry $options
                             if ($porcelain) {
@@ -446,7 +451,7 @@ function Invoke-QConf {
                             }
                         }
                         catch {
-                            if ((Get-ConfigMapSetting -Name Debug) -eq '1') {
+                            if ((Get-ConfigMapSetting -Name Debug -Settings $entryContext.Settings) -eq '1') {
                                 throw $_
                             }
                             Write-Error "Error getting value for entry '$entryName': $($_.Exception.Message)"

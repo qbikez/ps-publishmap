@@ -311,6 +311,7 @@ function Invoke-QRun {
         }
 
         $operationContext = New-ConfigMapOperationContext
+        $runContext = New-ConfigMapRunContext -Map $map -OperationContext $operationContext
         $target = Resolve-ProcessTarget -Map $map -Entry $processEntry -OperationContext $operationContext
         $processKey = $target.ProcessKey
         $processMapEntry = $target.ProcessEntry
@@ -357,17 +358,16 @@ function Invoke-QRun {
 
         $stepsToConsider = Get-ProcessStepsToRun -StepNames $stepNames -FromStep $fromStep -Follow:$Follow
         $checkTarget = @{
-            Map              = $map
-            ProcessKey       = $processKey
-            ProcessEntry     = $processMapEntry
-            BaseDir          = $baseDir
-            Bound            = $bound
-            OperationContext = $operationContext
-            State            = $state
-            StatePath        = $statePath
-            StepNames        = $stepNames
-            StepsToCheck     = $stepsToConsider
-            WholeProcess     = (-not $fromStep)
+            RunContext   = $runContext
+            ProcessKey   = $processKey
+            ProcessEntry = $processMapEntry
+            BaseDir      = $baseDir
+            Bound        = $bound
+            State        = $state
+            StatePath    = $statePath
+            StepNames    = $stepNames
+            StepsToCheck = $stepsToConsider
+            WholeProcess = (-not $fromStep)
         }
 
         if ($Check) {
@@ -379,9 +379,8 @@ function Invoke-QRun {
         }
 
         # -Force reruns every step anyway, so checking first would only add work.
-        $forceCheck = Invoke-WithEntrySettings -Map $map -EntryKey $processKey -Entry $processMapEntry -OperationContext $operationContext -ScriptBlock {
-            Test-ConfigMapFeatureEnabled -Name ForceCheck
-        }
+        $processContext = New-ConfigMapEntryContext -Parent $runContext -EntryKey $processKey -Entry $processMapEntry
+        $forceCheck = Test-ConfigMapFeatureEnabled -Name ForceCheck -Settings $processContext.Settings
         $checkBeforeStep = $forceCheck -and -not $Force
         if ($checkBeforeStep -and $checkTarget.WholeProcess -and (Get-ProcessCheckHandler $processMapEntry)) {
             # A process-level check judges the whole process at once, so it cannot be interleaved with steps.
@@ -425,8 +424,8 @@ function Invoke-QRun {
 
             # Earlier steps may have changed what this step's check sees, so check right before deciding.
             if ($checkBeforeStep) {
-                $null = Invoke-ProcessStepCheck -Map $map -ProcessKey $processKey -ProcessEntry $processMapEntry -StepName $stepName `
-                    -BaseDir $baseDir -Bound $bound -OperationContext $operationContext -State $state -Prefix $prefix
+                $null = Invoke-ProcessStepCheck -RunContext $runContext -ProcessKey $processKey -ProcessEntry $processMapEntry -StepName $stepName `
+                    -BaseDir $baseDir -Bound $bound -State $state -Prefix $prefix
                 Write-ProcessState -StatePath $statePath -State $state
             }
             $stepStatus = if ($state.steps[$stepName]) { [string]$state.steps[$stepName].status } else { 'Pending' }
@@ -461,8 +460,9 @@ function Invoke-QRun {
                 Push-Location $baseDir
                 try {
                     $settingsEntry = if ($stepEntry -is [System.Collections.IDictionary]) { $stepEntry } else { $processMapEntry }
-                    Invoke-WithEntrySettings -Map $map -EntryKey "$processKey.$stepName" -Entry $settingsEntry -OperationContext $operationContext -ScriptBlock {
-                        Invoke-EntryCommand -entry $stepEntry -key "exec" -bound $bound
+                    $stepContext = New-ConfigMapEntryContext -Parent $runContext -EntryKey "$processKey.$stepName" -Entry $settingsEntry
+                    Invoke-WithRunContext -Context $stepContext -ScriptBlock {
+                        Invoke-EntryCommand -entry $stepEntry -key "exec" -bound $bound -RunContext $stepContext
                     }
                 }
                 finally {

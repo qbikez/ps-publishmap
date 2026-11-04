@@ -9,7 +9,7 @@
         InvokeQBuildTargets = {
             param($Context)
 
-            if (-not (Test-ConcurrentlyEnabled)) {
+            if (-not (Test-ConcurrentlyEnabled -Settings $Context.Settings)) {
                 return @{ Handled = $false }
             }
 

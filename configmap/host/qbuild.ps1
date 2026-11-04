@@ -301,6 +301,7 @@ function Invoke-QBuild {
         }
 
         $operationContext = New-ConfigMapOperationContext
+        $runContext = New-ConfigMapRunContext -Map $map -OperationContext $operationContext
         $context = New-ConfigMapProcessContext `
             -Map $map `
             -UserMap $userMap `
@@ -309,6 +310,7 @@ function Invoke-QBuild {
             -Command $command `
             -Invocation $MyInvocation `
             -OperationContext $operationContext `
+            -RunContext $runContext `
             -BoundParameters $PSBoundParameters `
             -ProcessAction $ProcessAction `
             -ProcessValue $ProcessValue `

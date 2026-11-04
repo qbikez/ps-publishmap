@@ -5,8 +5,13 @@ function Invoke-EntryWrapper {
         $TargetEntry,
         [string]$Command,
         [hashtable]$Bound,
-        [string[]]$RemainingArguments
+        [string[]]$RemainingArguments,
+        [hashtable]$RunContext
     )
+
+    if (-not $RunContext) {
+        $RunContext = New-ConfigMapCurrentRunContext -Entry $TargetEntry
+    }
 
     $context = @{
         MainCommand        = $MainCommand
@@ -15,6 +20,8 @@ function Invoke-EntryWrapper {
         Command            = $Command
         Bound              = $Bound
         RemainingArguments = $RemainingArguments
+        RunContext         = $RunContext
+        Settings           = $RunContext.Settings
     }
 
     $hookResult = Invoke-ConfigMapPluginHooks -HookName 'InvokeEntryWrapper' -Context $context
@@ -22,10 +29,27 @@ function Invoke-EntryWrapper {
         return $hookResult.Result
     }
 
-    Invoke-EntryCommand -entry $TargetEntry -key $Command -bound $Bound
+    Invoke-EntryCommand -entry $TargetEntry -key $Command -bound $Bound -RunContext $RunContext
 }
 
-function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}) {
+function New-ConfigMapCurrentRunContext {
+    <#
+    .SYNOPSIS
+        Run context for a caller that passed none, such as a script calling Invoke-EntryCommand,
+        built from the settings that script is running with.
+    #>
+    param($Entry)
+
+    $context = New-ConfigMapRunContext -BaseSettings (Get-ConfigMapSettings)
+    $context.Entry = $Entry
+    return $context
+}
+
+function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}, [hashtable]$RunContext) {
+    if (-not $RunContext) {
+        $RunContext = New-ConfigMapCurrentRunContext -Entry $entry
+    }
+
     $command = Get-EntryCommand $entry $key
 
     if (!$command) {
@@ -50,9 +74,9 @@ function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}
             }
 
             $subEntry = $entry.$subCommandName
-            # $entry is a sub-entry, not the root map, so its subcommands build on the parent's settings.
-            Invoke-WithEntrySettings -Map $entry -EntryKey "$subCommandName" -Entry $subEntry -BaseSettings (Get-ConfigMapSettings) -ScriptBlock {
-                Invoke-EntryCommand -entry $subEntry -ordered $ordered -bound $bound
+            $subContext = New-ConfigMapEntryContext -Parent $RunContext -Map $entry -EntryKey "$subCommandName" -Entry $subEntry
+            Invoke-WithRunContext -Context $subContext -ScriptBlock {
+                Invoke-EntryCommand -entry $subEntry -ordered $ordered -bound $bound -RunContext $subContext
             }
         }
 
@@ -89,8 +113,10 @@ function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}
     if (!$bound._context.workDir) { $bound._context.workDir = (Get-Location).Path }
     # Directory of the map file that defined this entry, even when running in workDir.
     $bound._context.mapDir = "$baseDir"
+    # Set on every call: $bound is shared across steps, and each entry has its own settings.
+    $bound._context.settings = ConvertTo-ConfigMapReadOnlySettings -Settings $RunContext.Settings
     # useWorkDir: run in the caller's directory instead of the map's.
-    if (Test-ConfigMapFeatureEnabled -Name UseWorkDir) {
+    if (Test-ConfigMapFeatureEnabled -Name UseWorkDir -Settings $RunContext.Settings) {
         $baseDir = $bound._context.workDir
     }
 
@@ -146,7 +172,7 @@ function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}
 #     }
 # }
 
-function Invoke-Set($entry, $bound = @{}, $extra = @()) {
+function Invoke-Set($entry, $bound = @{}, $extra = @(), [hashtable]$RunContext) {
     # use ordered parameters, just in case the handler has different parameter names
     # Nameless leftovers after the option key (e.g. `set local tenant_1`) bind by name to
     # set params beyond ctx/key/value. Prefer already-bound names (e.g. -tenant).
@@ -166,10 +192,10 @@ function Invoke-Set($entry, $bound = @{}, $extra = @()) {
         }
     }
 
-    Invoke-EntryCommand $entry "set" -ordered @("", $bound.key, $bound.value) -bound $bound
+    Invoke-EntryCommand $entry "set" -ordered @("", $bound.key, $bound.value) -bound $bound -RunContext $RunContext
 }
 
-function Invoke-Get($entry, $bound = @{}) {
+function Invoke-Get($entry, $bound = @{}, [hashtable]$RunContext) {
     # use ordered parameters, just in case the handler has different parameter names
-    Invoke-EntryCommand $entry "get" -ordered @("", $bound.options) -bound $bound
+    Invoke-EntryCommand $entry "get" -ordered @("", $bound.options) -bound $bound -RunContext $RunContext
 }

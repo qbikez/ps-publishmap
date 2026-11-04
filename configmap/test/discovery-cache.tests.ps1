@@ -232,6 +232,34 @@ Describe 'Discovery cache' {
         Test-Path (Join-Path $dir '.configmap') | Should -BeFalse
     }
 
+    It 'does not apply a running entry''s DiscoveryCache setting to a map it loads' {
+        $dir = Join-Path $TestDrive 'nested-load'
+        $innerDir = Join-Path $dir 'inner'
+        New-Item -ItemType Directory -Path $innerDir -Force | Out-Null
+        $innerFile = Join-Path $innerDir '.build.map.ps1'
+        Set-Content -Path $innerFile -Value @'
+@{
+    alpha = { "a" }
+}
+'@
+        $outerFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $outerFile -Value @"
+@{
+    outer = @{
+        _settings = @{ DiscoveryCache = `$false }
+        exec      = {
+            `$inner = Import-ConfigMap -Map '$innerFile' -LookUp:`$false
+            Get-ConfigMapDiscoveryCache -Map `$inner -Language build | Out-Null
+        }
+    }
+}
+"@
+
+        qbuild -map $outerFile outer
+
+        Test-Path (Join-Path $innerDir '.configmap\discovery.build.cache.json') | Should -BeTrue
+    }
+
     It 'skips cache when QCONF_DiscoveryCache is disabled' {
         $dir = Join-Path $TestDrive 'opt-out-env'
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
