@@ -47,4 +47,3 @@
     "task3"  = { param([string]$Name = 'x3') Write-Host "task3" }
     "task4"  = { param([string]$Name = 'x4') Write-Host "task4" }
 }
-

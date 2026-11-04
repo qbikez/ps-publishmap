@@ -38,6 +38,21 @@ $fixtureShapes = @{
     'workspace-XL' = @{ Projects = 40; TasksPerProject = 9 }
 }
 
+# Stored fixtures are git-tracked, so format them like the repo-root `qbuild lint -Fix` does;
+# otherwise -Generate and lint keep rewriting each other's output.
+function Set-FormattedMap {
+    param([string]$Path, [string]$Content)
+
+    if (!$script:formatSettings) {
+        Import-Module PSScriptAnalyzer
+        $allSettings = Import-PowerShellDataFile (Join-Path $PSScriptRoot '..\..\..\PSScriptAnalyzerSettings.psd1')
+        $formatRules = @('PSUseConsistentIndentation', 'PSUseConsistentWhitespace', 'PSAlignAssignmentStatement')
+        $script:formatSettings = @{ IncludeRules = $formatRules; Rules = @{} }
+        foreach ($rule in $formatRules) { $script:formatSettings.Rules[$rule] = $allSettings.Rules[$rule] }
+    }
+    Set-Content -Path $Path -NoNewline -Value (Invoke-Formatter -ScriptDefinition ($Content -replace "`r`n", "`n") -Settings $script:formatSettings)
+}
+
 function New-ProjectMap {
     param([string]$Directory, [string]$Project, [int]$Tasks)
 
@@ -99,7 +114,7 @@ function New-ProjectMap {
         [void]$sb.AppendLine("    `"task$n`" = { param([string]`$Name = 'x$n') Write-Host `"task$n`" }")
     }
     [void]$sb.AppendLine('}')
-    Set-Content -Path (Join-Path $Directory '.build.map.ps1') -Value $sb.ToString()
+    Set-FormattedMap -Path (Join-Path $Directory '.build.map.ps1') -Content $sb.ToString()
 }
 
 function New-WorkspaceFixture {
@@ -119,7 +134,7 @@ function New-WorkspaceFixture {
     }
     [void]$sb.AppendLine('    }')
     [void]$sb.AppendLine('}')
-    Set-Content -Path (Join-Path $Root '.build.map.ps1') -Value $sb.ToString()
+    Set-FormattedMap -Path (Join-Path $Root '.build.map.ps1') -Content $sb.ToString()
 }
 
 function New-FlatFixture {
@@ -132,7 +147,7 @@ function New-FlatFixture {
         [void]$sb.AppendLine("    task$n = { param([string]`$Configuration = `"Debug`") }")
     }
     [void]$sb.AppendLine('}')
-    Set-Content -Path (Join-Path $Root '.build.map.ps1') -Value $sb.ToString()
+    Set-FormattedMap -Path (Join-Path $Root '.build.map.ps1') -Content $sb.ToString()
 }
 
 function New-SamplesFixture {
