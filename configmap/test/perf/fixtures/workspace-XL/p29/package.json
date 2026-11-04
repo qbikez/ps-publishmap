@@ -1,0 +1,20 @@
+{
+  "scripts": {
+    "script1": "echo p29-1",
+    "script2": "echo p29-2",
+    "script3": "echo p29-3",
+    "script4": "echo p29-4",
+    "script5": "echo p29-5",
+    "script6": "echo p29-6",
+    "script7": "echo p29-7",
+    "script8": "echo p29-8",
+    "script9": "echo p29-9",
+    "script10": "echo p29-10",
+    "script11": "echo p29-11",
+    "script12": "echo p29-12",
+    "script13": "echo p29-13",
+    "script14": "echo p29-14",
+    "script15": "echo p29-15"
+  },
+  "name": "p29"
+}
