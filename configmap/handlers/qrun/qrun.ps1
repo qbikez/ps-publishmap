@@ -382,9 +382,12 @@ function Invoke-QRun {
         $forceCheck = Invoke-WithEntrySettings -Map $map -EntryKey $processKey -Entry $processMapEntry -OperationContext $operationContext -ScriptBlock {
             Test-ConfigMapFeatureEnabled -Name ForceCheck
         }
-        if ($forceCheck -and -not $Force) {
+        $checkBeforeStep = $forceCheck -and -not $Force
+        if ($checkBeforeStep -and $checkTarget.WholeProcess -and (Get-ProcessCheckHandler $processMapEntry)) {
+            # A process-level check judges the whole process at once, so it cannot be interleaved with steps.
             # Failed checks reset their steps to Pending, so the run below executes them.
             $null = Invoke-ProcessCheckRun @checkTarget
+            $checkBeforeStep = $false
         }
 
         $skippedPrior = @()
@@ -419,6 +422,13 @@ function Invoke-QRun {
         foreach ($stepName in $stepsToConsider) {
             $stepIndex = [array]::IndexOf($stepNames, $stepName) + 1
             $prefix = "[$stepIndex/$total]"
+
+            # Earlier steps may have changed what this step's check sees, so check right before deciding.
+            if ($checkBeforeStep) {
+                $null = Invoke-ProcessStepCheck -Map $map -ProcessKey $processKey -ProcessEntry $processMapEntry -StepName $stepName `
+                    -BaseDir $baseDir -Bound $bound -OperationContext $operationContext -State $state -Prefix $prefix
+                Write-ProcessState -StatePath $statePath -State $state
+            }
             $stepStatus = if ($state.steps[$stepName]) { [string]$state.steps[$stepName].status } else { 'Pending' }
 
             if ($stepStatus -eq 'Succeeded' -and -not $Force) {
