@@ -1,4 +1,7 @@
 $script:ConfigMapSettings = $null
+# Defaults plus QCONF_* environment variables, captured at import or by Update-ConfigMapSettings.
+# Entry settings are resolved from this base and the map, never from the caller's settings.
+$script:ConfigMapBaseSettings = $null
 
 function New-ConfigMapSettings {
     param(
@@ -52,7 +55,8 @@ function New-ConfigMapSettings {
 }
 
 function Update-ConfigMapSettings {
-    $script:ConfigMapSettings = New-ConfigMapSettings
+    $script:ConfigMapBaseSettings = New-ConfigMapSettings
+    $script:ConfigMapSettings = $script:ConfigMapBaseSettings
 
     return $script:ConfigMapSettings
 }
@@ -236,6 +240,47 @@ function Enter-ConfigMapAncestorSettingsScopes {
     }
 }
 
+function Resolve-ConfigMapEntrySettings {
+    <#
+    .SYNOPSIS
+        Effective settings for an entry: the base, then the map's _settings, then each ancestor's,
+        then the entry's own. Reads no module state.
+    #>
+    param(
+        [Parameter(Mandatory)]
+        $BaseSettings,
+        [System.Collections.IDictionary]$Map,
+        [string]$EntryKey,
+        $Entry,
+        [hashtable]$OperationContext
+    )
+
+    $layers = [System.Collections.Generic.List[object]]::new()
+    if ($null -ne $Map -and $Map._settings) {
+        $layers.Add($Map._settings)
+    }
+    if ($null -ne $Map -and -not [string]::IsNullOrEmpty($EntryKey)) {
+        $visited = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+        $includeCache = if ($OperationContext) { $OperationContext.IncludeCache } else { @{} }
+        $loadingIncludes = if ($OperationContext) { $OperationContext.LoadingIncludes } else { @{} }
+        $found = Find-ConfigMapAncestorSettings -Node $Map -Segments @($EntryKey -split '\.') -Visited $visited -Cache $includeCache -Loading $loadingIncludes
+        if ($found.Found) {
+            foreach ($ancestorSettings in $found.Settings) {
+                $layers.Add($ancestorSettings)
+            }
+        }
+    }
+    if ($Entry -is [System.Collections.IDictionary] -and $Entry._settings) {
+        $layers.Add($Entry._settings)
+    }
+
+    $settings = $BaseSettings
+    foreach ($layer in $layers) {
+        $settings = New-ConfigMapSettings -BaseSettings $settings -Overrides $layer
+    }
+    return $settings
+}
+
 function Invoke-WithEntrySettings {
     param(
         [System.Collections.IDictionary]$Map,
@@ -305,9 +350,7 @@ function Get-ConfigMapSettingsForPath {
     $operationContext = if ($OperationContext) { $OperationContext } else { New-ConfigMapOperationContext }
 
     if ([string]::IsNullOrWhiteSpace($Path)) {
-        return Invoke-WithEntrySettings -Map $Map -EntryKey '' -Entry $null -OperationContext $operationContext -ScriptBlock {
-            Get-ConfigMapSettings
-        }
+        return Resolve-ConfigMapEntrySettings -BaseSettings $script:ConfigMapBaseSettings -Map $Map -OperationContext $operationContext
     }
 
     # Match qbuild: foo.all inspects the parent entry's effective settings.
@@ -317,9 +360,12 @@ function Get-ConfigMapSettingsForPath {
         throw "Entry '$Path' not found."
     }
 
-    return Invoke-WithEntrySettings -Map $Map -EntryKey $entryKey -Entry $targets[0].Value -OperationContext $operationContext -ScriptBlock {
-        Get-ConfigMapSettings
-    }
+    return Resolve-ConfigMapEntrySettings `
+        -BaseSettings $script:ConfigMapBaseSettings `
+        -Map $Map `
+        -EntryKey $entryKey `
+        -Entry $targets[0].Value `
+        -OperationContext $operationContext
 }
 
 function Get-ConfigMapSetting {
