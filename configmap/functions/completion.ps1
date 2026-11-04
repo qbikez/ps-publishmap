@@ -59,6 +59,7 @@ function Get-MapEntryList {
     $r = switch (@(, $list)) {
         { $_ -is [System.Collections.IDictionary] } {
             $result = [ordered]@{}
+            $handlerKeys = Get-EntryHandlerKey $map
 
             foreach ($kvp in $list.GetEnumerator()) {
                 # Handle #include directives first (before reserved keys check)
@@ -76,7 +77,7 @@ function Get-MapEntryList {
                     continue
                 }
 
-                if ($kvp.key -in $reservedKeys -or $kvp.key -eq $listKey) {
+                if ($kvp.key -in $reservedKeys -or $kvp.key -in $handlerKeys -or $kvp.key -eq $listKey) {
                     continue
                 }
 

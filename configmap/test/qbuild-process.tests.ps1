@@ -674,3 +674,83 @@ Describe 'qbuild in-process process handlers' {
         } -Parameters @{ MapFile = $mapFile }
     }
 }
+
+Describe 'check keyword scope' {
+    BeforeAll {
+        $script:checkScopeMap = [ordered]@{
+            check     = { 'top-check' }
+            group     = [ordered]@{
+                check = { 'group-check' }
+                other = { 'group-other' }
+            }
+            bootstrap = [ordered]@{
+                _settings = @{ process = 'steps' }
+                check     = { $true }
+                prepare   = @{
+                    exec  = { 'prepared' }
+                    check = { $true }
+                }
+                restore   = { 'restored' }
+            }
+        }
+    }
+
+    It 'Given a top-level check entry, when the map is listed, then check is a command' {
+        $names = @((Get-CompletionList -map $script:checkScopeMap -language build).Keys)
+        $names | Should -Contain 'check'
+    }
+
+    It 'Given a check entry in a plain group, when the map is listed, then group.check is a command' {
+        $names = @((Get-CompletionList -map $script:checkScopeMap -language build).Keys)
+        $names | Should -Contain 'group.check'
+    }
+
+    It 'Given a top-level check entry, when the catalog is built, then it describes check' {
+        $entry = Get-ConfigMapCommandCatalog -Map $script:checkScopeMap -Path check -Language build
+        $entry.IsParent | Should -BeFalse
+    }
+
+    It 'Given a top-level check entry, when qbuild runs it, then its exec runs' {
+        qbuild -map $script:checkScopeMap check | Should -Be 'top-check'
+    }
+
+    It 'Given a steps process, when the map is listed, then its process-level check is not a command' {
+        $names = @((Get-CompletionList -map $script:checkScopeMap -language build).Keys)
+        $names | Should -Not -Contain 'bootstrap.check'
+    }
+
+    It 'Given a step with exec and check, when the map is listed, then the step is a leaf without a check child' {
+        $names = @((Get-CompletionList -map $script:checkScopeMap -language build).Keys)
+        $names | Should -Contain 'bootstrap.prepare'
+        $names | Should -Not -Contain 'bootstrap.prepare.check'
+    }
+
+    It 'Given a step with exec and check, then it is not a parent entry' {
+        Test-IsParentEntry $script:checkScopeMap.bootstrap.prepare | Should -BeFalse
+    }
+
+    It 'Given a map loaded from a file, when baseDir is added, then a top-level check is wrapped like any entry' {
+        $map = Add-BaseDir ([ordered]@{ check = { 'top' } }) (Join-Path $TestDrive '.build.map.ps1')
+        $map.check | Should -BeOfType [System.Collections.IDictionary]
+        $map.check.exec | Should -BeOfType [scriptblock]
+    }
+
+    It 'Given a map loaded from a file, when baseDir is added, then steps check handlers stay scriptblocks' {
+        $map = Add-BaseDir ([ordered]@{
+                bootstrap = [ordered]@{
+                    _settings = @{ process = 'steps' }
+                    check     = { $true }
+                    prepare   = @{ exec = { 'p' }; check = { $true } }
+                }
+            }) (Join-Path $TestDrive '.build.map.ps1')
+        $map.bootstrap.check | Should -BeOfType [scriptblock]
+        $map.bootstrap.prepare.check | Should -BeOfType [scriptblock]
+    }
+
+    It 'Given a steps process with a process-level check, then check is not a step' {
+        InModuleScope ConfigMap -Parameters @{ ProcessEntry = $script:checkScopeMap.bootstrap } {
+            param($ProcessEntry)
+            Get-ProcessStepNames -ProcessEntry $ProcessEntry | Should -Be @('prepare', 'restore')
+        }
+    }
+}

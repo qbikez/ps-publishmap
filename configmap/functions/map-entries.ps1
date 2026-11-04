@@ -38,10 +38,11 @@ function Get-BuildAllChildren {
     )
 
     $reservedKeys = (Get-MapLanguage $Language).reservedKeys
+    $handlerKeys = Get-EntryHandlerKey $ParentEntry
     $result = [ordered]@{}
 
     foreach ($kvp in $ParentEntry.GetEnumerator()) {
-        if ($kvp.Key -in $reservedKeys -or $kvp.Key -eq 'all') {
+        if ($kvp.Key -in $reservedKeys -or $kvp.Key -in $handlerKeys -or $kvp.Key -eq 'all') {
             continue
         }
 
@@ -287,6 +288,27 @@ function Get-EntryValueSourceKey {
     return @((Get-ScriptValueSource $Entry.exec).Values)
 }
 
+function Get-EntryHandlerKey {
+    <#
+    .SYNOPSIS
+        Returns the sibling keys that hold handlers of the entry rather than child commands.
+    .DESCRIPTION
+        `check` is a handler only in a steps context: on a steps process entry it checks the
+        whole process, and next to a scriptblock exec it checks that step. Anywhere else
+        `check` is an ordinary entry name.
+    #>
+    [OutputType([string[]])]
+    param($Entry)
+
+    if ($Entry -isnot [System.Collections.IDictionary] -or $Entry['check'] -isnot [scriptblock]) {
+        return @()
+    }
+    if ($Entry.exec -is [scriptblock] -or (Get-EntryProcess $Entry -Default '') -eq 'steps') {
+        return @('check')
+    }
+    return @()
+}
+
 function Get-EntryCommand(
     [ValidateScript({
             $_ -is [System.Collections.IDictionary] -or $_ -is [array] -or $_ -is [scriptblock]
@@ -344,9 +366,9 @@ function Test-IsParentEntry {
     }
 
     # Check if entry contains nested commands (hashtables or scriptblocks)
-    $valueSourceKeys = Get-EntryValueSourceKey $Entry
+    $siblingKeys = @(Get-EntryValueSourceKey $Entry) + @(Get-EntryHandlerKey $Entry)
     foreach ($subKvp in $Entry.GetEnumerator()) {
-        if ($subKvp.Key -in $reservedKeys -or $subKvp.Key -in $valueSourceKeys) {
+        if ($subKvp.Key -in $reservedKeys -or $subKvp.Key -in $siblingKeys) {
             continue
         }
         if ($subKvp.Value -is [System.Collections.IDictionary] -or $subKvp.Value -is [scriptblock]) {

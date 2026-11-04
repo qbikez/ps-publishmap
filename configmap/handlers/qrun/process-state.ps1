@@ -10,7 +10,9 @@ function Get-ProcessStepNames {
         [System.Collections.IDictionary]$ProcessEntry
     )
 
-    $reservedKeys = Get-ProcessReservedKeys
+    # A process without _settings.process (standalone qrun map) is still a steps process,
+    # so its `check` is always the process-level handler, never a step.
+    $reservedKeys = @(Get-ProcessReservedKeys) + 'check'
 
     if ($ProcessEntry.exec -is [array] -and $ProcessEntry.exec.Count -gt 0) {
         return @($ProcessEntry.exec)
