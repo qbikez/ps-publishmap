@@ -290,9 +290,54 @@ ConfigMap automatically discovers parameters from your script blocks:
 }
 ```
 
-## Performance benchmark
+## Performance suite
 
-Run the opt-in performance harness from the module directory:
+`test/perf` guards the speed of `qbuild list` and tab completion. It compares
+two revisions on the same machine:
+
+```powershell
+# base vs your working tree (uncommitted changes included)
+.\test\perf\Compare-Perf.ps1 -Base master
+
+# quick check: one fixture, one round (gates on allocations only)
+.\test\perf\Compare-Perf.ps1 -Base master -Fixture workspace-M -Rounds 1
+```
+
+It prints a markdown table of base vs head per scenario and exits 1 on a
+regression. A regression is time +25% and +5 ms in every round (with 2+ rounds), or median
+allocations +10% and +64 KB. Allocations are near-deterministic, so they are the
+reliable signal. Timings on a desktop machine can vary 2x between runs.
+
+| Fixture | Shape |
+|---|---|
+| `workspace-M` | root map `#include`-ing 5 project maps, ~70 entries, depth 4, all process types |
+| `workspace-XL` | same shape with 40 project maps, ~600 entries |
+| `flat-1k` | one map with 1,000 trivial entries |
+| `samples` | root map `#include`-ing every `samples/*` build map; it grows with each new sample |
+
+The first three are committed under `test/perf/fixtures`, so every run measures the
+same maps. To change them, edit `New-PerfFixture.ps1`, run
+`.\test\perf\New-PerfFixture.ps1 -Generate` and commit the result. `samples` is
+built at run time from the git-tracked samples.
+
+The scenarios are `qbuild list` and TAB on an entry, a nested entry, a parameter
+name, a parameter value and a package script. Each one runs warm (loaded session),
+edited (a child map was just touched, so the discovery cache is rebuilt) and
+new-shell (fresh `pwsh`: `Import-Module` plus the first TAB). They only use
+`qbuild`, `qbuild list` and `TabExpansion2`, so the current suite can drive an
+older checkout. To measure a single revision (it runs on a temporary copy of the fixtures):
+
+```powershell
+.\test\perf\Invoke-PerfSuite.ps1
+```
+
+On GitHub, add the `perf` label to a PR to run the comparison. It reruns on every
+push while the label is present and posts the table as a PR comment. To accept a
+regression, add `perf-ok` and re-run the failed job.
+
+### Internal benchmark
+
+Run the opt-in internal-function harness from the module directory:
 
 ```powershell
 .\test\Measure-ConfigMapPerformance.ps1

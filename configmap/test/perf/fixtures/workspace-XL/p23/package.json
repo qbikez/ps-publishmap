@@ -1,0 +1,20 @@
+{
+  "scripts": {
+    "script1": "echo p23-1",
+    "script2": "echo p23-2",
+    "script3": "echo p23-3",
+    "script4": "echo p23-4",
+    "script5": "echo p23-5",
+    "script6": "echo p23-6",
+    "script7": "echo p23-7",
+    "script8": "echo p23-8",
+    "script9": "echo p23-9",
+    "script10": "echo p23-10",
+    "script11": "echo p23-11",
+    "script12": "echo p23-12",
+    "script13": "echo p23-13",
+    "script14": "echo p23-14",
+    "script15": "echo p23-15"
+  },
+  "name": "p23"
+}

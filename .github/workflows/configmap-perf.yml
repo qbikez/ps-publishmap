@@ -1,0 +1,69 @@
+name: configmap perf
+
+# Runs when the 'perf' label is added to a PR, and on every push while it is present.
+# Add 'perf-ok' to accept a reported regression, then re-run the failed job.
+
+permissions:
+  contents: read
+  pull-requests: write
+
+on:
+  pull_request:
+    types: [labeled, synchronize]
+    paths:
+      - 'configmap/**'
+      - '.github/workflows/configmap-perf.yml'
+
+concurrency:
+  group: configmap-perf-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  perf:
+    if: >-
+      (github.event.action == 'labeled' && github.event.label.name == 'perf') ||
+      (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'perf'))
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compare with base
+        id: compare
+        shell: pwsh
+        run: |
+          & ./configmap/test/perf/Compare-Perf.ps1 -Base "origin/${{ github.base_ref }}" -OutDir "$env:RUNNER_TEMP/perf"
+          "regressed=$($LASTEXITCODE -eq 1)" >> $env:GITHUB_OUTPUT
+          Get-Content "$env:RUNNER_TEMP/perf/perf-report.md" -Raw >> $env:GITHUB_STEP_SUMMARY
+          exit 0
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: configmap-perf
+          path: ${{ runner.temp }}/perf/*.json
+
+      - name: Comment on PR
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} --edit-last --create-if-none --body-file "$env:RUNNER_TEMP/perf/perf-report.md"
+
+      - name: Gate
+        if: steps.compare.outputs.regressed == 'True'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Read labels live so adding 'perf-ok' and re-running the job is enough.
+          $labels = gh pr view ${{ github.event.pull_request.number }} --json labels -q '.labels[].name'
+          if ($labels -contains 'perf-ok') {
+            Write-Host "Regression accepted via 'perf-ok' label."
+            exit 0
+          }
+          Write-Error "Performance regression - see the PR comment. Add the 'perf-ok' label and re-run to accept it."
+          exit 1
