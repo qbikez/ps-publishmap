@@ -123,6 +123,55 @@ Describe 'qbuild _settings.process=steps forwarding' {
         Get-Content 'b.txt' -Raw | Should -Match 'manual'
     }
 
+    It 'Given _settings.useWorkDir on a nested process entry, when qbuild runs from a subdirectory, then steps and checks run there and _context.mapDir points at the map' {
+        @'
+[ordered]@{
+    build = [ordered]@{
+        incremental = [ordered]@{
+            _settings = @{ process = 'steps'; useWorkDir = $true }
+            compile   = @{
+                exec  = { param($_context) "$($_context.mapDir)" | Set-Content 'out.txt' }
+                check = { Test-Path 'out.txt' }
+            }
+        }
+    }
+}
+'@ | Set-Content -LiteralPath $script:mapFile -Encoding utf8
+        $subDir = New-Item -ItemType Directory -Path (Join-Path $script:workDir 'sub') -Force
+        Push-Location $subDir
+        try {
+            qbuild -map $script:mapFile build.incremental
+        }
+        finally {
+            Pop-Location
+        }
+
+        Test-Path (Join-Path $script:workDir 'out.txt') | Should -BeFalse
+        (Get-Content (Join-Path $subDir 'out.txt') -Raw).Trim() | Should -Be $script:workDir
+    }
+
+    It 'Given _settings.useWorkDir on an exec entry, when qbuild runs from a subdirectory, then it runs there' {
+        @'
+[ordered]@{
+    stamp = @{
+        _settings = @{ useWorkDir = $true }
+        exec      = { param($_context) "$($_context.mapDir)" | Set-Content 'out.txt' }
+    }
+}
+'@ | Set-Content -LiteralPath $script:mapFile -Encoding utf8
+        $subDir = New-Item -ItemType Directory -Path (Join-Path $script:workDir 'sub') -Force
+        Push-Location $subDir
+        try {
+            qbuild -map $script:mapFile stamp
+        }
+        finally {
+            Pop-Location
+        }
+
+        Test-Path (Join-Path $script:workDir 'out.txt') | Should -BeFalse
+        (Get-Content (Join-Path $subDir 'out.txt') -Raw).Trim() | Should -Be $script:workDir
+    }
+
     It 'does not delegate a process entry when an in-memory map has no source file' {
         $map = @{
             bootstrap = @{

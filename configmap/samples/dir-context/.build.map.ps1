@@ -1,0 +1,1 @@
+. $PSScriptRoot/_scripts/.build.map.ps1

@@ -14,6 +14,7 @@ function New-ConfigMapSettings {
         DiscoveryCacheLocation = 'local'
         Process                = $script:ConfigMapDefaultProcessName
         ForceCheck             = $false
+        UseWorkDir             = $false
     }
 
     foreach ($propertyName in @($settings.Keys)) {
@@ -334,7 +335,7 @@ function Get-ConfigMapSetting {
 function Test-ConfigMapFeatureEnabled {
     param(
         [Parameter(Mandatory)]
-        [ValidateSet('TmuxAutoWindow', 'Concurrently', 'DiscoveryCache', 'ForceCheck')]
+        [ValidateSet('TmuxAutoWindow', 'Concurrently', 'DiscoveryCache', 'ForceCheck', 'UseWorkDir')]
         [string]$Name
     )
 

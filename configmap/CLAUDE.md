@@ -135,7 +135,7 @@ ConfigMap automatically discovers parameters from script blocks using AST parsin
 
 ### Process types (`_settings.process`)
 - `exec` - Default; runs the entry `exec` scriptblock (omit `_settings.process` for the same)
-- `steps` - Multi-step runner with persisted state (prefer via `qbuild`; standalone `qrun` is deprecated; legacy map value `qrun` still works). `_settings.forceCheck = $true` runs step `check` handlers before every run instead of trusting the cache
+- `steps` - Multi-step runner with persisted state (prefer via `qbuild`; standalone `qrun` is deprecated; legacy map value `qrun` still works). `_settings.forceCheck = $true` runs step `check` handlers before every run instead of trusting the cache. `_settings.useWorkDir = $true` (any process) runs scriptblocks in the caller's directory instead of the map's; `$_context.mapDir` always holds the map file's directory
 - `options` - Configuration get/set/show (prefer via `qbuild`; standalone `qconf` is deprecated; legacy map value `qconf` still works)
 - `bun` / `npm` - Proxy to `<tool> run <script>` in the entry directory (`handlers/pkg/pkg.ps1`); script list read lazily from `package.json`.
 

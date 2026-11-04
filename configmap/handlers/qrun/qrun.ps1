@@ -351,6 +351,9 @@ function Invoke-QRun {
         if ($passthrough.Count -gt 0) {
             $bound._context = @{ additionalArgs = @($passthrough) }
         }
+        # Steps run after Push-Location $baseDir; record the caller's directory first.
+        if (!$bound._context) { $bound._context = @{} }
+        $bound._context.workDir = (Get-Location).Path
 
         $stepsToConsider = Get-ProcessStepsToRun -StepNames $stepNames -FromStep $fromStep -Follow:$Follow
         $checkTarget = @{

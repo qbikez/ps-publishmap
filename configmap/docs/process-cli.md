@@ -109,4 +109,21 @@ bootstrap = [ordered]@{
 - `-Force` skips the checks, since it reruns every step anyway.
 - Like other settings, it inherits from map and ancestor `_settings`, and `$env:QCONF_ForceCheck = '1'` turns it on everywhere.
 
+### `_settings.useWorkDir`
+
+Scripts run in the map file's directory by default. Set `useWorkDir` to run `exec` and `check` blocks in the directory `qbuild` was called from instead (e.g. a map in a parent directory serving several projects):
+
+```powershell
+build = [ordered]@{
+    incremental = [ordered]@{
+        _settings = @{ process = 'steps'; useWorkDir = $true }
+        project   = @{ exec = { param($_context) dotnet build; "map: $($_context.mapDir)" } }
+    }
+}
+```
+
+- `$_context.workDir` is the caller's directory; `$_context.mapDir` is always the directory of the map file that defined the entry.
+- Works for any process type that runs entry scriptblocks (`exec`, `steps`). Process state stays under the map directory.
+- Inherits like other settings; `$env:QCONF_UseWorkDir = '1'` turns it on everywhere.
+
 Callers that only use the shared surface should not special-case these switches; they discover names via `!complete -params` and forward whatever the user bound.
