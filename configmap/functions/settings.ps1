@@ -1,4 +1,7 @@
 $script:ConfigMapSettings = $null
+# Defaults plus QCONF_* environment variables, captured at import or by Update-ConfigMapSettings.
+# Entry settings are resolved from this base and the map, never from the caller's settings.
+$script:ConfigMapBaseSettings = $null
 
 function New-ConfigMapSettings {
     param(
@@ -52,7 +55,8 @@ function New-ConfigMapSettings {
 }
 
 function Update-ConfigMapSettings {
-    $script:ConfigMapSettings = New-ConfigMapSettings
+    $script:ConfigMapBaseSettings = New-ConfigMapSettings
+    $script:ConfigMapSettings = $script:ConfigMapBaseSettings
 
     return $script:ConfigMapSettings
 }
@@ -205,88 +209,84 @@ function Find-ConfigMapAncestorSettings {
     return $notFound
 }
 
-function Enter-ConfigMapAncestorSettingsScopes {
+function Resolve-ConfigMapEntrySettings {
+    <#
+    .SYNOPSIS
+        Effective settings for an entry: the base, then the map's _settings, then each ancestor's,
+        then the entry's own. Reads no module state.
+    #>
     param(
+        [Parameter(Mandatory)]
+        $BaseSettings,
         [System.Collections.IDictionary]$Map,
         [string]$EntryKey,
-        [switch]$IncludeTarget,
+        $Entry,
         [hashtable]$OperationContext
     )
 
-    $entered = [System.Collections.Generic.List[object]]::new()
-    try {
-        $segments = @($EntryKey -split '\.')
+    $layers = [System.Collections.Generic.List[object]]::new()
+    if ($null -ne $Map -and $Map._settings) {
+        $layers.Add($Map._settings)
+    }
+    if ($null -ne $Map -and -not [string]::IsNullOrEmpty($EntryKey)) {
         $visited = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
         $includeCache = if ($OperationContext) { $OperationContext.IncludeCache } else { @{} }
         $loadingIncludes = if ($OperationContext) { $OperationContext.LoadingIncludes } else { @{} }
-        $found = Find-ConfigMapAncestorSettings -Node $Map -Segments $segments -IncludeTarget:$IncludeTarget -Visited $visited -Cache $includeCache -Loading $loadingIncludes
+        $found = Find-ConfigMapAncestorSettings -Node $Map -Segments @($EntryKey -split '\.') -Visited $visited -Cache $includeCache -Loading $loadingIncludes
         if ($found.Found) {
-            foreach ($settings in $found.Settings) {
-                $entered.Add((Enter-ConfigMapSettingsScope -Settings $settings))
+            foreach ($ancestorSettings in $found.Settings) {
+                $layers.Add($ancestorSettings)
             }
         }
     }
-    catch {
-        Exit-ConfigMapSettingsScopes -Scopes $entered
-        throw
+    if ($Entry -is [System.Collections.IDictionary] -and $Entry._settings) {
+        $layers.Add($Entry._settings)
     }
 
-    foreach ($scope in $entered) {
-        , $scope
+    $settings = $BaseSettings
+    foreach ($layer in $layers) {
+        $settings = New-ConfigMapSettings -BaseSettings $settings -Overrides $layer
     }
+    return $settings
 }
 
 function Invoke-WithEntrySettings {
+    <#
+    .SYNOPSIS
+        Run a scriptblock with an entry's effective settings, resolved from -BaseSettings and the map.
+        The caller's current settings are ignored, so a nested qbuild never inherits them.
+        -BaseSettings defaults to the module's base settings; pass the parent entry's settings when
+        -Map is a sub-entry rather than the root map.
+    #>
     param(
         [System.Collections.IDictionary]$Map,
         [string]$EntryKey,
         $Entry,
         [hashtable]$OperationContext,
+        $BaseSettings = $script:ConfigMapBaseSettings,
         [Parameter(Mandatory)]
         [scriptblock]$ScriptBlock
     )
 
+    $entrySettings = Resolve-ConfigMapEntrySettings `
+        -BaseSettings $BaseSettings `
+        -Map $Map `
+        -EntryKey $EntryKey `
+        -Entry $Entry `
+        -OperationContext $OperationContext
+
     # Parameter names would hide the caller's $map and $entry from the scriptblock.
-    $settingsMap = $Map
-    $settingsEntryKey = $EntryKey
-    $settingsEntry = $Entry
     $settingsScript = $ScriptBlock
-    $settingsOperationContext = $OperationContext
-    Remove-Variable Map, EntryKey, Entry, OperationContext, ScriptBlock -ErrorAction SilentlyContinue
+    Remove-Variable Map, EntryKey, Entry, OperationContext, BaseSettings, ScriptBlock -ErrorAction SilentlyContinue
 
-    $scopes = [System.Collections.Generic.List[object]]::new()
+    # Readers still use Get-ConfigMapSetting, so the resolved settings stay installed for the call.
+    $previousSettings = $script:ConfigMapSettings
+    $script:ConfigMapSettings = $entrySettings
     try {
-        $mapSettings = $null
-        if ($settingsMap -is [System.Collections.IDictionary]) {
-            $mapSettings = $settingsMap._settings
-        }
-        $scopes.Add((Enter-ConfigMapSettingsScope -Settings $mapSettings))
-
-        if (-not [string]::IsNullOrEmpty($settingsEntryKey)) {
-            $ancestorScopes = @(Enter-ConfigMapAncestorSettingsScopes -Map $settingsMap -EntryKey $settingsEntryKey -OperationContext $settingsOperationContext)
-            foreach ($ancestorScope in $ancestorScopes) {
-                $scopes.Add($ancestorScope)
-            }
-        }
-
-        $leafSettings = $null
-        if ($settingsEntry -is [System.Collections.IDictionary]) {
-            $leafSettings = $settingsEntry._settings
-        }
-        $scopes.Add((Enter-ConfigMapSettingsScope -Settings $leafSettings))
-
         & $settingsScript
     }
     finally {
-        Exit-ConfigMapSettingsScopes -Scopes $scopes
-    }
-}
-
-function Exit-ConfigMapSettingsScopes {
-    param($Scopes)
-
-    for ($index = $Scopes.Count - 1; $index -ge 0; $index--) {
-        Exit-ConfigMapSettingsScope -PreviousSettings $Scopes[$index]
+        $script:ConfigMapSettings = $previousSettings
     }
 }
 
@@ -305,9 +305,7 @@ function Get-ConfigMapSettingsForPath {
     $operationContext = if ($OperationContext) { $OperationContext } else { New-ConfigMapOperationContext }
 
     if ([string]::IsNullOrWhiteSpace($Path)) {
-        return Invoke-WithEntrySettings -Map $Map -EntryKey '' -Entry $null -OperationContext $operationContext -ScriptBlock {
-            Get-ConfigMapSettings
-        }
+        return Resolve-ConfigMapEntrySettings -BaseSettings $script:ConfigMapBaseSettings -Map $Map -OperationContext $operationContext
     }
 
     # Match qbuild: foo.all inspects the parent entry's effective settings.
@@ -317,9 +315,12 @@ function Get-ConfigMapSettingsForPath {
         throw "Entry '$Path' not found."
     }
 
-    return Invoke-WithEntrySettings -Map $Map -EntryKey $entryKey -Entry $targets[0].Value -OperationContext $operationContext -ScriptBlock {
-        Get-ConfigMapSettings
-    }
+    return Resolve-ConfigMapEntrySettings `
+        -BaseSettings $script:ConfigMapBaseSettings `
+        -Map $Map `
+        -EntryKey $entryKey `
+        -Entry $targets[0].Value `
+        -OperationContext $operationContext
 }
 
 function Get-ConfigMapSetting {
