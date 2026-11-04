@@ -114,9 +114,11 @@ bootstrap = [ordered]@{
 Scripts run in the map file's directory by default. Set `useWorkDir` to run `exec` and `check` blocks in the directory `qbuild` was called from instead (e.g. a map in a parent directory serving several projects):
 
 ```powershell
-'build.incremental' = [ordered]@{
-    _settings = @{ process = 'steps'; useWorkDir = $true }
-    project   = @{ exec = { param($_context) dotnet build; "map: $($_context.mapDir)" } }
+build = [ordered]@{
+    incremental = [ordered]@{
+        _settings = @{ process = 'steps'; useWorkDir = $true }
+        project   = @{ exec = { param($_context) dotnet build; "map: $($_context.mapDir)" } }
+    }
 }
 ```
 

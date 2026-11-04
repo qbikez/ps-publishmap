@@ -123,14 +123,16 @@ Describe 'qbuild _settings.process=steps forwarding' {
         Get-Content 'b.txt' -Raw | Should -Match 'manual'
     }
 
-    It 'Given _settings.useWorkDir on a dotted process key, when qbuild runs from a subdirectory, then steps and checks run there and _context.mapDir points at the map' {
+    It 'Given _settings.useWorkDir on a nested process entry, when qbuild runs from a subdirectory, then steps and checks run there and _context.mapDir points at the map' {
         @'
 [ordered]@{
-    'build.incremental' = [ordered]@{
-        _settings = @{ process = 'steps'; useWorkDir = $true }
-        compile   = @{
-            exec  = { param($_context) "$($_context.mapDir)" | Set-Content 'out.txt' }
-            check = { Test-Path 'out.txt' }
+    build = [ordered]@{
+        incremental = [ordered]@{
+            _settings = @{ process = 'steps'; useWorkDir = $true }
+            compile   = @{
+                exec  = { param($_context) "$($_context.mapDir)" | Set-Content 'out.txt' }
+                check = { Test-Path 'out.txt' }
+            }
         }
     }
 }
