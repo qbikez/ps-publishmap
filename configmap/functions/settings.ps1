@@ -61,25 +61,6 @@ function Update-ConfigMapSettings {
     return $script:ConfigMapSettings
 }
 
-function Enter-ConfigMapSettingsScope {
-    param(
-        [System.Collections.IDictionary]$Settings
-    )
-
-    $previousSettings = $script:ConfigMapSettings
-    if ($Settings) {
-        $script:ConfigMapSettings = New-ConfigMapSettings -BaseSettings $previousSettings -Overrides $Settings
-    }
-
-    return $previousSettings
-}
-
-function Exit-ConfigMapSettingsScope {
-    param($PreviousSettings)
-
-    $script:ConfigMapSettings = $PreviousSettings
-}
-
 function New-ConfigMapOperationContext {
     return @{
         IncludeCache    = @{}
