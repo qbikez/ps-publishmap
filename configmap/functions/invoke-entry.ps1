@@ -35,7 +35,8 @@ function Invoke-EntryWrapper {
 function New-ConfigMapCurrentRunContext {
     <#
     .SYNOPSIS
-        Run context for a caller that passed none, built from the current settings.
+        Run context for a caller that passed none, such as a script calling Invoke-EntryCommand,
+        built from the settings that script is running with.
     #>
     param($Entry)
 

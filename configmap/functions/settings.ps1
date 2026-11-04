@@ -1,3 +1,6 @@
+# Current settings for map scripts and plugin hooks, which read them through Get-ConfigMapSetting.
+# Only Invoke-WithRunContext changes it, for the duration of a script; module code takes settings
+# from a run context instead.
 $script:ConfigMapSettings = $null
 # Defaults plus QCONF_* environment variables, captured at import or by Update-ConfigMapSettings.
 # Entry settings are resolved from this base and the map, never from the caller's settings.
@@ -233,6 +236,10 @@ function Resolve-ConfigMapEntrySettings {
 
 function Get-ConfigMapSettings {
     return $script:ConfigMapSettings
+}
+
+function Get-ConfigMapBaseSettings {
+    return $script:ConfigMapBaseSettings
 }
 
 function Get-ConfigMapSettingsForPath {

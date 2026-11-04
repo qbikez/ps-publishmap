@@ -135,13 +135,13 @@ Each step keeps the suite green.
    This deviates from the original step 3 (thread a run context through every handler). With no inheritance, an entry's settings depend only on the base and the map, so the bug could be fixed without threading. The module variable remains as a bridge for readers.
 4. **Done.** `functions/run-context.ps1` adds `New-ConfigMapRunContext`, `New-ConfigMapEntryContext`, `Invoke-WithRunContext` and `ConvertTo-ConfigMapReadOnlySettings`. `Invoke-QBuild`, `Invoke-QRun` and `Invoke-QConf` build a run context; the exec, steps and options handlers, `Invoke-EntryWrapper`, `exec` arrays and the tmux plugin pass child contexts down instead of calling `Invoke-WithEntrySettings`, which is removed. `Invoke-EntryCommand`, `Invoke-Set` and `Invoke-Get` take an optional `-RunContext`. Internal readers (`UseWorkDir`, `ForceCheck`, qconf `Debug`, the tmux and concurrently plugins) pass `-Settings` explicitly; hook contexts carry `Settings` and `RunContext`. Scripts get `$_context.settings` as a read-only dictionary.
 5. **Done.** The discovery cache reads its settings from `Get-ConfigMapDiscoveryCacheSettings`: the base settings plus the map's `DiscoveryCache*` overrides. It no longer enters scopes on top of the current settings, so a map loaded while an entry runs ignores that entry's settings. No threading through the import path was needed. `Enter/Exit-ConfigMapSettingsScope` are removed.
-6. No internal code reads the module variable implicitly any more. What remains is deciding its role for scripts; see "Current settings for scripts" below.
+6. **Done.** `$script:ConfigMapSettings` is kept as the current settings for scripts (see below). Only `Invoke-WithRunContext` and `Update-ConfigMapSettings` write it. `!settings` without a map reads `Get-ConfigMapBaseSettings`; the only other reader is the fallback context for callers that pass none, such as a script calling `Invoke-EntryCommand`.
 
 ### Current settings for scripts
 
 Map files are dot-sourced inside the module, so map scriptblocks and plugin hooks can call the non-exported `Get-ConfigMapSetting` and get the running entry's settings. Existing tests rely on this (`settings.tests.ps1`: build, configuration and exec-subcommand scripts, and the `InvokeEntryWrapper` and `InvokeQBuildTargets` hooks), and so does `qbuild !settings` without a path. `Invoke-WithRunContext` therefore still installs the context's settings as the current settings while a script or hook runs.
 
-Deleting `$script:ConfigMapSettings` in step 6 would break that. Either keep it as the "current settings for scripts" (written only by `Invoke-WithRunContext`, read by nothing internal), or deprecate script access in favour of `$_context.settings` and hook `$Context.Settings` first.
+Deleting `$script:ConfigMapSettings` would break that, so it stays as the current settings for scripts. Scripts and hooks may use either `Get-ConfigMapSetting` or `$_context.settings` / `$Context.Settings`; script access is not deprecated.
 
 Steps 1–3 fix the bug and can ship alone. Steps 4–6 finish the cleanup.
 
