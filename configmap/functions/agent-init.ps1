@@ -71,26 +71,6 @@ function Get-QBuildAgentSkillsParent {
     return [System.IO.Path]::GetFullPath((Join-Path $root $skillsParent))
 }
 
-function Get-QBuildAgentSkillDestination {
-    <#
-    .SYNOPSIS
-        Resolves the install directory for a shipped agent skill.
-    #>
-    [OutputType([string])]
-    param(
-        [ValidateSet('user', 'project')]
-        [string]$Scope = 'project',
-        [ValidateSet('cursor', 'copilot', 'claude')]
-        [string]$Agent = 'cursor',
-        [string]$ProjectRoot = $null,
-        [Parameter(Mandatory = $true)]
-        [string]$SkillName
-    )
-
-    $parent = Get-QBuildAgentSkillsParent -Scope $Scope -Agent $Agent -ProjectRoot $ProjectRoot
-    return [System.IO.Path]::GetFullPath((Join-Path $parent $SkillName))
-}
-
 function Show-QBuildAgentSkills {
     <#
     .SYNOPSIS

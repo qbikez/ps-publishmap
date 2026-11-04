@@ -665,25 +665,20 @@ Describe "qbuild list with exec list entries" {
                 }
             }
         }
+    }
 
-        $invocation = [pscustomobject]@{
-            InvocationName = "qbuild"
-            Statement      = "qbuild"
+    It "lists the exec-list entry" {
+        $names = [System.Collections.Generic.List[string]]::new()
+        Mock Write-Host -ModuleName ConfigMap {
+            $text = "$Object".Trim()
+            if ($text -match '^(build)\b') {
+                $names.Add($Matches[1])
+            }
         }
-    }
 
-    It "should not throw when listing commands" {
-        { qbuild -map $buildTargets "list" } | Should -Not -Throw
-    }
+        qbuild -map $buildTargets "list"
 
-    It "should not throw when formatting help" {
-        {
-            InModuleScope ConfigMap {
-                param($map, $inv)
-
-                Write-MapHelp -map $map -invocation $inv
-            } -ArgumentList $buildTargets, $invocation
-        } | Should -Not -Throw
+        $names | Should -Contain 'build'
     }
 
     It "keeps command order from ordered maps" {
