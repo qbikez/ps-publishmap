@@ -1,7 +1,7 @@
 #requires -version 7.0
 
 $script:discoveryCacheMemory = @{}
-$script:discoveryCacheVersion = 2
+$script:discoveryCacheVersion = 3
 
 function Get-ConfigMapUserHome {
     if ($env:HOME) {
@@ -414,6 +414,8 @@ function New-ConfigMapDiscoveryEntryDescriptor {
         isParent    = [bool]$isParent
         description = $description
         parameters  = $parameters
+        # Process declared in the entry's own _settings ('' when inherited); lets list skip sub-paths without a map lookup.
+        process     = [string](Get-EntryProcess $Entry -Default '')
     }
 }
 

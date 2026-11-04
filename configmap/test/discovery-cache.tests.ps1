@@ -60,6 +60,58 @@ Describe 'Discovery cache' {
         $params[0].validateSet | Should -Be @('Debug', 'Release')
     }
 
+    It 'records the process each entry declares in its own _settings' {
+        $dir = Join-Path $TestDrive 'declared-process'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value @'
+@{
+    build  = { "ok" }
+    deploy = @{
+        _settings = @{ process = "qrun" }
+        package   = @{ exec = { "package" } }
+    }
+}
+'@
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $cache = & (Get-Module ConfigMap) {
+            param($Map)
+            Get-ConfigMapDiscoveryCache -Map $Map -Language build
+        } $map
+
+        $entries = @($cache.entries.hierarchical)
+        ($entries | Where-Object { $_.key -eq 'deploy' }).process | Should -Be 'steps'
+        ($entries | Where-Object { $_.key -eq 'build' }).process | Should -Be ''
+    }
+
+    It 'list does not look up nested entries that declare no process of their own' {
+        $dir = Join-Path $TestDrive 'list-nested'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value @'
+@{
+    build = { "ok" }
+    tools = @{
+        fmt  = { "fmt" }
+        lint = { "lint" }
+    }
+}
+'@
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        Mock Write-Host -ModuleName ConfigMap { }
+        Mock Get-MapEntry -ModuleName ConfigMap { } -ParameterFilter { "$key" -like '*.*' }
+
+        & (Get-Module ConfigMap) {
+            param($Map)
+            Write-MapHelp -map $Map -invocation ([pscustomobject]@{ InvocationName = 'qbuild' })
+        } $map
+
+        Should -Invoke Get-MapEntry -ModuleName ConfigMap -ParameterFilter { "$key" -like '*.*' } -Times 0 -Exactly
+        Should -Invoke Write-Host -ModuleName ConfigMap -ParameterFilter { "$Object" -match '^build\b' } -Times 1 -Exactly
+    }
+
     It 'returns the same payload on hit without rewriting when mtime is unchanged' {
         $dir = Join-Path $TestDrive 'hit'
         New-Item -ItemType Directory -Path $dir -Force | Out-Null

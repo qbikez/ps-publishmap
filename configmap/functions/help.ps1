@@ -245,6 +245,10 @@ function Write-MapHelp {
 
         foreach ($item in $scriptItems) {
             $name = [string]$item.key
+            # Same rule as $tryWriteProcessListEntry, decided from the cache so hidden sub-paths cost no map lookup.
+            if ($language -eq 'build' -and $name -match '\.' -and -not $item.process) {
+                continue
+            }
             $entryValue = Get-MapEntry $map $name -language $language -OperationContext $operationContext
             if (& $tryWriteProcessListEntry $name $entryValue) {
                 continue

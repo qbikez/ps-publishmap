@@ -55,6 +55,29 @@ Describe 'Import-IncludedConfigMap' {
         } $TestDrive $includeDirectory $cache $loading
     }
 
+    It 'returns a cached include without checking the filesystem again' {
+        $includeDirectory = Join-Path $TestDrive 'cached'
+        New-Item -ItemType Directory -Path $includeDirectory -Force | Out-Null
+        Set-Content -Path (Join-Path $includeDirectory '.build.map.ps1') -Value '@{ task = { "done" } }'
+        $cache = @{}
+        $loading = @{}
+
+        $first = & (Get-Module ConfigMap) {
+            param($BaseDir, $Cache, $Loading)
+            Import-IncludedConfigMap -DirectoryName 'cached' -BaseDir $BaseDir -Cache $Cache -Loading $Loading
+        } $TestDrive $cache $loading
+
+        Mock Test-Path -ModuleName ConfigMap { $true }
+
+        $second = & (Get-Module ConfigMap) {
+            param($BaseDir, $Cache, $Loading)
+            Import-IncludedConfigMap -DirectoryName 'cached' -BaseDir $BaseDir -Cache $Cache -Loading $Loading
+        } $TestDrive $cache $loading
+
+        $second | Should -Be $first
+        Should -Invoke Test-Path -ModuleName ConfigMap -Times 0 -Exactly
+    }
+
     It 'returns null when an include directory has no map' {
         New-Item -ItemType Directory -Path (Join-Path $TestDrive 'empty') -Force | Out-Null
 
