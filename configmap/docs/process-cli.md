@@ -86,6 +86,7 @@ qrun <entry> [-Follow] [-Force] [-Status] [-Reset] [-Check] …
 
 - A step may declare `check = { ... }` (step as hashtable with `exec` + `check`). A truthy last output is OK; `$false`, no output or a throw is a failed check.
 - A `check` on the process entry itself replaces the per-step checks when checking the whole process (`qbuild bootstrap -check`). `qbuild bootstrap.prepare -check` always uses that step's own check.
+- `check` is a handler only in a steps context (on a steps process entry, or next to a scriptblock `exec`). Elsewhere `check` is an ordinary entry name, so `qbuild check` can run a `check = { ... }` entry.
 - Results sync the cache: OK -> `Succeeded`, failed -> `Pending`. Steps without a handler are reported `UNCHECKED` and keep their cached status.
 - The command throws (non-zero exit) when any check fails.
 
