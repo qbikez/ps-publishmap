@@ -1,0 +1,20 @@
+{
+  "scripts": {
+    "script1": "echo p12-1",
+    "script2": "echo p12-2",
+    "script3": "echo p12-3",
+    "script4": "echo p12-4",
+    "script5": "echo p12-5",
+    "script6": "echo p12-6",
+    "script7": "echo p12-7",
+    "script8": "echo p12-8",
+    "script9": "echo p12-9",
+    "script10": "echo p12-10",
+    "script11": "echo p12-11",
+    "script12": "echo p12-12",
+    "script13": "echo p12-13",
+    "script14": "echo p12-14",
+    "script15": "echo p12-15"
+  },
+  "name": "p12"
+}

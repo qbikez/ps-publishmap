@@ -1270,7 +1270,7 @@ $global:ConfigMapIncludeLoadCount++
 
                 $context = New-ConfigMapOperationContext
                 $target = @(Get-MapEntries $Map 'child.run' -language build -OperationContext $context)[0]
-                Invoke-WithEntrySettings -Map $Map -EntryKey 'child.run' -Entry $target.Value -OperationContext $context -ScriptBlock { }
+                New-ConfigMapEntryContext -Parent (New-ConfigMapRunContext -Map $Map -OperationContext $context) -EntryKey 'child.run' -Entry $target.Value | Out-Null
                 Get-MapEntry $Map 'child.run' -language build -OperationContext $context | Out-Null
             } -ArgumentList $map
 

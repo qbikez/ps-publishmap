@@ -1,3 +1,6 @@
+# Current settings for map scripts and plugin hooks, which read them through Get-ConfigMapSetting.
+# Only Invoke-WithRunContext changes it, for the duration of a script; module code takes settings
+# from a run context instead.
 $script:ConfigMapSettings = $null
 # Defaults plus QCONF_* environment variables, captured at import or by Update-ConfigMapSettings.
 # Entry settings are resolved from this base and the map, never from the caller's settings.
@@ -59,25 +62,6 @@ function Update-ConfigMapSettings {
     $script:ConfigMapSettings = $script:ConfigMapBaseSettings
 
     return $script:ConfigMapSettings
-}
-
-function Enter-ConfigMapSettingsScope {
-    param(
-        [System.Collections.IDictionary]$Settings
-    )
-
-    $previousSettings = $script:ConfigMapSettings
-    if ($Settings) {
-        $script:ConfigMapSettings = New-ConfigMapSettings -BaseSettings $previousSettings -Overrides $Settings
-    }
-
-    return $previousSettings
-}
-
-function Exit-ConfigMapSettingsScope {
-    param($PreviousSettings)
-
-    $script:ConfigMapSettings = $PreviousSettings
 }
 
 function New-ConfigMapOperationContext {
@@ -250,48 +234,12 @@ function Resolve-ConfigMapEntrySettings {
     return $settings
 }
 
-function Invoke-WithEntrySettings {
-    <#
-    .SYNOPSIS
-        Run a scriptblock with an entry's effective settings, resolved from -BaseSettings and the map.
-        The caller's current settings are ignored, so a nested qbuild never inherits them.
-        -BaseSettings defaults to the module's base settings; pass the parent entry's settings when
-        -Map is a sub-entry rather than the root map.
-    #>
-    param(
-        [System.Collections.IDictionary]$Map,
-        [string]$EntryKey,
-        $Entry,
-        [hashtable]$OperationContext,
-        $BaseSettings = $script:ConfigMapBaseSettings,
-        [Parameter(Mandatory)]
-        [scriptblock]$ScriptBlock
-    )
-
-    $entrySettings = Resolve-ConfigMapEntrySettings `
-        -BaseSettings $BaseSettings `
-        -Map $Map `
-        -EntryKey $EntryKey `
-        -Entry $Entry `
-        -OperationContext $OperationContext
-
-    # Parameter names would hide the caller's $map and $entry from the scriptblock.
-    $settingsScript = $ScriptBlock
-    Remove-Variable Map, EntryKey, Entry, OperationContext, BaseSettings, ScriptBlock -ErrorAction SilentlyContinue
-
-    # Readers still use Get-ConfigMapSetting, so the resolved settings stay installed for the call.
-    $previousSettings = $script:ConfigMapSettings
-    $script:ConfigMapSettings = $entrySettings
-    try {
-        & $settingsScript
-    }
-    finally {
-        $script:ConfigMapSettings = $previousSettings
-    }
-}
-
 function Get-ConfigMapSettings {
     return $script:ConfigMapSettings
+}
+
+function Get-ConfigMapBaseSettings {
+    return $script:ConfigMapBaseSettings
 }
 
 function Get-ConfigMapSettingsForPath {
@@ -326,21 +274,28 @@ function Get-ConfigMapSettingsForPath {
 function Get-ConfigMapSetting {
     param(
         [Parameter(Mandatory)]
-        [string]$Name
+        [string]$Name,
+        # Defaults to the current settings, for map scripts and plugin hooks.
+        $Settings
     )
 
-    $settings = Get-ConfigMapSettings
-    return $settings.PSObject.Properties[$Name].Value
+    # Hook contexts built outside qbuild may carry no Settings.
+    if ($null -eq $Settings) {
+        $Settings = Get-ConfigMapSettings
+    }
+    return $Settings.PSObject.Properties[$Name].Value
 }
 
 function Test-ConfigMapFeatureEnabled {
     param(
         [Parameter(Mandatory)]
         [ValidateSet('TmuxAutoWindow', 'Concurrently', 'DiscoveryCache', 'ForceCheck', 'UseWorkDir')]
-        [string]$Name
+        [string]$Name,
+        # Defaults to the current settings, for map scripts and plugin hooks.
+        $Settings
     )
 
-    switch (Get-ConfigMapSetting -Name $Name) {
+    switch (Get-ConfigMapSetting -Name $Name -Settings $Settings) {
         $true { return $true }
         { $_ -in '1', 'true', 'yes', 'on' } { return $true }
         default { return $false }

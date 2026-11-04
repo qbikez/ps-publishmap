@@ -1,0 +1,20 @@
+{
+  "scripts": {
+    "script1": "echo p06-1",
+    "script2": "echo p06-2",
+    "script3": "echo p06-3",
+    "script4": "echo p06-4",
+    "script5": "echo p06-5",
+    "script6": "echo p06-6",
+    "script7": "echo p06-7",
+    "script8": "echo p06-8",
+    "script9": "echo p06-9",
+    "script10": "echo p06-10",
+    "script11": "echo p06-11",
+    "script12": "echo p06-12",
+    "script13": "echo p06-13",
+    "script14": "echo p06-14",
+    "script15": "echo p06-15"
+  },
+  "name": "p06"
+}

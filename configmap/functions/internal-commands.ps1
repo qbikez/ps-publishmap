@@ -113,7 +113,7 @@ function Get-ConfigMapInternalCommands {
                 }
 
                 if (!$_context.UserMap) {
-                    return Get-ConfigMapSettings
+                    return Get-ConfigMapBaseSettings
                 }
 
                 Get-ConfigMapSettingsForPath -Map $_context.UserMap -Path $Path

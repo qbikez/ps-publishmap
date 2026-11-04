@@ -1,7 +1,7 @@
 #requires -version 7.0
 
 $script:discoveryCacheMemory = @{}
-$script:discoveryCacheVersion = 1
+$script:discoveryCacheVersion = 2
 
 function Get-ConfigMapUserHome {
     if ($env:HOME) {
@@ -68,11 +68,29 @@ function Get-ConfigMapDiscoveryCacheSettingOverrides {
     return $overrides
 }
 
+function Get-ConfigMapDiscoveryCacheSettings {
+    <#
+    .SYNOPSIS
+        Settings for a map's discovery cache: the base settings plus the map's cache overrides.
+        A running entry's settings never apply to a map it loads.
+    #>
+    param([System.Collections.IDictionary]$Map)
+
+    $overrides = Get-ConfigMapDiscoveryCacheSettingOverrides -Map $Map
+    if (-not $overrides) {
+        return $script:ConfigMapBaseSettings
+    }
+    return New-ConfigMapSettings -BaseSettings $script:ConfigMapBaseSettings -Overrides $overrides
+}
+
 function Resolve-ConfigMapDiscoveryCacheLocation {
-    param($Value)
+    param(
+        $Value,
+        $Settings
+    )
 
     if ($null -eq $Value -or "$Value" -eq '') {
-        $Value = Get-ConfigMapSetting -Name DiscoveryCacheLocation
+        $Value = Get-ConfigMapSetting -Name DiscoveryCacheLocation -Settings $Settings
     }
 
     $normalized = "$Value".Trim().ToLowerInvariant()
@@ -95,13 +113,7 @@ function Get-ConfigMapDiscoveryCachePath {
 
     $fullPath = [System.IO.Path]::GetFullPath($SourceFile)
     if (-not $Location) {
-        $previous = Enter-ConfigMapSettingsScope -Settings (Get-ConfigMapDiscoveryCacheSettingOverrides -Map $Map)
-        try {
-            $Location = Resolve-ConfigMapDiscoveryCacheLocation
-        }
-        finally {
-            Exit-ConfigMapSettingsScope -PreviousSettings $previous
-        }
+        $Location = Resolve-ConfigMapDiscoveryCacheLocation -Settings (Get-ConfigMapDiscoveryCacheSettings -Map $Map)
     }
     else {
         $Location = Resolve-ConfigMapDiscoveryCacheLocation -Value $Location
@@ -159,14 +171,8 @@ function Get-ConfigMapDiscoveryCacheTarget {
         [System.Collections.IDictionary]$Map
     )
 
-    $previous = Enter-ConfigMapSettingsScope -Settings (Get-ConfigMapDiscoveryCacheSettingOverrides -Map $Map)
-    try {
-        $location = Resolve-ConfigMapDiscoveryCacheLocation
-        return Get-ConfigMapDiscoveryCacheCandidate -SourceFile $SourceFile -Language $Language -Location $location
-    }
-    finally {
-        Exit-ConfigMapSettingsScope -PreviousSettings $previous
-    }
+    $location = Resolve-ConfigMapDiscoveryCacheLocation -Settings (Get-ConfigMapDiscoveryCacheSettings -Map $Map)
+    return Get-ConfigMapDiscoveryCacheCandidate -SourceFile $SourceFile -Language $Language -Location $location
 }
 
 function Find-ConfigMapDiscoveryCache {
@@ -531,13 +537,7 @@ function Build-ConfigMapDiscoveryCache {
 function Test-ConfigMapDiscoveryCacheEnabled {
     param([System.Collections.IDictionary]$Map)
 
-    $previous = Enter-ConfigMapSettingsScope -Settings (Get-ConfigMapDiscoveryCacheSettingOverrides -Map $Map)
-    try {
-        return Test-ConfigMapFeatureEnabled -Name DiscoveryCache
-    }
-    finally {
-        Exit-ConfigMapSettingsScope -PreviousSettings $previous
-    }
+    return Test-ConfigMapFeatureEnabled -Name DiscoveryCache -Settings (Get-ConfigMapDiscoveryCacheSettings -Map $Map)
 }
 
 function Get-ConfigMapDiscoveryCache {
@@ -649,13 +649,7 @@ function Get-ConfigMapDiscoveryCacheInfo {
 
     $enabled = Test-ConfigMapDiscoveryCacheEnabled -Map $Map
     if (!$Map._sourceFile) {
-        $previous = Enter-ConfigMapSettingsScope -Settings (Get-ConfigMapDiscoveryCacheSettingOverrides -Map $Map)
-        try {
-            $location = Resolve-ConfigMapDiscoveryCacheLocation
-        }
-        finally {
-            Exit-ConfigMapSettingsScope -PreviousSettings $previous
-        }
+        $location = Resolve-ConfigMapDiscoveryCacheLocation -Settings (Get-ConfigMapDiscoveryCacheSettings -Map $Map)
         return New-ConfigMapDiscoveryCacheInfo -Action $Action -Enabled $enabled -Location $location -Path $null -Exists $false -Valid $false -Source 'none' -RootMap $null -Language $Language
     }
 

@@ -15,15 +15,21 @@
             }
 
             Write-Verbose "[tmux] Dispatching $($Context.Targets.Count) target(s) via tmux windows."
+            $runContext = $Context.RunContext
+            if (-not $runContext) {
+                $runContext = New-ConfigMapRunContext -Map $Context.Map
+            }
             foreach ($target in $Context.Targets) {
-                Invoke-WithEntrySettings -Map $Context.Map -EntryKey $target.Key -Entry $target.Value -ScriptBlock {
+                $targetContext = New-ConfigMapEntryContext -Parent $runContext -EntryKey $target.Key -Entry $target.Value
+                Invoke-WithRunContext -Context $targetContext -ScriptBlock {
                     Invoke-EntryWrapper `
                         -MainCommand $Context.MainCommand `
                         -TargetKey $target.Key `
                         -TargetEntry $target.Value `
                         -Command $Context.Command `
                         -Bound $Context.Bound `
-                        -RemainingArguments $Context.RemainingArguments
+                        -RemainingArguments $Context.RemainingArguments `
+                        -RunContext $targetContext
                 }
             }
 
@@ -34,15 +40,14 @@
             param($Context)
 
             $hasMap = $Context.Bound.map -and $Context.Bound.map -isnot [string]
-            if (-not (Test-ConfigMapFeatureEnabled -Name TmuxAutoWindow) -or $hasMap) {
+            if (-not (Test-ConfigMapFeatureEnabled -Name TmuxAutoWindow -Settings $Context.Settings) -or $hasMap) {
                 Write-Verbose "[tmux] Auto-window is disabled or map argument is present. Skipping tmux handling."
                 return @{ Handled = $false }
             }
 
             $tmuxInfo = Get-TmuxInfo
             if ($null -eq $tmuxInfo `
-                    -or $tmuxInfo.windowName -eq $Context.TargetKey `
-                    -or -not (Test-ConfigMapFeatureEnabled -Name TmuxAutoWindow)) {
+                    -or $tmuxInfo.windowName -eq $Context.TargetKey) {
                 Write-Verbose "[tmux] Auto-window is disabled or already in the target window. Skipping tmux handling."
                 return @{ Handled = $false }
             }
