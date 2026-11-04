@@ -122,18 +122,20 @@ A nested `qbuild inner` inside a scriptblock receives no context. It starts from
 - **Discovery cache.** It enters scopes around map loading, so settings must be threaded through the import path, including the `$script:ImportConfigMap` scriptblock. This is the most invasive step.
 - **`exec` arrays.** `Invoke-EntryCommand` passes a sub-entry as `-Map` and relies on the parent's scope still being active. It needs the parent context instead.
 - **`Invoke-EntryCommand` is exported.** It gets an optional `-Context`. Without one it resolves settings from the entry alone, which matches the nested-qbuild behavior.
-- **Tests that reset the global.** `concurrently.tests.ps1`, `discovery-cache.tests.ps1` and `qbuild-cache.tests.ps1` call `Update-ConfigMapSettings` to pick up changed `QCONF_*` variables. Once base settings are built per invocation, these calls become unnecessary and are removed with the global.
+- **Base settings are captured, not re-read.** `$script:ConfigMapBaseSettings` holds defaults plus `QCONF_*` as read at import; `Update-ConfigMapSettings` refreshes it. Tests rely on this (`settings.tests.ps1`: "uses the initialized settings object until explicitly refreshed"), so it stays.
 
 ## Migration
 
 Each step keeps the suite green.
 
-1. **Red.** Pester regression test: nested `qbuild` from a steps `check` and from a steps `exec` runs the target with `process = exec`. Confirm it fails with `has no steps`.
-2. Add `Resolve-ConfigMapEntrySettings`; route `Get-ConfigMapSettingsForPath` through it.
-3. Build the run context in `Invoke-QBuild` and pass it to handlers. Replace `Invoke-WithEntrySettings` one handler at a time: exec, qrun, qconf, then `invoke-entry` and the tmux plugin. The regression test goes green here.
-4. Convert readers and plugins to `-Settings`.
+1. **Done.** Red regression tests in `qbuild-process.tests.ps1`: nested `qbuild` from a steps `exec` and a steps `check` runs the target as `exec`; a nested `qbuild` from a `useWorkDir` entry runs in its own map directory.
+2. **Done.** `Resolve-ConfigMapEntrySettings` layers map, ancestor and entry `_settings` over `$script:ConfigMapBaseSettings`. `Get-ConfigMapSettingsForPath` uses it, which fixes dispatch: the steps tests go green.
+3. **Done.** `Invoke-WithEntrySettings` resolves from the base and the map instead of stacking on the current settings, and installs the result only for its scriptblock. The `useWorkDir` test goes green. `exec`-array subcommands pass `-BaseSettings` with the parent's settings because they resolve against a sub-entry. The scope-stacking helpers are gone.
+
+   This deviates from the original step 3 (thread a run context through every handler). With no inheritance, an entry's settings depend only on the base and the map, so the bug could be fixed without threading. The module variable remains as a bridge for readers.
+4. Build the run context in `Invoke-QBuild` and the handlers; replace `Invoke-WithEntrySettings` with child contexts. Convert readers and plugins to `-Settings`, and expose `$_context.settings`.
 5. Thread settings through the discovery cache and import path.
-6. Delete `$script:ConfigMapSettings`, `Update-ConfigMapSettings`, `Enter/Exit-ConfigMapSettingsScope(s)`, `Enter-ConfigMapAncestorSettingsScopes` and `Invoke-WithEntrySettings`.
+6. Delete `$script:ConfigMapSettings`, `Enter/Exit-ConfigMapSettingsScope` and `Invoke-WithEntrySettings`. `Get-ConfigMapSettings` returns the base settings.
 
 Steps 1–3 fix the bug and can ship alone. Steps 4–6 finish the cleanup.
 
