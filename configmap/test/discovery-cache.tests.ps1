@@ -244,6 +244,50 @@ Describe 'Discovery cache' {
         @($second.entries.hierarchical).key | Should -Contain 'child.task'
     }
 
+    It 'records mtimes of dot-prefixed (hidden on Unix) root, include and _dependsOn files without errors' {
+        $dir = Join-Path $TestDrive 'dotfiles'
+        $child = Join-Path $dir 'child'
+        New-Item -ItemType Directory -Path $child -Force | Out-Null
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value @'
+@{
+    "#include" = @{ child = @{ prefix = $true } }
+    _dependsOn = @('.deps.ps1')
+    root = { "root" }
+}
+'@
+        Set-Content -Path (Join-Path $child '.build.map.ps1') -Value '@{ task = { "task" } }'
+        Set-Content -Path (Join-Path $dir '.deps.ps1') -Value '# dependency'
+        if (!$IsWindows) {
+            # Guard: on Unix a leading dot is what makes these files hidden.
+            Get-Item -LiteralPath $mapFile -ErrorAction SilentlyContinue | Should -BeNullOrEmpty
+        }
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $cache = & (Get-Module ConfigMap) {
+            param($Map)
+            Get-ConfigMapDiscoveryCache -Map $Map -Language build -ErrorAction Stop
+        } $map
+
+        $deps = @($cache.dependencies)
+        $expected = @(
+            [System.IO.Path]::GetFullPath($mapFile)
+            [System.IO.Path]::GetFullPath((Join-Path $child '.build.map.ps1'))
+            [System.IO.Path]::GetFullPath((Join-Path $dir '.deps.ps1'))
+        )
+        foreach ($path in $expected) {
+            @($deps.path) | Should -Contain $path
+        }
+        foreach ($dep in $deps) {
+            $dep.ticks | Should -Be ([System.IO.File]::GetLastWriteTimeUtc($dep.path).Ticks) -Because $dep.path
+        }
+
+        & (Get-Module ConfigMap) {
+            param($Cache)
+            Test-ConfigMapDiscoveryCacheValid -Cache $Cache -Language build
+        } $cache | Should -BeTrue
+    }
+
     It 'does not create a cache file for in-memory maps' {
         $dir = Join-Path $TestDrive 'in-memory'
         New-Item -ItemType Directory -Path $dir -Force | Out-Null

@@ -287,7 +287,7 @@ function Add-ConfigMapDependsOnDependencies {
         }
 
         if (Test-Path -LiteralPath $fullPath -PathType Leaf) {
-            $OperationContext.Dependencies[$fullPath] = (Get-Item -LiteralPath $fullPath).LastWriteTimeUtc.Ticks
+            $OperationContext.Dependencies[$fullPath] = (Get-Item -LiteralPath $fullPath -Force).LastWriteTimeUtc.Ticks
         }
         else {
             $OperationContext.Dependencies[$fullPath] = $null
@@ -469,7 +469,7 @@ function Test-ConfigMapDiscoveryCacheValid {
 
         if (-not $exists) { return $false }
 
-        $currentTicks = (Get-Item -LiteralPath $path).LastWriteTimeUtc.Ticks
+        $currentTicks = (Get-Item -LiteralPath $path -Force).LastWriteTimeUtc.Ticks
         if ([int64]$currentTicks -ne [int64]$storedTicks) { return $false }
     }
 
@@ -520,7 +520,7 @@ function Build-ConfigMapDiscoveryCache {
 
     $sourceFile = [System.IO.Path]::GetFullPath($Map._sourceFile)
     $operationContext = New-ConfigMapOperationContext
-    $operationContext.Dependencies[$sourceFile] = (Get-Item -LiteralPath $sourceFile).LastWriteTimeUtc.Ticks
+    $operationContext.Dependencies[$sourceFile] = (Get-Item -LiteralPath $sourceFile -Force).LastWriteTimeUtc.Ticks
 
     $pair = Get-MapEntryListPair -map $Map -language $Language -OperationContext $operationContext
 
