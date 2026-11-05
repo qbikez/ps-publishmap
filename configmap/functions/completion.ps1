@@ -229,7 +229,7 @@ function Merge-IncludeDirectives {
         $fullMapPath = [System.IO.Path]::GetFullPath($mapFile)
 
         if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
-            $OperationContext.Dependencies[$fullMapPath] = (Get-Item -LiteralPath $mapFile).LastWriteTimeUtc.Ticks
+            $OperationContext.Dependencies[$fullMapPath] = (Get-Item -LiteralPath $mapFile -Force).LastWriteTimeUtc.Ticks
         }
         else {
             $OperationContext.Dependencies[$fullMapPath] = $null
