@@ -73,7 +73,7 @@ h1 em { font-style: normal; color: var(--acc); }
 .copy:hover { color: var(--ink); }
 
 /* terminal */
-.term { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; box-shadow: 0 24px 60px -30px #000; }
+.term { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; box-shadow: 0 24px 60px -30px #000; }
 .term-h { display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 12px; color: var(--mute); }
 .term-h i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); display: block; }
 .term-h span { margin-left: 8px; }
@@ -81,7 +81,16 @@ h1 em { font-style: normal; color: var(--acc); }
 .term-tabs button { font: 500 13px var(--mono); background: none; border: 0; color: var(--mute); padding: 10px 14px; cursor: pointer; white-space: nowrap; border-bottom: 2px solid transparent; min-height: 44px; }
 .term-tabs button:hover { color: var(--ink); }
 .term-tabs button[aria-selected="true"] { color: var(--acc); border-bottom-color: var(--acc); }
-.out { padding: 18px; font-size: 13.5px; line-height: 1.65; overflow-x: auto; min-height: 280px; color: var(--ink); }
+.out { padding: 18px; font-size: 13.5px; line-height: 1.65; overflow: auto; height: 320px; color: var(--ink); }
+.term.typing .caret { animation: none; }
+.flash { border-radius: 2px; animation: flash 0.9s ease-out; }
+@keyframes flash { from { background: rgba(255, 179, 71, 0.45); color: var(--acc); } to { background: transparent; } }
+.menu { display: inline-flex; flex-wrap: wrap; gap: 6px; padding-left: 4ch; }
+.menu span { padding: 0 6px; border: 1px solid var(--line); border-radius: 3px; color: var(--mute); transition: background 0.12s, color 0.12s; }
+.menu span.sel { background: var(--acc); border-color: var(--acc); color: #1a1205; }
+.key { position: absolute; right: 16px; bottom: 16px; font: 600 12px var(--mono); color: #1a1205; background: var(--acc); border-radius: 6px; padding: 6px 12px; box-shadow: 0 4px 0 #b9792a; opacity: 0; transform: translateY(8px) scale(0.9); transition: opacity 0.15s, transform 0.15s, box-shadow 0.08s; pointer-events: none; }
+.key.on { opacity: 1; transform: none; }
+.key.down { transform: translateY(3px); box-shadow: 0 1px 0 #b9792a; }
 .out[hidden] { display: none; }
 .pr { color: var(--acc2); }
 .d { color: var(--mute); }
@@ -132,6 +141,7 @@ footer ul { list-style: none; margin: 0; padding: 0; display: flex; gap: 20px; f
 }
 @media (prefers-reduced-motion: reduce) {
   .caret { animation: none; }
+  .key { display: none; }
   html { scroll-behavior: auto; }
 }
 </style>
@@ -172,9 +182,10 @@ footer ul { list-style: none; margin: 0; padding: 0; display: flex; gap: 20px; f
 
       <div class="term">
         <div class="term-h"><i></i><i></i><i></i><span>pwsh · ~/my-app</span></div>
+        <kbd class="key" id="key" aria-hidden="true"></kbd>
         <div class="term-tabs" role="tablist" aria-label="Demo commands">
           <button role="tab" id="tab-list" aria-controls="out-list" aria-selected="true" tabindex="0">qbuild</button>
-          <button role="tab" id="tab-tab" aria-controls="out-tab" aria-selected="false" tabindex="-1">qbuild deploy -&lt;TAB&gt;</button>
+          <button role="tab" id="tab-tab" aria-controls="out-tab" aria-selected="false" tabindex="-1">qbuild deploy &lt;TAB&gt;</button>
           <button role="tab" id="tab-conf" aria-controls="out-conf" aria-selected="false" tabindex="-1">qbuild storage -value</button>
         </div>
 <pre class="out" id="out-list" role="tabpanel" aria-labelledby="tab-list"><span class="pr">PS&gt;</span> qbuild
@@ -373,6 +384,175 @@ Import-Module configmap</pre></div></li>
 <script>
 (function () {
   var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
+  var term = document.querySelector('.term');
+  var keyEl = document.getElementById('key');
+
+  function esc(t) { return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function d(t) { return '<span class="d">' + t + '</span>'; }
+  var PROMPT = '<span class="pr">PS&gt;</span> ';
+
+  function storageTree(active, value) {
+    return [
+      '',
+      '    <span class="hi">storage</span>  Storage endpoint in appsettings JSON',
+      '    ' + d('├─') + ' <span class="pr">●</span> Active  ' + active,
+      '    ' + d('├─') + '   Value   {"Storage:BaseUrl":"' + value + '"}',
+      '    ' + d('└─') + '   Options local, prod',
+      ''
+    ];
+  }
+
+  // Each step is [action, argument]. Output was captured from qbuild on the sample maps.
+  var SCENARIOS = {
+    'tab-list': [
+      ['type', 'qbuild'], ['pause', 350], ['enter'],
+      ['output', [
+        '',
+        '<span class="hi">QBUILD</span>',
+        d('A command line tool to manage build scripts'),
+        d('Map: ./.build.map.ps1'),
+        '',
+        'COMMANDS:',
+        '    build    ' + d('[-Configuration]') + '  Build the project',
+        '    clean',
+        '    deploy   ' + d('[-Environment -Force -Timeout]') + '  Deploy to specified environment',
+        ''
+      ]]
+    ],
+    'tab-tab': [
+      ['type', 'qbuild dep'], ['pause', 300], ['key', 'Tab'], ['complete', 'loy '],
+      ['type', '-'], ['pause', 250],
+      ['menu', { items: ['-Environment', '-Force', '-Timeout'], select: 0, insert: 'Environment ' }],
+      ['menu', { items: ['dev', 'prod', 'staging'], select: 1, insert: 'prod' }],
+      ['type', ' -Force'], ['pause', 400], ['enter'],
+      ['output', ['Deploying to prod...', '']]
+    ],
+    'tab-conf': [
+      ['type', 'qbuild sto'], ['pause', 300], ['key', 'Tab'], ['complete', 'rage'],
+      ['pause', 300], ['enter'],
+      ['output', storageTree('prod', 'https://prod.example')],
+      ['pause', 600],
+      ['type', 'qbuild storage -value local'], ['pause', 350], ['enter'],
+      ['output', storageTree('local', 'https://127.0.0.1:10000/devstoreaccount1')]
+    ]
+  };
+
+  var STOP = {};
+  var runId = 0;
+  var onScreen = true;
+
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  // Waits ms of visible time; aborts when a newer run started.
+  function wait(ms, id) {
+    var left = ms;
+    function tick() {
+      if (id !== runId) return Promise.reject(STOP);
+      if (left <= 0) return Promise.resolve();
+      return sleep(40).then(function () {
+        if (onScreen && !document.hidden) left -= 40;
+        return tick();
+      });
+    }
+    return tick();
+  }
+
+  function press(label, id) {
+    keyEl.textContent = label;
+    keyEl.classList.add('on', 'down');
+    return wait(140, id).then(function () {
+      keyEl.classList.remove('down');
+      var shown = label;
+      setTimeout(function () { if (keyEl.textContent === shown) keyEl.classList.remove('on'); }, 450);
+      return wait(160, id);
+    });
+  }
+
+  function render(el, st) {
+    var html = st.lines.join('\n');
+    if (!st.busy) {
+      var input = st.flash < 0 ? esc(st.input)
+        : esc(st.input.slice(0, st.flash)) + '<span class="flash">' + esc(st.input.slice(st.flash)) + '</span>';
+      html += (st.lines.length ? '\n' : '') + PROMPT + input + '<span class="caret"></span>';
+      if (st.menu) {
+        html += '\n<span class="menu">' + st.menu.items.map(function (it, i) {
+          return '<span' + (i === st.menu.sel ? ' class="sel"' : '') + '>' + esc(it) + '</span>';
+        }).join('') + '</span>';
+      }
+    }
+    el.innerHTML = html;
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function play(steps, el, id) {
+    var st = { lines: [], input: '', flash: -1, menu: null, busy: false };
+    render(el, st);
+    var actions = {
+      pause: function (ms) { return wait(ms, id); },
+      type: function (text) {
+        st.flash = -1;
+        term.classList.add('typing');
+        var i = 0;
+        function next() {
+          if (i >= text.length) { term.classList.remove('typing'); return Promise.resolve(); }
+          st.input += text[i++];
+          render(el, st);
+          return wait(45 + Math.random() * 75, id).then(next);
+        }
+        return next();
+      },
+      key: function (label) { return press(label, id); },
+      complete: function (text) {
+        st.flash = st.input.length;
+        st.input += text;
+        render(el, st);
+        return wait(550, id);
+      },
+      menu: function (m) {
+        return press('Tab', id).then(function () {
+          st.menu = { items: m.items, sel: 0 };
+          render(el, st);
+          var moves = m.select;
+          function move() {
+            if (moves-- <= 0) return wait(500, id);
+            return wait(450, id).then(function () { return press('Tab', id); })
+              .then(function () { st.menu.sel++; render(el, st); return move(); });
+          }
+          return wait(400, id).then(move);
+        }).then(function () { return press('Enter', id); }).then(function () {
+          st.menu = null;
+          st.flash = st.input.length;
+          st.input += m.insert;
+          render(el, st);
+          return wait(550, id);
+        });
+      },
+      enter: function () {
+        return press('Enter', id).then(function () {
+          st.lines.push(PROMPT + esc(st.input));
+          st.input = '';
+          st.flash = -1;
+          st.busy = true;
+          render(el, st);
+          return wait(250, id);
+        });
+      },
+      output: function (lines) {
+        var i = 0;
+        function next() {
+          if (i >= lines.length) { st.busy = false; render(el, st); return Promise.resolve(); }
+          st.lines.push(lines[i++]);
+          render(el, st);
+          return wait(60, id).then(next);
+        }
+        return next();
+      }
+    };
+    return steps.reduce(function (p, step) {
+      return p.then(function () { return actions[step[0]](step[1]); });
+    }, Promise.resolve());
+  }
+
   function select(tab) {
     tabs.forEach(function (t) {
       var on = t === tab;
@@ -381,17 +561,40 @@ Import-Module configmap</pre></div></li>
       document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
     });
   }
+
+  var animate = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Plays the selected demo, then moves on to the next one, forever.
+  function cycle(index) {
+    var id = ++runId;
+    keyEl.classList.remove('on', 'down');
+    term.classList.remove('typing');
+    var tab = tabs[index];
+    select(tab);
+    if (!animate) return;
+    var panel = document.getElementById(tab.getAttribute('aria-controls'));
+    play(SCENARIOS[tab.id], panel, id)
+      .then(function () { return wait(2800, id); })
+      .then(function () { cycle((index + 1) % tabs.length); })
+      .catch(function (e) { if (e !== STOP) throw e; });
+  }
+
   tabs.forEach(function (t, i) {
-    t.addEventListener('click', function () { select(t); });
+    t.addEventListener('click', function () { cycle(i); });
     t.addEventListener('keydown', function (e) {
-      var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
-      if (!d) return;
+      var dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (!dir) return;
       e.preventDefault();
-      var next = tabs[(i + d + tabs.length) % tabs.length];
-      next.focus();
-      select(next);
+      var n = (i + dir + tabs.length) % tabs.length;
+      tabs[n].focus();
+      cycle(n);
     });
   });
+
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(function (entries) { onScreen = entries[0].isIntersecting; }).observe(term);
+  }
+  cycle(0);
 
   document.querySelectorAll('[data-copy]').forEach(function (btn) {
     btn.addEventListener('click', function () {
