@@ -677,10 +677,8 @@ function ConvertTo-ConfigMapProcessSplat {
         [hashtable]$BoundParameters,
         [string[]]$RemainingArguments,
         [string[]]$SkipKeys = @(
-            'entry', 'command', 'map', 'ProcessAction', 'ProcessValue', 'RemainingArguments',
-            'Verbose', 'Debug', 'ErrorAction', 'WarningAction', 'InformationAction',
-            'ErrorVariable', 'WarningVariable', 'InformationVariable',
-            'OutVariable', 'OutBuffer', 'PipelineVariable', 'ProgressAction'
+            (Get-QBuildHostParameterName) + @('ProcessAction', 'ProcessValue') +
+            [System.Management.Automation.PSCmdlet]::CommonParameters
         )
     )
 

@@ -341,9 +341,10 @@ function Invoke-QRun {
             return
         }
 
+        $skip = (Get-QBuildHostParameterName) + @('Follow', 'Force', 'Status', 'Reset', 'Check', 'Word', 'Params')
         $bound = @{}
         foreach ($key in $PSBoundParameters.Keys) {
-            if ($key -in @('command', 'entry', 'Follow', 'Force', 'Status', 'Reset', 'Check', 'map', 'RemainingArguments', 'Word', 'Params')) {
+            if ($key -in $skip) {
                 continue
             }
             $bound[$key] = $PSBoundParameters[$key]
