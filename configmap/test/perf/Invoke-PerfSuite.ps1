@@ -11,7 +11,11 @@
     Cache states:
       warm      - repeated call in a loaded session (discovery cache memory hit)
       edited    - a child map was just touched, so the discovery cache is rebuilt
-      new-shell - fresh pwsh: module import + first TAB (discovery cache disk hit)
+      new-shell - fresh pwsh: first TAB on the fixture (discovery cache disk hit),
+                  excluding module import and one-time session warm-up
+
+    Module load time ('module' fixture) is Import-Module in a fresh pwsh, measured
+    once per run independent of the fixtures, with its allocations.
 .EXAMPLE
     ./Invoke-PerfSuite.ps1
 .EXAMPLE
@@ -28,6 +32,8 @@ param(
     [double]$ScenarioBudgetSeconds = 8,
     [ValidateRange(1, 1000)]
     [int]$NewShellIterations = 8,
+    [ValidateRange(1, 1000)]
+    [int]$ImportIterations = 10,
     [string]$Label = 'local',
     [string]$OutFile
 )
@@ -113,38 +119,85 @@ function Measure-Tab {
     }
 }
 
+function Invoke-FreshShell {
+    param([scriptblock]$Probe, [object[]]$ArgumentList)
+
+    $quoted = $ArgumentList | ForEach-Object { "'$($_ -replace "'", "''")'" }
+    $command = "& { $Probe } $quoted"
+    $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($command))
+    pwsh -NoProfile -NonInteractive -EncodedCommand $encoded | Select-Object -Last 1 | ConvertFrom-Json
+}
+
+function Measure-ModuleImport {
+    $probe = {
+        param($ModulePath)
+        Get-ChildItem env: | Where-Object Name -like 'QCONF_*' | ForEach-Object { Remove-Item "env:$($_.Name)" }
+        $before = [GC]::GetTotalAllocatedBytes($true)
+        $sw = [System.Diagnostics.Stopwatch]::StartNew()
+        Import-Module $ModulePath
+        $ms = $sw.Elapsed.TotalMilliseconds
+        $alloc = [GC]::GetTotalAllocatedBytes($true) - $before
+        $loaded = [bool](Get-Command qbuild -ErrorAction Ignore)
+        @{ ms = $ms; alloc = $alloc; loaded = $loaded } | ConvertTo-Json -Compress
+    }
+
+    $name = 'Import-Module (new shell)'
+    $times = [System.Collections.Generic.List[double]]::new()
+    $allocs = [System.Collections.Generic.List[long]]::new()
+    try {
+        # Untimed: the first load of the module files can be slowed by disk/AV caches.
+        $null = Invoke-FreshShell -Probe $probe -ArgumentList $ModulePath
+        foreach ($i in 1..$ImportIterations) {
+            $r = Invoke-FreshShell -Probe $probe -ArgumentList $ModulePath
+            if (!$r.loaded) { throw 'Import-Module did not export qbuild.' }
+            $times.Add($r.ms)
+            $allocs.Add($r.alloc)
+        }
+    }
+    catch {
+        Write-Host ("  {0,-14} {1,-34} FAILED: {2}" -f 'module', $name, $_) -ForegroundColor Yellow
+        return [pscustomobject]@{ Scenario = $name; Fixture = 'module'; Gate = $true; Error = "$_" }
+    }
+
+    $result = New-ScenarioResult -Name $name -Fixture 'module' -Gate $true -Times $times -Allocs $allocs
+    Write-Host ("  {0,-14} {1,-34} median {2,9:n1} ms  (n={3})" -f 'module', $name, $result.MedianMs, $result.Iterations) -ForegroundColor DarkGray
+    $result
+}
+
 function Measure-NewShell {
     param([string]$Fixture, [string]$Directory, [string]$Line)
 
     $probe = {
-        param($ModulePath, $Directory, $Line)
+        param($ModulePath, $Directory, $WarmupDirectory, $Line)
         Get-ChildItem env: | Where-Object Name -like 'QCONF_*' | ForEach-Object { Remove-Item "env:$($_.Name)" }
-        $sw = [System.Diagnostics.Stopwatch]::StartNew()
         Import-Module $ModulePath
-        $importMs = $sw.Elapsed.TotalMilliseconds
+        # Untimed TAB on an identical copy: pays the one-time code costs of a new
+        # session (script compilation, type loading) through the same code paths,
+        # so the timed TAB measures only the disk cache load and the map work.
+        Set-Location $WarmupDirectory
+        $null = TabExpansion2 $Line $Line.Length
         Set-Location $Directory
         $before = [GC]::GetTotalAllocatedBytes($true)
-        $sw.Restart()
+        $sw = [System.Diagnostics.Stopwatch]::StartNew()
         $count = (TabExpansion2 $Line $Line.Length).CompletionMatches.Count
         $tabMs = $sw.Elapsed.TotalMilliseconds
         $alloc = [GC]::GetTotalAllocatedBytes($true) - $before
-        @{ importMs = $importMs; tabMs = $tabMs; alloc = $alloc; count = $count } | ConvertTo-Json -Compress
+        @{ tabMs = $tabMs; alloc = $alloc; count = $count } | ConvertTo-Json -Compress
     }
-    $command = "& { $probe } '$ModulePath' '$Directory' '$Line'"
-    $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($command))
+    # A sibling keeps relative paths and parent-map lookups identical.
+    $warmup = "$Directory-warmup"
+    $probeArgs = @($ModulePath, $Directory, $warmup, $Line)
 
-    $import = [System.Collections.Generic.List[double]]::new()
     $tab = [System.Collections.Generic.List[double]]::new()
     $allocs = [System.Collections.Generic.List[long]]::new()
     try {
-        # Writes the disk cache so every timed run is a disk hit.
-        $null = pwsh -NoProfile -NonInteractive -EncodedCommand $encoded
+        Copy-Item $Directory $warmup -Recurse -Force
+        # Writes the disk cache of both copies so every timed run is a disk hit.
+        $null = Invoke-FreshShell -Probe $probe -ArgumentList $probeArgs
 
         foreach ($i in 1..$NewShellIterations) {
-            $json = pwsh -NoProfile -NonInteractive -EncodedCommand $encoded | Select-Object -Last 1
-            $r = $json | ConvertFrom-Json
+            $r = Invoke-FreshShell -Probe $probe -ArgumentList $probeArgs
             if ($r.count -lt 1) { throw "new-shell TabExpansion2 '$Line' returned no matches." }
-            $import.Add($r.importMs)
             $tab.Add($r.tabMs)
             $allocs.Add($r.alloc)
         }
@@ -154,8 +207,10 @@ function Measure-NewShell {
         [pscustomobject]@{ Scenario = "new-shell: TAB '$Line'"; Fixture = $Fixture; Gate = $true; Error = "$_" }
         return
     }
+    finally {
+        Remove-Item $warmup -Recurse -Force -ErrorAction Ignore
+    }
 
-    New-ScenarioResult -Name 'new-shell: Import-Module' -Fixture $Fixture -Gate $true -Times $import -Allocs @()
     New-ScenarioResult -Name "new-shell: TAB '$Line'" -Fixture $Fixture -Gate $true -Times $tab -Allocs $allocs
 }
 
@@ -163,12 +218,14 @@ $results = [System.Collections.Generic.List[object]]::new()
 $startLocation = Get-Location
 
 try {
+    $results.Add((Measure-ModuleImport))
+
     foreach ($fixture in 'workspace-M', 'workspace-XL') {
         $dir = Join-Path $FixtureRoot $fixture
         if (!(Test-Path $dir)) { continue }
         Set-Location $dir
         $childMap = Join-Path $dir 'p03\.build.map.ps1'
-        $touch = { (Get-Item $childMap).LastWriteTimeUtc = [datetime]::UtcNow }.GetNewClosure()
+        $touch = { (Get-Item -LiteralPath $childMap -Force).LastWriteTimeUtc = [datetime]::UtcNow }.GetNewClosure()
 
         $list = { qbuild list 6>&1 | Out-String }
         $results.Add((Measure-Scenario -Name 'list (warm)' -Fixture $fixture -Action $list))
@@ -194,7 +251,7 @@ try {
     if (Test-Path $samplesDir) {
         Set-Location $samplesDir
         $rootMap = Join-Path $samplesDir '.build.map.ps1'
-        $touchRoot = { (Get-Item $rootMap).LastWriteTimeUtc = [datetime]::UtcNow }.GetNewClosure()
+        $touchRoot = { (Get-Item -LiteralPath $rootMap -Force).LastWriteTimeUtc = [datetime]::UtcNow }.GetNewClosure()
         $results.Add((Measure-Scenario -Name 'list (warm)' -Fixture 'samples' -Action { qbuild list 6>&1 | Out-String }))
         $results.Add((Measure-Scenario -Name 'TAB entry (warm)' -Fixture 'samples' -Action { Measure-Tab 'qbuild ' }))
         $results.Add((Measure-Scenario -Name 'TAB entry (edited)' -Fixture 'samples' -Action { Measure-Tab 'qbuild ' } -Setup $touchRoot))

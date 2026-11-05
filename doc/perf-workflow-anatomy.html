@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Where the perf workflow spends its 8 minutes</title>
+<title>Where the perf workflow spends its 5 minutes</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -116,18 +116,33 @@ table.mini { min-width: 560px; }
 <body>
 <main>
   <header>
-    <h1>Where the perf workflow spends its 8 minutes</h1>
-    <p>Measured from the <code>configmap perf</code> run #8 on PR #74, on a Windows runner. Times come from the log timestamps; the five other recent runs took 6&#8239;m&#8239;26&#8239;s to 7&#8239;m&#8239;54&#8239;s for the same step. The workflow step runs:</p>
+    <h1>Where the perf workflow spends its 5 minutes</h1>
+    <p>Measured from a local run of the workflow's command on PR #78 (head) against <code>master</code> @ <code>ce7ba5a</code> (base), in a Linux container (Ubuntu 24.04, pwsh 7.4.6), with the defaults from <code>c250be2</code>. Times come from timestamps on each output line. These are not comparable with the earlier Windows CI run #8: different machine, different defaults, and the code under test changed. The workflow step runs:</p>
     <pre class="term" aria-label="Command run by the workflow" style="margin-top:14px"><span class="t-bar"><i></i><i></i><i></i><span>pwsh — configmap perf · Compare with base</span></span><code><span class="t-prompt">PS&gt;</span> <span class="t-cmd">./configmap/test/perf/Compare-Perf.ps1</span> <span class="t-flag">-Base</span> <span class="t-str">"origin/master"</span> <span class="t-flag">-Fixture</span> <span class="t-str">workspace-M, samples</span>
 <span class="t-comment"># defaults, not passed by the workflow:</span>
-     <span class="t-flag">-Rounds</span> <span class="t-num">3</span> <span class="t-flag">-Iterations</span> <span class="t-num">30</span> <span class="t-flag">-ScenarioBudgetSeconds</span> <span class="t-num">10</span> <span class="t-flag">-NewShellIterations</span> <span class="t-num">5</span></code></pre>
+     <span class="t-flag">-Rounds</span> <span class="t-num">3</span> <span class="t-flag">-Iterations</span> <span class="t-num">10</span> <span class="t-flag">-ScenarioBudgetSeconds</span> <span class="t-num">8</span> <span class="t-flag">-NewShellIterations</span> <span class="t-num">5</span> <span class="t-flag">-ImportIterations</span> <span class="t-num">10</span></code></pre>
   </header>
 
   <section class="tiles" aria-label="Summary">
-    <div class="tile"><b>8 m 13 s</b><span>whole job</span></div>
-    <div class="tile"><b>7 m 54 s</b><span>“Compare with base” step</span></div>
-    <div class="tile"><b>6 × ~77 s</b><span>suite runs: 3 rounds × base + head</span></div>
-    <div class="tile"><b>44 %</b><span>of each run is the three budget-capped <code>list</code> scenarios</span></div>
+    <div class="tile"><b>5 m 13 s</b><span>“Compare with base” command</span></div>
+    <div class="tile"><b>6 × ~50 s</b><span>suite runs: 3 rounds × base + head</span></div>
+    <div class="tile"><b>48 %</b><span>of each run starts fresh <code>pwsh</code> processes (module load + new-shell)</span></div>
+    <div class="tile"><b>33 %</b><span>of each run is the three <code>list</code> scenarios</span></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-changes">
+    <div>
+      <h2 id="h-changes">What changed since run #8</h2>
+      <p class="sub">PR #78 (perf suite), on top of PR #79 (Linux dotfile fix) and <code>c250be2</code> (fewer iterations).</p>
+    </div>
+    <ul class="notes">
+      <li><b>Fewer iterations.</b> Scenarios now stop at 10 iterations or an 8 s budget, instead of 30 and 10 s. In this container a suite run dropped from ~77 s to ~50 s, and no scenario in the CI fixtures reaches the budget any more.</li>
+      <li><b>New <code>module</code> scenario.</b> <code>Import-Module</code> in a fresh <code>pwsh</code>, timed with its allocations: 1 untimed + 10 timed processes, about 7.2 s per run. Median ~242 ms, about 24 MB allocated.</li>
+      <li><b>new-shell no longer times module loading.</b> Import happens before the timer, and an untimed TAB on a copy of the fixture pays the one-time session warm-up first. The timed TAB is now about 100–140 ms, but each process still takes about 1.3 s of wall time.</li>
+      <li><b>The per-fixture <code>new-shell: Import-Module</code> rows are gone</b>, replaced by the single <code>module</code> row.</li>
+      <li><b>Fresh-shell scenarios now dominate.</b> The iteration cut does not apply to them, so module load and new-shell are about half of each run.</li>
+      <li><b>Dotfile maps work on Linux.</b> PR #79 makes the discovery cache valid there, and the suite's own “touch the map” step now uses <code>Get-Item -Force</code>, so the <code>list</code> and <em>edited</em> scenarios run instead of failing.</li>
+    </ul>
   </section>
 
   <section class="card" aria-labelledby="h-job">
@@ -138,25 +153,25 @@ table.mini { min-width: 560px; }
     <div class="bar" id="jobbar" role="img" aria-label="Job timeline"></div>
     <div class="axis" id="jobaxis"></div>
     <div class="legend">
-      <span><i style="background:var(--base)"></i>base (origin/master)</span>
-      <span><i style="background:var(--head)"></i>head (PR merge commit)</span>
-      <span><i style="background:var(--s5)"></i>checkout, setup, report, comment</span>
+      <span><i style="background:var(--base)"></i>base (<code>master</code>)</span>
+      <span><i style="background:var(--head)"></i>head (PR #78)</span>
+      <span><i style="background:var(--s5)"></i>Compare setup and report (CI adds ~20 s of checkout, upload and comment)</span>
     </div>
   </section>
 
   <section class="card" aria-labelledby="h-run">
     <div>
-      <h2 id="h-run">2 · Inside one suite run (~77 s)</h2>
-      <p class="sub">Average of the six runs, in execution order. Colour shows what makes a scenario stop.</p>
+      <h2 id="h-run">2 · Inside one suite run (~50 s)</h2>
+      <p class="sub">Average of the six runs, in execution order. Colour shows the kind of scenario.</p>
     </div>
     <div class="bar" id="runbar" role="img" aria-label="One suite run broken down by scenario"></div>
     <div class="axis" id="runaxis"></div>
     <div class="annot" id="runannot" aria-hidden="true"></div>
     <div class="legend">
-      <span><i style="background:var(--s1)"></i><code>list</code>: stops at the 10 s budget (n = 9–19)</span>
-      <span><i style="background:var(--s2)"></i>TAB after an edit: 30 iterations × ~200 ms</span>
-      <span><i style="background:var(--s3)"></i>TAB warm: 30 iterations × 35–80 ms</span>
-      <span><i style="background:var(--s4)"></i>new-shell: 1 + 5 fresh <code>pwsh</code> processes</span>
+      <span><i style="background:var(--s1)"></i><code>list</code>: 10 iterations × 320–540 ms</span>
+      <span><i style="background:var(--s2)"></i>TAB after an edit: 10 iterations × ~190–225 ms</span>
+      <span><i style="background:var(--s3)"></i>TAB warm: 10 iterations × 20–51 ms</span>
+      <span><i style="background:var(--s4)"></i>fresh <code>pwsh</code>: module load 1 + 10, new-shell 1 + 5 processes</span>
       <span><i style="background:var(--s5)"></i>process start, import, internal helpers</span>
     </div>
   </section>
@@ -168,25 +183,25 @@ table.mini { min-width: 560px; }
     </div>
     <pre class="term" aria-label="Stop condition"><code><span class="t-flag">while</span> ($times.Count <span class="t-flag">-lt</span> <span class="t-cmd">$Iterations</span> <span class="t-flag">-and</span>
        ($times.Count <span class="t-flag">-lt</span> <span class="t-num">3</span> <span class="t-flag">-or</span> $budget.Elapsed.TotalSeconds <span class="t-flag">-lt</span> <span class="t-cmd">$ScenarioBudgetSeconds</span>)) { ... }
-<span class="t-comment"># stops at 30 samples, or at 10 s once it has at least 3, whichever comes first</span></code></pre>
+<span class="t-comment"># stops at 10 samples, or at 8 s once it has at least 3, whichever comes first</span></code></pre>
     <div class="loop">
       <div class="step"><b>1 · Warm-up</b>Runs the action once, untimed. It runs before the budget clock starts and is not a sample.</div>
       <div class="step"><b>2 · Timed loop</b><code>Setup</code> (e.g. touch a map file) → read allocations → stopwatch around the action. Every sample is kept.</div>
-      <div class="step"><b>3 · Stop</b>30 samples, <em>or</em> at least 3 samples and 10 s elapsed. The budget is wall-clock, so <code>Setup</code> and the allocation reads count against it.</div>
+      <div class="step"><b>3 · Stop</b>10 samples, <em>or</em> at least 3 samples and 8 s elapsed. The budget is wall-clock, so <code>Setup</code> and the allocation reads count against it.</div>
       <div class="step"><b>4 · Report</b>Median, p95, min and median allocated KB. Compare-Perf takes the median of the 3 per-round medians.</div>
     </div>
     <ul class="notes">
       <li><b>Minimum 3 samples.</b> A 5 s call still runs 3 times (~15 s) before the budget can stop it.</li>
-      <li><b>Budget wins above ~333 ms per call</b> (10 s ÷ 30). In the CI fixtures only the <code>list</code> scenarios are that slow.</li>
-      <li><b>new-shell is different.</b> It skips this loop and always starts 1 untimed + <code>NewShellIterations</code> (5) fresh <code>pwsh</code> processes, with no budget.</li>
+      <li><b>Budget wins above ~800 ms per call</b> (8 s ÷ 10). In the CI fixtures no scenario is that slow any more, so every scenario stops at 10 iterations.</li>
+      <li><b>Fresh-shell scenarios are different.</b> They skip this loop and have no budget. <code>module</code> starts 1 untimed + <code>ImportIterations</code> (10) processes. new-shell starts 1 untimed + <code>NewShellIterations</code> (5) processes, and each one runs an untimed warm-up TAB on a copy of the fixture before the timed TAB.</li>
     </ul>
     <div class="tablewrap">
       <table class="mini">
-        <thead><tr><th>Example from run #8</th><th class="num">ms per call</th><th>What stops it</th><th class="num">n</th></tr></thead>
+        <thead><tr><th>Example from the local run</th><th class="num">ms per call</th><th>What stops it</th><th class="num">n</th></tr></thead>
         <tbody>
-          <tr><td><code>list (warm)</code> · workspace-M</td><td class="num"><span class="hl">~940</span></td><td><span class="pill"><i style="background:var(--s1)"></i>10 s budget</span></td><td class="num"><span class="hl">9–13</span></td></tr>
-          <tr><td><code>TAB entry (edited)</code> · workspace-M</td><td class="num"><span class="hl">~195</span></td><td><span class="pill"><i style="background:var(--s2)"></i>30 iterations, after ~6 s</span></td><td class="num">30</td></tr>
-          <tr><td><code>TAB param name (warm)</code> · workspace-M</td><td class="num"><span class="hl">~35</span></td><td><span class="pill"><i style="background:var(--s3)"></i>30 iterations, after ~1 s</span></td><td class="num">30</td></tr>
+          <tr><td><code>list (warm)</code> · workspace-M</td><td class="num"><span class="hl">~504</span></td><td><span class="pill"><i style="background:var(--s1)"></i>10 iterations, after ~6.5 s</span></td><td class="num">10</td></tr>
+          <tr><td><code>TAB entry (edited)</code> · workspace-M</td><td class="num"><span class="hl">~224</span></td><td><span class="pill"><i style="background:var(--s2)"></i>10 iterations, after ~2.4 s</span></td><td class="num">10</td></tr>
+          <tr><td><code>TAB param name (warm)</code> · workspace-M</td><td class="num"><span class="hl">~25</span></td><td><span class="pill"><i style="background:var(--s3)"></i>10 iterations, after ~0.3 s</span></td><td class="num">10</td></tr>
         </tbody>
       </table>
     </div>
@@ -208,35 +223,35 @@ table.mini { min-width: 560px; }
 </main>
 <div id="tip" role="tooltip"></div>
 <script>
-// Job timeline, run #8 (seconds from job start 21:41:30).
+// Job timeline, local run (seconds from command start).
 const job = [
-  { l: 'Set up job + checkout', d: 8.4, c: 's5' },
-  { l: 'Compare setup: 2 worktrees, fixtures, AV warm-up pass', d: 12.1, c: 's5' },
-  { l: 'Round 1 · base', d: 76.0, c: 'base' },
-  { l: 'Round 1 · head', d: 77.5, c: 'head' },
-  { l: 'Round 2 · head', d: 74.7, c: 'head' },
-  { l: 'Round 2 · base', d: 77.4, c: 'base' },
-  { l: 'Round 3 · base', d: 82.2, c: 'base' },
-  { l: 'Round 3 · head', d: 74.5, c: 'head' },
-  { l: 'Report, upload artifact, PR comment, cleanup', d: 10.2, c: 's5' }
+  { l: 'Compare setup: 2 worktrees, fixtures, warm-up pass', d: 11.3, c: 's5' },
+  { l: 'Round 1 · base', d: 50.1, c: 'base' },
+  { l: 'Round 1 · head', d: 48.9, c: 'head' },
+  { l: 'Round 2 · head', d: 48.8, c: 'head' },
+  { l: 'Round 2 · base', d: 51.7, c: 'base' },
+  { l: 'Round 3 · base', d: 51.1, c: 'base' },
+  { l: 'Round 3 · head', d: 50.7, c: 'head' },
+  { l: 'Report and cleanup', d: 0.2, c: 's5' }
 ];
 // One suite run, averaged over the six runs. est = split out of a combined log gap.
 const scen = [
-  { g: 'workspace-M', l: 'pwsh start + Import-Module', d: 2.0, c: 's5', stop: '—', n: '', ms: '', est: true },
-  { g: 'workspace-M', l: 'list (warm)', d: 11.2, c: 's1', stop: 'budget', n: '9–13', ms: '938', est: true },
-  { g: 'workspace-M', l: 'list (edited)', d: 11.2, c: 's1', stop: 'budget', n: '12–15', ms: '752' },
-  { g: 'workspace-M', l: 'TAB entry (warm)', d: 2.5, c: 's3', stop: '30 iter', n: '30', ms: '77' },
-  { g: 'workspace-M', l: 'TAB nested (warm)', d: 2.5, c: 's3', stop: '30 iter', n: '30', ms: '78' },
-  { g: 'workspace-M', l: 'TAB param name (warm)', d: 1.1, c: 's3', stop: '30 iter', n: '30', ms: '35' },
-  { g: 'workspace-M', l: 'TAB param value (warm)', d: 1.1, c: 's3', stop: '30 iter', n: '30', ms: '35' },
-  { g: 'workspace-M', l: 'TAB pkg script (warm)', d: 1.8, c: 's3', stop: '30 iter', n: '30', ms: '55' },
-  { g: 'workspace-M', l: 'TAB entry (edited)', d: 6.1, c: 's2', stop: '30 iter', n: '30', ms: '195' },
-  { g: 'workspace-M', l: 'new-shell: import + TAB', d: 7.5, c: 's4', stop: '5 + 1', n: '5', ms: '~1,300', est: true },
-  { g: 'samples', l: 'list (warm)', d: 11.6, c: 's1', stop: 'budget', n: '12–19', ms: '647', est: true },
-  { g: 'samples', l: 'TAB entry (warm)', d: 2.2, c: 's3', stop: '30 iter', n: '30', ms: '71' },
-  { g: 'samples', l: 'TAB entry (edited)', d: 7.3, c: 's2', stop: '30 iter', n: '30', ms: '231' },
-  { g: 'samples', l: 'new-shell: import + TAB', d: 7.7, c: 's4', stop: '5 + 1', n: '5', ms: '~1,300' },
-  { g: 'in-memory-1k', l: 'internal: Get-MapEntries + Get-EntryCompletion', d: 1.2, c: 's5', stop: '30 iter', n: '30', ms: '0.3 / 38' }
+  { g: 'module', l: 'pwsh start + Import-Module (suite)', d: 1.4, c: 's5', stop: '—', n: '', ms: '', est: true },
+  { g: 'module', l: 'Import-Module (new shell)', d: 7.2, c: 's4', stop: '10 + 1', n: '10', ms: '242', est: true },
+  { g: 'workspace-M', l: 'list (warm)', d: 6.5, c: 's1', stop: '10 iter', n: '10', ms: '504' },
+  { g: 'workspace-M', l: 'list (edited)', d: 6.3, c: 's1', stop: '10 iter', n: '10', ms: '538' },
+  { g: 'workspace-M', l: 'TAB entry (warm)', d: 0.65, c: 's3', stop: '10 iter', n: '10', ms: '51' },
+  { g: 'workspace-M', l: 'TAB nested (warm)', d: 0.43, c: 's3', stop: '10 iter', n: '10', ms: '37' },
+  { g: 'workspace-M', l: 'TAB param name (warm)', d: 0.25, c: 's3', stop: '10 iter', n: '10', ms: '25' },
+  { g: 'workspace-M', l: 'TAB param value (warm)', d: 0.25, c: 's3', stop: '10 iter', n: '10', ms: '21' },
+  { g: 'workspace-M', l: 'TAB pkg script (warm)', d: 0.42, c: 's3', stop: '10 iter', n: '10', ms: '36' },
+  { g: 'workspace-M', l: 'TAB entry (edited)', d: 2.4, c: 's2', stop: '10 iter', n: '10', ms: '224' },
+  { g: 'workspace-M', l: 'new-shell: TAB', d: 9.1, c: 's4', stop: '5 + 1', n: '5', ms: '137 (~1,300 wall)', est: true },
+  { g: 'samples', l: 'list (warm)', d: 3.8, c: 's1', stop: '10 iter', n: '10', ms: '323', est: true },
+  { g: 'samples', l: 'TAB entry (warm)', d: 0.45, c: 's3', stop: '10 iter', n: '10', ms: '40' },
+  { g: 'samples', l: 'TAB entry (edited)', d: 2.2, c: 's2', stop: '10 iter', n: '10', ms: '187' },
+  { g: 'samples', l: 'new-shell: TAB', d: 8.0, c: 's4', stop: '5 + 1', n: '5', ms: '104 (~1,300 wall)', est: true },
+  { g: 'in-memory-1k', l: 'internal: Get-MapEntries + Get-EntryCompletion', d: 0.9, c: 's5', stop: '10 iter', n: '10', ms: '0.5 / 71' }
 ];
 
 const tip = document.getElementById('tip');
@@ -281,12 +296,12 @@ function drawAxis(el, total, ticks, f) {
 const jobTotal = drawBar(document.getElementById('jobbar'), job,
   (it, tot) => it.d / tot > 0.08 ? it.l.replace('Round ', 'R').replace(' · ', ' ') : '',
   it => `<b>${it.l}</b><br>${fmt(it.d)}`);
-drawAxis(document.getElementById('jobaxis'), jobTotal, [0, 120, 240, 360, jobTotal], t => t === 0 ? '0' : fmt(t));
+drawAxis(document.getElementById('jobaxis'), jobTotal, [0, 60, 120, 180, 240, jobTotal], t => t === 0 ? '0' : fmt(t));
 
 const runTotal = drawBar(document.getElementById('runbar'), scen,
-  (it, tot) => it.d / tot > 0.12 ? it.l.replace(' (warm)', '').replace(' (edited)', ' ✎').replace('new-shell: import + TAB', 'new-shell') : '',
+  (it, tot) => it.d / tot > 0.1 ? it.l.replace(' (warm)', '').replace(' (edited)', ' ✎').replace('new-shell: TAB', 'new-shell').replace('Import-Module (new shell)', 'module') : '',
   it => `<b>${it.g} · ${it.l}</b><br>${it.est ? '~' : ''}${fmt(it.d)} per run${it.n ? `<br>n = ${it.n} × ${it.ms} ms` : ''}${it.stop ? `<br>stops at: ${it.stop}` : ''}`);
-drawAxis(document.getElementById('runaxis'), runTotal, [0, 20, 40, 60, runTotal], t => t === 0 ? '0' : fmt(t));
+drawAxis(document.getElementById('runaxis'), runTotal, [0, 10, 20, 30, 40, runTotal], t => t === 0 ? '0' : fmt(t));
 
 // Fixture brackets under the run bar.
 const annot = document.getElementById('runannot');
