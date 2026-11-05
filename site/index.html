@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QBuild: one command line for every script in your repo</title>
+<meta name="description" content="QBuild turns a PowerShell map file into a command line with typed parameters, validation and tab completion. Builds, deploys, config switches and package scripts in one tool.">
+<meta property="og:title" content="QBuild">
+<meta property="og:description" content="Describe builds, deploys and settings in a PowerShell map file. QBuild turns each entry into a command with tab completion.">
+<meta name="theme-color" content="#0e1420">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230e1420'/%3E%3Cpath d='M8 10l6 6-6 6' stroke='%23ffb347' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M16 22h8' stroke='%235cd6c0' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: the product is a terminal, so the page is one. A live demo terminal in the hero, then map -> CLI, features, config, agents, install. */
+:root {
+  --bg: #0e1420;
+  --panel: #151d2c;
+  --line: #26324a;
+  --ink: #e6ebf5;
+  --mute: #93a0ba;
+  --acc: #ffb347;
+  --acc2: #5cd6c0;
+  --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --c-com: #7283a3;
+  --c-str: #f2c879;
+  --c-key: #5cd6c0;
+  --c-var: #9db7ff;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); line-height: 1.5; }
+a { color: var(--acc2); }
+a:hover { color: var(--ink); }
+:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
+pre, code { font-family: var(--mono); }
+pre { margin: 0; }
+h1, h2, h3 { font-family: var(--mono); font-weight: 600; letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+.skip { position: absolute; left: -999px; top: 8px; background: var(--acc); color: var(--bg); padding: 8px 12px; z-index: 10; }
+.skip:focus { left: 8px; }
+
+/* nav */
+.nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 18px; padding-bottom: 18px; flex-wrap: wrap; }
+.logo { font: 600 18px var(--mono); color: var(--ink); text-decoration: none; display: flex; align-items: center; gap: 10px; }
+.logo span { color: var(--acc); }
+.nav ul { list-style: none; margin: 0; padding: 0; display: flex; gap: 20px; flex-wrap: wrap; }
+.nav ul a { color: var(--mute); text-decoration: none; font-size: 15px; }
+.nav ul a:hover { color: var(--ink); }
+
+/* buttons */
+.btn { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; font-weight: 600; font-size: 15px; padding: 12px 18px; min-height: 44px; border-radius: 6px; }
+.btn.p { background: var(--acc); color: #1a1205; }
+.btn.p:hover { background: #ffc46e; color: #1a1205; }
+.btn.s { border: 1px solid var(--line); color: var(--ink); }
+.btn.s:hover { border-color: var(--mute); }
+
+/* hero */
+.hero { padding: 48px 0 64px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 48px; align-items: center; }
+.eyebrow { font-family: var(--mono); color: var(--acc); font-size: 14px; margin-bottom: 16px; }
+h1 { font-size: clamp(34px, 5vw, 56px); line-height: 1.05; }
+h1 em { font-style: normal; color: var(--acc); }
+.lede { color: var(--mute); font-size: 18px; line-height: 1.55; max-width: 46ch; margin: 20px 0 28px; }
+.cta { display: flex; gap: 12px; flex-wrap: wrap; }
+.install { margin-top: 24px; display: flex; align-items: stretch; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); max-width: 440px; }
+.install code { flex: 1; padding: 12px 14px; font-size: 14px; overflow-x: auto; white-space: nowrap; }
+.install code::before { content: "PS> "; color: var(--acc2); }
+.copy { font: 500 13px var(--mono); background: none; color: var(--mute); border: 0; border-left: 1px solid var(--line); padding: 0 14px; cursor: pointer; min-width: 72px; min-height: 44px; }
+.copy:hover { color: var(--ink); }
+
+/* terminal */
+.term { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; box-shadow: 0 24px 60px -30px #000; }
+.term-h { display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 12px; color: var(--mute); }
+.term-h i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); display: block; }
+.term-h span { margin-left: 8px; }
+.term-tabs { display: flex; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.term-tabs button { font: 500 13px var(--mono); background: none; border: 0; color: var(--mute); padding: 10px 14px; cursor: pointer; white-space: nowrap; border-bottom: 2px solid transparent; min-height: 44px; }
+.term-tabs button:hover { color: var(--ink); }
+.term-tabs button[aria-selected="true"] { color: var(--acc); border-bottom-color: var(--acc); }
+.out { padding: 18px; font-size: 13.5px; line-height: 1.65; overflow-x: auto; min-height: 280px; color: var(--ink); }
+.out[hidden] { display: none; }
+.pr { color: var(--acc2); }
+.d { color: var(--mute); }
+.hi { background: var(--line); color: var(--acc); padding: 0 3px; border-radius: 3px; }
+.caret { display: inline-block; width: 8px; height: 15px; background: var(--acc); vertical-align: -2px; animation: blink 1.1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* sections */
+section { padding: 64px 0; border-top: 1px solid var(--line); }
+h2 { font-size: clamp(24px, 3vw, 32px); margin-bottom: 12px; }
+h2 .n { color: var(--acc); }
+.sub { color: var(--mute); max-width: 62ch; line-height: 1.6; margin: 0 0 32px; font-size: 17px; }
+.sub code, .card code, .steps p code { font-size: 0.88em; color: var(--ink); background: var(--panel); border: 1px solid var(--line); padding: 1px 5px; border-radius: 3px; }
+.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.code { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px; font-size: 13px; line-height: 1.65; overflow-x: auto; }
+.cap { font-family: var(--mono); font-size: 12px; color: var(--mute); margin-bottom: 8px; }
+.hl-c { color: var(--c-com); }
+.hl-s { color: var(--c-str); }
+.hl-k { color: var(--c-key); }
+.hl-v { color: var(--c-var); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+.card h3 { font-size: 15px; color: var(--acc2); }
+.card p { margin: 0; color: var(--mute); font-size: 15px; line-height: 1.55; }
+
+.tw { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+table { width: 100%; border-collapse: collapse; font-size: 15px; }
+th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font: 500 12px var(--mono); color: var(--mute); text-transform: uppercase; letter-spacing: 0.06em; background: var(--panel); }
+td:first-child { font-family: var(--mono); color: var(--acc); white-space: nowrap; }
+td { color: var(--mute); }
+td code { color: var(--ink); font-size: 0.88em; }
+
+.steps { counter-reset: s; list-style: none; margin: 0; padding: 0; display: grid; gap: 20px; max-width: 720px; }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; }
+.steps li::before { content: counter(s); font: 600 14px var(--mono); color: var(--bg); background: var(--acc); width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; }
+.steps p { margin: 2px 0 0; color: var(--ink); }
+.steps pre { margin-top: 8px; background: var(--panel); border: 1px solid var(--line); padding: 10px 14px; border-radius: 6px; font-size: 13px; overflow-x: auto; line-height: 1.6; }
+
+footer { border-top: 1px solid var(--line); padding: 32px 0 48px; color: var(--mute); font-size: 14px; display: flex; gap: 16px; justify-content: space-between; flex-wrap: wrap; }
+footer ul { list-style: none; margin: 0; padding: 0; display: flex; gap: 20px; flex-wrap: wrap; }
+
+@media (max-width: 860px) {
+  .hero, .split { grid-template-columns: minmax(0, 1fr); }
+  .hero { padding-top: 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .caret { animation: none; }
+  html { scroll-behavior: auto; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="wrap nav">
+  <a class="logo" href="#top" aria-label="QBuild home"><span aria-hidden="true">&gt;_</span>qbuild</a>
+  <nav aria-label="Main">
+    <ul>
+      <li><a href="#how">How it works</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#config">Config</a></li>
+      <li><a href="#agents">Agents</a></li>
+      <li><a href="#start">Get started</a></li>
+      <li><a href="https://github.com/qbikez/ps-publishmap">GitHub</a></li>
+    </ul>
+  </nav>
+</header>
+
+<main id="main">
+  <div class="wrap" id="top">
+    <div class="hero">
+      <div>
+        <div class="eyebrow">$ qbuild</div>
+        <h1>One command line for every script in your <em>repo</em>.</h1>
+        <p class="lede">Describe builds, deploys and settings in a PowerShell map file. QBuild turns each entry into a command with tab completion, typed parameters and validation.</p>
+        <div class="cta">
+          <a class="btn p" href="#start">Get started</a>
+          <a class="btn s" href="https://github.com/qbikez/ps-publishmap/tree/master/configmap">Read the docs</a>
+        </div>
+        <div class="install">
+          <code id="install-cmd">Install-Module configmap</code>
+          <button class="copy" type="button" data-copy="install-cmd" aria-label="Copy install command">copy</button>
+        </div>
+      </div>
+
+      <div class="term">
+        <div class="term-h"><i></i><i></i><i></i><span>pwsh · ~/my-app</span></div>
+        <div class="term-tabs" role="tablist" aria-label="Demo commands">
+          <button role="tab" id="tab-list" aria-controls="out-list" aria-selected="true" tabindex="0">qbuild</button>
+          <button role="tab" id="tab-tab" aria-controls="out-tab" aria-selected="false" tabindex="-1">qbuild deploy -&lt;TAB&gt;</button>
+          <button role="tab" id="tab-conf" aria-controls="out-conf" aria-selected="false" tabindex="-1">qbuild storage -value</button>
+        </div>
+<pre class="out" id="out-list" role="tabpanel" aria-labelledby="tab-list"><span class="pr">PS&gt;</span> qbuild
+
+<span class="hi">QBUILD</span>
+<span class="d">A command line tool to manage build scripts</span>
+<span class="d">Map: ./.build.map.ps1</span>
+
+COMMANDS:
+    build    <span class="d">[-Configuration]</span>  Build the project
+    clean
+    deploy   <span class="d">[-Environment -Force -Timeout]</span>  Deploy to specified environment
+
+<span class="pr">PS&gt;</span> <span class="caret"></span></pre>
+<pre class="out" id="out-tab" role="tabpanel" aria-labelledby="tab-tab" hidden><span class="pr">PS&gt;</span> qbuild deploy -<span class="d">&lt;TAB&gt;</span>
+
+  -Environment   -Force   -Timeout
+
+<span class="pr">PS&gt;</span> qbuild deploy -Environment <span class="d">&lt;TAB&gt;</span>
+
+  dev   <span class="hi">prod</span>   staging
+
+<span class="pr">PS&gt;</span> qbuild deploy -Environment prod -Force
+Deploying to prod...
+
+<span class="pr">PS&gt;</span> <span class="caret"></span></pre>
+<pre class="out" id="out-conf" role="tabpanel" aria-labelledby="tab-conf" hidden><span class="pr">PS&gt;</span> qbuild storage -value local
+
+    <span class="hi">storage</span>  Storage endpoint in appsettings JSON
+    <span class="d">├─</span> <span class="pr">●</span> Active  local
+    <span class="d">├─</span>   Value   {"Storage:BaseUrl":"https://127.0.0.1:10000/devstoreaccount1"}
+    <span class="d">└─</span>   Options local, prod
+
+<span class="pr">PS&gt;</span> <span class="caret"></span></pre>
+      </div>
+    </div>
+  </div>
+
+  <section id="how">
+    <div class="wrap">
+      <h2><span class="n">01</span> Your map file is the CLI.</h2>
+      <p class="sub">Write a hashtable in <code>.build.map.ps1</code>. Each key becomes a command, each <code>param()</code> becomes a flag, and each <code>ValidateSet</code> becomes a completion list.</p>
+      <div class="split">
+        <div>
+          <div class="cap">.build.map.ps1</div>
+<pre class="code"><span class="hl-k">@{</span>
+    <span class="hl-c"># Plain script block</span>
+    clean = { Remove-Item bin, obj -Recurse -Force }
+
+    build = @{
+        <span class="hl-k">description</span> = <span class="hl-s">'Build the project'</span>
+        <span class="hl-k">exec</span> = {
+            <span class="hl-k">param</span>([ValidateSet(<span class="hl-s">'Debug'</span>, <span class="hl-s">'Release'</span>)]<span class="hl-v">$Configuration</span> = <span class="hl-s">'Debug'</span>)
+            dotnet build --configuration <span class="hl-v">$Configuration</span>
+        }
+    }
+
+    deploy = @{
+        <span class="hl-k">description</span> = <span class="hl-s">'Deploy to specified environment'</span>
+        <span class="hl-k">exec</span> = {
+            <span class="hl-k">param</span>(
+                [ValidateSet(<span class="hl-s">'dev'</span>, <span class="hl-s">'staging'</span>, <span class="hl-s">'prod'</span>)]<span class="hl-v">$Environment</span> = <span class="hl-s">'dev'</span>,
+                [switch]<span class="hl-v">$Force</span>,
+                [int]<span class="hl-v">$Timeout</span> = 300
+            )
+            Write-Host <span class="hl-s">"Deploying to </span><span class="hl-v">$Environment</span><span class="hl-s">..."</span>
+        }
+    }
+<span class="hl-k">}</span></pre>
+        </div>
+        <div>
+          <div class="cap">what you get</div>
+<pre class="code"><span class="pr">PS&gt;</span> qbuild build -Configuration Release
+<span class="pr">PS&gt;</span> qbuild deploy -Environment prod -Force -Timeout 600
+
+<span class="pr">PS&gt;</span> qbuild <span class="d">&lt;TAB&gt;</span>
+<span class="d">    build  clean  deploy  help  list  ...</span>
+<span class="pr">PS&gt;</span> qbuild deploy -<span class="d">&lt;TAB&gt;</span>
+<span class="d">    -Environment  -Force  -Timeout</span>
+<span class="pr">PS&gt;</span> qbuild deploy -Environment <span class="d">&lt;TAB&gt;</span>
+<span class="d">    dev  prod  staging</span></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <h2><span class="n">02</span> What it does</h2>
+      <p class="sub">Built on the publishmap module. Runs anywhere PowerShell 7 runs: Windows, macOS and Linux.</p>
+      <div class="grid">
+        <div class="card"><h3>Typed parameters</h3><p>Parameters come straight from your script blocks: types, defaults, switches and <code>ValidateSet</code>.</p></div>
+        <div class="card"><h3>Tab completion</h3><p>Entries, nested entries, parameter names and values complete in the shell. <code>ValidateSet('@envs')</code> reads its values from a sibling key, computed only when needed.</p></div>
+        <div class="card"><h3>Process types</h3><p><code>exec</code> scripts, multi-step <code>steps</code>, config <code>options</code>, and <code>bun</code> / <code>npm</code> package scripts in one tool.</p></div>
+        <div class="card"><h3>Maps that compose</h3><p>A root map can <code>#include</code> project maps, so one <code>qbuild</code> covers a whole workspace.</p></div>
+        <div class="card"><h3>Fast listing</h3><p>Discovery is cached as JSON and refreshed when the map, its includes or its <code>_dependsOn</code> files change.</p></div>
+        <div class="card"><h3>Starts from your repo</h3><p><code>qbuild !init</code> writes a map with defaults for what it finds, including <code>bun</code> or <code>npm</code> when a lock file or <code>package.json</code> is present.</p></div>
+      </div>
+
+      <div style="height:40px"></div>
+      <div class="tw">
+        <table>
+          <thead><tr><th>process</th><th>what it runs</th></tr></thead>
+          <tbody>
+            <tr><td>exec</td><td>The entry's <code>exec</code> script block. This is the default.</td></tr>
+            <tr><td>steps</td><td>A multi-step process with persisted state.</td></tr>
+            <tr><td>options</td><td>Configuration get, set and show.</td></tr>
+            <tr><td>bun, npm</td><td><code>package.json</code> scripts: <code>qbuild web dev -- --watch</code> runs <code>bun run dev --watch</code> in the entry's directory.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="config">
+    <div class="wrap">
+      <h2><span class="n">03</span> Switch settings, not files.</h2>
+      <p class="sub">Give an entry named presets and a template, and QBuild reads and writes the value for you. Templates exist for <code>appsettings</code> JSON, <code>.env</code> files and <code>dotnet user-secrets</code>. Your own <code>get</code> and <code>set</code> still win when you need them.</p>
+      <div class="split">
+        <div>
+          <div class="cap">.build.map.ps1</div>
+<pre class="code"><span class="hl-k">@{</span>
+    storage = @{
+        <span class="hl-k">description</span> = <span class="hl-s">'Storage endpoint in appsettings JSON'</span>
+        <span class="hl-k">_settings</span>   = @{ process = <span class="hl-s">'options'</span> }
+        <span class="hl-k">_template</span>   = <span class="hl-s">'appsettings:src/appsettings.Development.json'</span>
+        <span class="hl-k">options</span>     = @{
+            local = @{ <span class="hl-s">'Storage:BaseUrl'</span> = <span class="hl-s">'https://127.0.0.1:10000/devstoreaccount1'</span> }
+            prod  = @{ <span class="hl-s">'Storage:BaseUrl'</span> = <span class="hl-s">'https://prod.example'</span> }
+        }
+    }
+<span class="hl-k">}</span></pre>
+        </div>
+        <div>
+          <div class="cap">usage</div>
+<pre class="code"><span class="pr">PS&gt;</span> qbuild storage
+
+    storage  Storage endpoint in appsettings JSON
+    <span class="d">├─</span> <span class="pr">●</span> Active  prod
+    <span class="d">├─</span>   Value   {"Storage:BaseUrl":"https://prod.example"}
+    <span class="d">└─</span>   Options local, prod
+
+<span class="pr">PS&gt;</span> qbuild storage -value local</pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="agents">
+    <div class="wrap">
+      <h2><span class="n">04</span> Readable by agents and scripts.</h2>
+      <p class="sub">AI agents and automation get a structured catalog instead of scraping help text. Each command reports its name, description and parameters with types, defaults and allowed values.</p>
+      <div class="split">
+<pre class="code"><span class="pr">PS&gt;</span> qbuild !describe                     <span class="hl-c"># all commands as objects</span>
+<span class="pr">PS&gt;</span> qbuild !describe build               <span class="hl-c"># one command</span>
+<span class="pr">PS&gt;</span> qbuild !describe | ConvertTo-Json -Depth 6</pre>
+<pre class="code"><span class="hl-c"># Install the shipped agent skills into this project</span>
+<span class="pr">PS&gt;</span> qbuild !agent.init                    <span class="hl-c"># Cursor</span>
+<span class="pr">PS&gt;</span> qbuild !agent.init -Agent claude      <span class="hl-c"># Claude Code</span>
+<span class="pr">PS&gt;</span> qbuild !agent.init -Agent copilot     <span class="hl-c"># GitHub Copilot</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <section id="start">
+    <div class="wrap">
+      <h2><span class="n">05</span> Start in four lines.</h2>
+      <p class="sub">Requires PowerShell 7 or higher.</p>
+      <ol class="steps">
+        <li><div><p>Install and load the module</p><pre>Install-Module configmap
+Import-Module configmap</pre></div></li>
+        <li><div><p>Create a map with defaults for this directory</p><pre>qbuild !init</pre></div></li>
+        <li><div><p>See what you can run</p><pre>qbuild</pre></div></li>
+        <li><div><p>Run a command</p><pre>qbuild build -Configuration Release</pre></div></li>
+      </ol>
+      <p class="sub" style="margin-top:32px">Add <code>Import-Module configmap</code> to your PowerShell profile so completion is ready in every shell.</p>
+      <div class="cta">
+        <a class="btn p" href="https://github.com/qbikez/ps-publishmap/tree/master/configmap">Read the docs</a>
+        <a class="btn s" href="https://www.powershellgallery.com/packages/configmap">PowerShell Gallery</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="wrap">
+  <footer>
+    <span>QBuild ships in the configmap module, part of ps-publishmap.</span>
+    <ul>
+      <li><a href="https://github.com/qbikez/ps-publishmap">GitHub</a></li>
+      <li><a href="https://github.com/qbikez/ps-publishmap/tree/master/configmap/samples">Samples</a></li>
+      <li><a href="https://www.powershellgallery.com/packages/configmap">PowerShell Gallery</a></li>
+    </ul>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
+  function select(tab) {
+    tabs.forEach(function (t) {
+      var on = t === tab;
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+    });
+  }
+  tabs.forEach(function (t, i) {
+    t.addEventListener('click', function () { select(t); });
+    t.addEventListener('keydown', function (e) {
+      var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (!d) return;
+      e.preventDefault();
+      var next = tabs[(i + d + tabs.length) % tabs.length];
+      next.focus();
+      select(next);
+    });
+  });
+
+  document.querySelectorAll('[data-copy]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var text = document.getElementById(btn.getAttribute('data-copy')).textContent;
+      var done = function (label) { btn.textContent = label; setTimeout(function () { btn.textContent = 'copy'; }, 1500); };
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(function () { done('copied'); }, function () { done('failed'); });
+      } else {
+        done('failed');
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>
