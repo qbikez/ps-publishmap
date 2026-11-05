@@ -761,19 +761,24 @@ function Get-ConfigMapProcessNamesInMap {
     #>
     param(
         [Parameter(Mandatory = $true)]
-        [System.Collections.IDictionary]$Map,
-        $OperationContext
+        [System.Collections.IDictionary]$Map
     )
-
-    if (-not $OperationContext) {
-        $OperationContext = New-ConfigMapOperationContext
-    }
 
     $names = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     foreach ($key in @($Map.Keys)) {
         if ([string]$key -like '_*') { continue }
-        $resolved = Get-MapEntry $Map $key -language 'build' -OperationContext $OperationContext
-        $proc = Get-EntryProcess $resolved
+        # Runs on every qbuild entry TAB, so keep the per-key cost low on large maps: index the
+        # map directly (Get-MapEntry rescans it per key) and skip entries without their own
+        # process before any function call; they default to exec, which is never external.
+        $entry = $Map[$key]
+        if (
+            $entry -isnot [System.Collections.IDictionary] -or
+            $entry._settings -isnot [System.Collections.IDictionary] -or
+            -not $entry._settings.process
+        ) {
+            continue
+        }
+        $proc = Get-EntryProcess $entry
         if (
             $proc -and
             -not (Get-ConfigMapProcessHandler -Name $proc) -and

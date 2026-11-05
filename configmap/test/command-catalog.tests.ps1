@@ -162,11 +162,8 @@ Describe 'qbuild !describe' {
     It 'includes built-in list and help in entry completions when a map exists' {
         Push-Location $script:tempRoot
         try {
-            $completer = (Get-Command qbuild).Parameters['entry'].Attributes |
-                Where-Object { $_ -is [System.Management.Automation.ArgumentCompleterAttribute] } |
-                Select-Object -First 1
-
-            $completions = & $completer.ScriptBlock 'qbuild' 'entry' '' $null @{}
+            $line = 'qbuild '
+            $completions = (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText
 
             $completions | Should -Contain 'list'
             $completions | Should -Contain 'help'

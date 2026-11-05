@@ -202,11 +202,8 @@ Describe 'ConfigMap settings' {
     }
 
     It 'includes qbuild !settings in entry completions without a build map' {
-        $completer = (Get-Command qbuild).Parameters['entry'].Attributes |
-            Where-Object { $_ -is [System.Management.Automation.ArgumentCompleterAttribute] } |
-            Select-Object -First 1
-
-        $completions = & $completer.ScriptBlock 'qbuild' 'entry' '!set' $null @{}
+        $line = 'qbuild !set'
+        $completions = (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText
 
         $completions | Should -Contain '!settings'
     }

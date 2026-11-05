@@ -139,11 +139,8 @@ Describe 'Initialize-QBuildAgent / qbuild !agent.init' {
     It 'includes !agent.init in entry completions' {
         Push-Location $script:projectRoot
         try {
-            $completer = (Get-Command qbuild).Parameters['entry'].Attributes |
-                Where-Object { $_ -is [System.Management.Automation.ArgumentCompleterAttribute] } |
-                Select-Object -First 1
-
-            $completions = & $completer.ScriptBlock 'qbuild' 'entry' '!agent' $null @{}
+            $line = 'qbuild !agent'
+            $completions = (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText
             $completions | Should -Contain '!agent.init'
             $completions | Should -Contain '!agent.skills'
         }

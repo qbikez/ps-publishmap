@@ -85,12 +85,8 @@ Describe 'qbuild package script proxy' {
         }
 
         It 'completes script names' {
-            $ast = [System.Management.Automation.Language.Parser]::ParseInput('qbuild web ', [ref]$null, [ref]$null).EndBlock.Statements[0].PipelineElements[0]
-            $completer = (Get-Command qbuild).Parameters['ProcessAction'].Attributes |
-                Where-Object { $_ -is [System.Management.Automation.ArgumentCompleterAttribute] } |
-                Select-Object -First 1
-
-            $result = @(& $completer.ScriptBlock 'qbuild' 'ProcessAction' '' $ast @{ entry = 'web' })
+            $line = 'qbuild web '
+            $result = @((TabExpansion2 $line $line.Length).CompletionMatches.CompletionText)
 
             $result | Should -Contain 'dev'
             $result | Should -Contain 'build'

@@ -58,9 +58,11 @@ Describe "qbuild multi-target" {
         New-Item -ItemType Directory -Path $script:mtMapDir -Force | Out-Null
         "@{ 'clean' = { }; 'build' = { }; 'test' = { } }" | Out-File (Join-Path $script:mtMapDir ".build.map.ps1")
 
-        $script:mtCompleter = (Get-Command qbuild).Parameters['entry'].Attributes |
-            Where-Object { $_ -is [System.Management.Automation.ArgumentCompleterAttribute] } |
-            Select-Object -First 1
+        # TabExpansion2 splits "clean,b" into array elements, so call the completion directly.
+        $script:completeEntry = {
+            param([string]$Word)
+            InModuleScope ConfigMap { param($Word) Get-QBuildEntryCompletion -WordToComplete $Word } -Parameters @{ Word = $Word }
+        }
     }
 
     BeforeEach { $script:mtRan.Clear() }
@@ -96,10 +98,8 @@ Describe "qbuild multi-target" {
             param($Script, $MapDir)
             . $Script
             Set-Location $MapDir
-            $completer = (Get-Command qbuild).Parameters['entry'].Attributes |
-                Where-Object { $_ -is [System.Management.Automation.ArgumentCompleterAttribute] } |
-                Select-Object -First 1
-            & $completer.ScriptBlock "qbuild" "entry" "" $null @{}
+            $line = 'qbuild '
+            (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText
         } -args $configmapScript, $script:mtMapDir
 
         $output | Should -Contain "clean"
@@ -110,7 +110,7 @@ Describe "qbuild multi-target" {
     It "completes the second target after a comma" {
         Push-Location $script:mtMapDir
         try {
-            $completions = & $script:mtCompleter.ScriptBlock "qbuild" "entry" "clean," $null @{}
+            $completions = & $script:completeEntry "clean,"
             $completions | Should -Contain "clean,build"
             $completions | Should -Contain "clean,test"
         } finally { Pop-Location }
@@ -119,7 +119,7 @@ Describe "qbuild multi-target" {
     It "filters completions by the partial word after the comma" {
         Push-Location $script:mtMapDir
         try {
-            $completions = & $script:mtCompleter.ScriptBlock "qbuild" "entry" "clean,b" $null @{}
+            $completions = & $script:completeEntry "clean,b"
             $completions | Should -Contain "clean,build"
             $completions | Should -Not -Contain "clean,test"
         } finally { Pop-Location }
@@ -128,7 +128,7 @@ Describe "qbuild multi-target" {
     It "excludes already-selected entries from completions" {
         Push-Location $script:mtMapDir
         try {
-            $completions = & $script:mtCompleter.ScriptBlock "qbuild" "entry" "clean," $null @{}
+            $completions = & $script:completeEntry "clean,"
             $completions | Should -Not -Contain "clean,clean"
         } finally { Pop-Location }
     }
@@ -811,10 +811,8 @@ Describe "qbuild !init" {
 
         Push-Location $completeDir
         try {
-            $completer = (Get-Command qbuild).Parameters['entry'].Attributes |
-                Where-Object { $_ -is [System.Management.Automation.ArgumentCompleterAttribute] } |
-                Select-Object -First 1
-            $completions = & $completer.ScriptBlock "qbuild" "entry" "!init" $null @{}
+            $line = 'qbuild !init'
+            $completions = (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText
 
             foreach ($name in '!init', '!init.exec', '!init.options', '!init.steps', '!init.bun', '!init.npm') {
                 $completions | Should -Contain $name
@@ -864,10 +862,8 @@ Describe "qbuild !init" {
         Push-Location $childDir
         try {
             # simulate tab completion
-            $completer = (Get-Command qbuild).Parameters['entry'].Attributes |
-                Where-Object { $_ -is [System.Management.Automation.ArgumentCompleterAttribute] } |
-                Select-Object -First 1
-            $completions = & $completer.ScriptBlock "qbuild" "entry" "" $null @{}
+            $line = 'qbuild '
+            $completions = (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText
 
             $completions | Should -Contain "!init"
             $completions | Should -Contain "parent-cmd"

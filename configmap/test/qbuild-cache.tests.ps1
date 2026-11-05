@@ -194,11 +194,8 @@ Describe 'qbuild !cache' {
     It 'includes !cache in entry completions when a map exists' {
         Push-Location $script:tempRoot
         try {
-            $completer = (Get-Command qbuild).Parameters['entry'].Attributes |
-                Where-Object { $_ -is [System.Management.Automation.ArgumentCompleterAttribute] } |
-                Select-Object -First 1
-
-            $completions = & $completer.ScriptBlock 'qbuild' 'entry' '' $null @{}
+            $line = 'qbuild '
+            $completions = (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText
             $completions | Should -Contain '!cache'
         }
         finally {
@@ -211,11 +208,8 @@ Describe 'qbuild !cache' {
         New-Item -ItemType Directory -Force -Path $emptyDir | Out-Null
         Push-Location $emptyDir
         try {
-            $completer = (Get-Command qbuild).Parameters['entry'].Attributes |
-                Where-Object { $_ -is [System.Management.Automation.ArgumentCompleterAttribute] } |
-                Select-Object -First 1
-
-            $completions = & $completer.ScriptBlock 'qbuild' 'entry' '!ca' $null @{}
+            $line = 'qbuild !ca'
+            $completions = (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText
             $completions | Should -Contain '!cache'
         }
         finally {
@@ -226,11 +220,8 @@ Describe 'qbuild !cache' {
     It 'includes !cache subcommands in entry completions' {
         Push-Location $script:tempRoot
         try {
-            $completer = (Get-Command qbuild).Parameters['entry'].Attributes |
-                Where-Object { $_ -is [System.Management.Automation.ArgumentCompleterAttribute] } |
-                Select-Object -First 1
-
-            $completions = & $completer.ScriptBlock 'qbuild' 'entry' '!cache.' $null @{}
+            $line = 'qbuild !cache.'
+            $completions = (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText
             $completions | Should -Be @('!cache.status', '!cache.clear', '!cache.rebuild')
         }
         finally {
