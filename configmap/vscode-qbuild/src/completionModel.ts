@@ -44,9 +44,9 @@ const mapSuggestions: CompletionSuggestion[] = [
     isSnippet: true,
   },
   {
-    label: "_dependsOn",
+    label: "_cacheDependsOn",
     detail: "Discovery-cache file dependencies",
-    insertText: "_dependsOn = @('${1:path}')",
+    insertText: "_cacheDependsOn = @('${1:path}')",
     isSnippet: true,
   },
 ];

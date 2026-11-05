@@ -396,7 +396,7 @@ Describe 'Discovery cache' {
         (Get-Item $cachePath).LastWriteTimeUtc | Should -Be $before
     }
 
-    It 'rebuilds when a root _dependsOn file mtime changes' {
+    It 'rebuilds when a root _cacheDependsOn file mtime changes' {
         $dir = Join-Path $TestDrive 'depends-on-mtime'
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
         $dataFile = Join-Path $dir 'data.txt'
@@ -405,7 +405,7 @@ Describe 'Discovery cache' {
         Set-Content -Path $mapFile -Value @'
 $data = (Get-Content (Join-Path $PSScriptRoot 'data.txt') -Raw).Trim()
 @{
-    _dependsOn = @('data.txt')
+    _cacheDependsOn = @('data.txt')
     "$data"    = { "ok" }
 }
 '@
@@ -437,13 +437,13 @@ $data = (Get-Content (Join-Path $PSScriptRoot 'data.txt') -Raw).Trim()
         @($second.entries.hierarchical).key | Should -Not -Contain 'alpha'
     }
 
-    It 'rebuilds when a previously missing _dependsOn file appears' {
+    It 'rebuilds when a previously missing _cacheDependsOn file appears' {
         $dir = Join-Path $TestDrive 'depends-on-missing'
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
         $mapFile = Join-Path $dir '.build.map.ps1'
         Set-Content -Path $mapFile -Value @'
 @{
-    _dependsOn = @('sidecar.txt')
+    _cacheDependsOn = @('sidecar.txt')
     root       = { "root" }
 }
 '@
@@ -472,7 +472,7 @@ $data = (Get-Content (Join-Path $PSScriptRoot 'data.txt') -Raw).Trim()
         $found.ticks | Should -Not -BeNullOrEmpty
     }
 
-    It 'records _dependsOn on a leaf target in cache dependencies' {
+    It 'records _cacheDependsOn on a leaf target in cache dependencies' {
         $dir = Join-Path $TestDrive 'depends-on-leaf'
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
         $leafDep = Join-Path $dir 'leaf-dep.txt'
@@ -482,7 +482,7 @@ $data = (Get-Content (Join-Path $PSScriptRoot 'data.txt') -Raw).Trim()
 @{
     build = @{
         exec       = { "ok" }
-        _dependsOn = @('leaf-dep.txt')
+        _cacheDependsOn = @('leaf-dep.txt')
     }
 }
 '@
@@ -497,7 +497,7 @@ $data = (Get-Content (Join-Path $PSScriptRoot 'data.txt') -Raw).Trim()
         @($cache.dependencies).path | Should -Contain $expected
     }
 
-    It 'resolves a relative _dependsOn path against the map directory' {
+    It 'resolves a relative _cacheDependsOn path against the map directory' {
         $dir = Join-Path $TestDrive 'depends-on-relative'
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
         $extra = Join-Path $dir 'extra.txt'
@@ -505,7 +505,7 @@ $data = (Get-Content (Join-Path $PSScriptRoot 'data.txt') -Raw).Trim()
         $mapFile = Join-Path $dir '.build.map.ps1'
         Set-Content -Path $mapFile -Value @'
 @{
-    _dependsOn = 'extra.txt'
+    _cacheDependsOn = 'extra.txt'
     build      = { "ok" }
 }
 '@
@@ -520,13 +520,13 @@ $data = (Get-Content (Join-Path $PSScriptRoot 'data.txt') -Raw).Trim()
         @($cache.dependencies).path | Should -Contain $expected
     }
 
-    It 'does not expose _dependsOn as a completion key' {
+    It 'does not expose _cacheDependsOn as a completion key' {
         $dir = Join-Path $TestDrive 'depends-on-completion'
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
         $mapFile = Join-Path $dir '.build.map.ps1'
         Set-Content -Path $mapFile -Value @'
 @{
-    _dependsOn = @('extra.txt')
+    _cacheDependsOn = @('extra.txt')
     alpha      = { "a" }
 }
 '@
@@ -534,10 +534,35 @@ $data = (Get-Content (Join-Path $PSScriptRoot 'data.txt') -Raw).Trim()
         $map = Import-ConfigMap -Map $mapFile -LookUp:$false
         $completions = @(Get-EntryCompletion $map -language build -wordToComplete '')
         $completions | Should -Contain 'alpha'
-        $completions | Should -Not -Contain '_dependsOn'
+        $completions | Should -Not -Contain '_cacheDependsOn'
 
         $underscore = @(Get-EntryCompletion $map -language build -wordToComplete '_')
-        $underscore | Should -Not -Contain '_dependsOn'
+        $underscore | Should -Not -Contain '_cacheDependsOn'
+    }
+
+    It 'warns that file paths in _dependsOn now belong in _cacheDependsOn' {
+        $dir = Join-Path $TestDrive 'legacy-depends-on'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        Set-Content -Path (Join-Path $dir 'helpers.ps1') -Value '# helper'
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value @'
+@{
+    _dependsOn = @('helpers.ps1')
+    alpha      = { "a" }
+}
+'@
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $output = & (Get-Module ConfigMap) {
+            param($Map)
+            Get-ConfigMapDiscoveryCache -Map $Map -Language build
+        } $map 3>&1
+        $warnings = @($output | Where-Object { $_ -is [System.Management.Automation.WarningRecord] })
+        $cache = @($output | Where-Object { $_ -isnot [System.Management.Automation.WarningRecord] }) | Select-Object -First 1
+
+        $warnings | Should -HaveCount 1
+        "$warnings" | Should -Match "'helpers\.ps1'.*_cacheDependsOn"
+        @($cache.dependencies).path | Should -Not -Contain ([System.IO.Path]::GetFullPath((Join-Path $dir 'helpers.ps1')))
     }
 
     It 'writes discovery.configuration.cache.json for a canonical configuration map' {
