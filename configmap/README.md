@@ -467,7 +467,7 @@ Creates a `.configuration.map.ps1` file with sample configuration entries.
         _template   = "dotenv:.env"
     }
 
-    # Add exclude = @("SECRET_*", "FLAG") to skip keys (wildcards allowed) when creating those entries.
+    # Add exclude = @("SECRET_*", "FLAG") to skip keys (wildcards allowed) when creating those entries; the parent's value hides them too.
     # keys = "auto" (reads .env.example/.sample/.template) or keys = "<file>" also adds one entry
     # per key: `qbuild keyed.API_URL -value https://staging`. A comment line above a key becomes
     # its description. Presets keep working on the parent entry.

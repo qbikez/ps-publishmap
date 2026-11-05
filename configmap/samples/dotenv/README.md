@@ -42,4 +42,4 @@ The sample modifies `.env`; restore it with `git checkout .env`.
 - `options` omitted: each `.env.<name>` is preset `<name>`; `.example`, `.sample` and `.template` suffixes are ignored; a bare `.env.example` is preset `example`.
 - Explicit `options` in the map turn discovery off.
 - `keys = 'auto'` reads `.env.example` (then `.sample`, `.template`); `keys = '<file>'` reads that file.
-- `exclude = @('API_KEY', 'SECRET_*')` (string or array, `-like` wildcards) removes those keys from the per-key entries; they are not listed, completed or readable through the child entries.
+- `exclude = @('API_KEY', 'SECRET_*')` (string or array, `-like` wildcards) removes those keys from the per-key entries; they are not listed, completed or readable through the child entries, and the parent entry's value leaves them out.
