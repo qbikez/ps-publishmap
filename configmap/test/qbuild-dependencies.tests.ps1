@@ -239,3 +239,33 @@ Describe 'qbuild _dependsOn' {
         }
     }
 }
+
+Describe 'samples/dependencies' {
+    BeforeAll {
+        $script:sampleMap = Join-Path $PSScriptRoot '..' 'samples' 'dependencies' '.build.map.ps1'
+    }
+
+    It 'runs pack after its prerequisites, each once' {
+        $output = qbuild -map $script:sampleMap pack 6>&1 | ForEach-Object { "$_" }
+
+        $output | Should -Be @(
+            '-> lint (dependency of pack)'
+            'linting'
+            '-> restore (dependency of test)'
+            'restoring packages'
+            '-> build (dependency of test)'
+            'building'
+            '-> test (dependency of pack)'
+            'running tests'
+            '-> api.build (dependency of pack)'
+            'building api'
+            'packing'
+        )
+    }
+
+    It 'runs only pack with -NoDeps' {
+        $output = qbuild -map $script:sampleMap pack -NoDeps 6>&1 | ForEach-Object { "$_" }
+
+        $output | Should -Be @('packing')
+    }
+}
