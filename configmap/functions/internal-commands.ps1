@@ -258,7 +258,7 @@ function Merge-ConfigMapCommands {
     $internalCommands = Get-ConfigMapInternalCommands -Language $Language -Map $Map
 
     if ($Map) {
-        foreach ($metadataKey in @('_baseDir', '_sourceFile', '_settings', '_dependsOn')) {
+        foreach ($metadataKey in @('_baseDir', '_sourceFile', '_settings', '_dependsOn', '_cacheDependsOn')) {
             if ($Map.Contains($metadataKey)) {
                 $result[$metadataKey] = $Map[$metadataKey]
             }
@@ -270,7 +270,7 @@ function Merge-ConfigMapCommands {
     # Precedence policy: the last write wins. Reverse these two loops to let user commands override internals.
     if ($userCommands -is [System.Collections.IDictionary]) {
         foreach ($item in $userCommands.GetEnumerator()) {
-            if ($item.Key -notin @('_baseDir', '_sourceFile', '_settings', '_dependsOn')) {
+            if ($item.Key -notin @('_baseDir', '_sourceFile', '_settings', '_dependsOn', '_cacheDependsOn')) {
                 $commands[$item.Key] = $item.Value
             }
         }

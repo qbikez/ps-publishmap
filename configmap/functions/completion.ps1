@@ -49,7 +49,7 @@ function Get-MapEntryList {
     }
 
     if ($map -is [System.Collections.IDictionary]) {
-        Add-ConfigMapDependsOnDependencies -Node $map -Map $map -OperationContext $OperationContext
+        Add-ConfigMapCacheDependency -Node $map -Map $map -OperationContext $OperationContext
     }
 
     $list = $map.$listKey ? $map.$listKey : $map
@@ -85,7 +85,7 @@ function Get-MapEntryList {
 
                 if (!(Test-IsParentEntry $entry -reservedKeys $reservedKeys)) {
                     if ($entry -is [System.Collections.IDictionary]) {
-                        Add-ConfigMapDependsOnDependencies -Node $entry -Map $map -OperationContext $OperationContext
+                        Add-ConfigMapCacheDependency -Node $entry -Map $map -OperationContext $OperationContext
                     }
                     $result["$($kvp.key)"] = $entry
                     continue

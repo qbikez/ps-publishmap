@@ -214,7 +214,7 @@ Autocompletion works automatically when the configmap module is imported:
 
 ### Discovery cache
 
-Entry discovery for tab completion and `list`/`help` is cached as JSON (for example `discovery.build.cache.json`). Non-canonical maps use `discovery.<name>.<language>.cache.json` so build and conf caches stay separate. The cache stores entry keys plus lightweight metadata (description, parameter names/types). It is invalidated when the root map, any transitively `#include`d map file, or any path listed in `_dependsOn` changes. Safe to delete or gitignore; it is rebuilt on demand.
+Entry discovery for tab completion and `list`/`help` is cached as JSON (for example `discovery.build.cache.json`). Non-canonical maps use `discovery.<name>.<language>.cache.json` so build and conf caches stay separate. The cache stores entry keys plus lightweight metadata (description, parameter names/types). It is invalidated when the root map, any transitively `#include`d map file, or any path listed in `_cacheDependsOn` changes. Safe to delete or gitignore; it is rebuilt on demand.
 
 Lookup probes both cache files from the map path alone (no map settings). A hit is valid when dependency mtimes in the cache still match. `DiscoveryCacheLocation` (default `local`) only chooses where a miss is written:
 
@@ -232,14 +232,16 @@ Lookup probes both cache files from the map path alone (no map settings). A hit 
 $env:QCONF_DiscoveryCacheLocation = 'user'
 ```
 
-Maps that generate entries from other files should declare those files with `_dependsOn` on the map root (or on an individual target). Relative paths resolve against that node's `_baseDir`:
+Maps that generate entries from other files should declare those files with `_cacheDependsOn` on the map root (or on an individual target). Relative paths resolve against that node's `_baseDir`:
 
 ```powershell
 @{
-    _dependsOn = @('install.yaml', 'helpers.ps1')
+    _cacheDependsOn = @('install.yaml', 'helpers.ps1')
     # generated entries...
 }
 ```
+
+> **Breaking change:** this key used to be `_dependsOn`, which is now reserved for task dependencies. Rename existing file lists to `_cacheDependsOn`. While the cache is built, qbuild warns once about any `_dependsOn` item that looks like a file.
 
 Enabled by default. Opt out per map or for the whole process:
 
@@ -619,6 +621,7 @@ The following keys have special meaning in map files:
 - `_template` - Built-in entry type: `@{ type; file }` or `"appsettings:{filepath}"` / `"dotenv:{filepath}"`, or `@{ type = "user-secrets"; csproj }` / `"user-secrets:{csproj}"`, that fills get/set when omitted; author get/set override the fill-in and can call `$_context.base`
 - `description` - Command description
 - `completions` - Custom tab completion values
+- `_cacheDependsOn` - Files that invalidate the discovery cache (see [Discovery cache](#discovery-cache))
 
 ## Examples
 
