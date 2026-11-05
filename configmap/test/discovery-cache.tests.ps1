@@ -101,7 +101,9 @@ Describe 'Discovery cache' {
 
         $map = Import-ConfigMap -Map $mapFile -LookUp:$false
         Mock Write-Host -ModuleName ConfigMap { }
-        Mock Get-MapEntry -ModuleName ConfigMap { } -ParameterFilter { "$key" -like '*.*' }
+        # Pester 6 throws when only filtered mocks exist and none matches, so mock every call
+        # and apply the filters in the assertions instead.
+        Mock Get-MapEntry -ModuleName ConfigMap { { "ok" } }
 
         & (Get-Module ConfigMap) {
             param($Map)
@@ -109,6 +111,7 @@ Describe 'Discovery cache' {
         } $map
 
         Should -Invoke Get-MapEntry -ModuleName ConfigMap -ParameterFilter { "$key" -like '*.*' } -Times 0 -Exactly
+        Should -Invoke Get-MapEntry -ModuleName ConfigMap -ParameterFilter { "$key" -eq 'build' } -Times 1 -Exactly
         Should -Invoke Write-Host -ModuleName ConfigMap -ParameterFilter { "$Object" -match '^build\b' } -Times 1 -Exactly
     }
 
