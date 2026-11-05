@@ -26,7 +26,10 @@ qbuild api.API_URL                 # show the current value
 qbuild api.API_URL -value https://staging.example.com   # change only that key
 qbuild api.FLAG -value off         # adds FLAG to .env if it was missing
 
-# 3. Hand-written sub-entries (api_manual): each key has its own get/set in the map
+# 3. Excluded keys: api_safe skips API_KEY, so there is no api_safe.API_KEY entry
+qbuild api_safe.API_URL            # works; qbuild api_safe.API_KEY does not exist
+
+# 4. Hand-written sub-entries (api_manual): each key has its own get/set in the map
 qbuild api_manual.API_URL set https://manual.example.com
 ```
 
@@ -39,3 +42,4 @@ The sample modifies `.env`; restore it with `git checkout .env`.
 - `options` omitted: each `.env.<name>` is preset `<name>`; `.example`, `.sample` and `.template` suffixes are ignored; a bare `.env.example` is preset `example`.
 - Explicit `options` in the map turn discovery off.
 - `keys = 'auto'` reads `.env.example` (then `.sample`, `.template`); `keys = '<file>'` reads that file.
+- `exclude = @('API_KEY', 'SECRET_*')` (string or array, `-like` wildcards) removes those keys from the per-key entries; they are not listed, completed or readable through the child entries.

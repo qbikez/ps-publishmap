@@ -1143,6 +1143,24 @@ Describe 'qbuild dotenv _template per-key entries' {
         @($result.Keys) | Should -Not -Contain 'api.API_URL'
     }
 
+    It 'skips keys listed in exclude, including wildcard patterns' {
+        Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options' }
+        _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto'; exclude = @('FLAG', 'API_K*') }
+    }
+}
+'@
+
+        $buildMap = $script:buildMap
+        $result = InModuleScope configmap -Parameters @{ map = $buildMap } { Get-MapEntryList (Import-ConfigMap -Map $map) -language build }
+
+        @($result.Keys) | Should -Contain 'api.API_URL'
+        @($result.Keys) | Should -Not -Contain 'api.FLAG'
+        @($result.Keys) | Should -Not -Contain 'api.API_KEY'
+    }
+
     It 'works against the dotenv sample' {
         $sampleDir = Join-Path $PSScriptRoot '..' 'samples' 'dotenv'
         Copy-Item -Path (Join-Path $sampleDir '*') -Destination $script:workDir -Recurse -Force
