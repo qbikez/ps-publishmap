@@ -10,6 +10,9 @@ function ConvertTo-ConfigMapDependencyRef {
     <#
     .SYNOPSIS
         Turns one _dependsOn item into @{ Path; Key } with Key resolved from the map root.
+    .DESCRIPTION
+        './name' (or '.\name') is a sibling: it replaces the last segment of DeclaringKey.
+        Any '..' segment is rejected, so every item resolves inside the map without walking up.
     #>
     param(
         $Item,
@@ -20,9 +23,21 @@ function ConvertTo-ConfigMapDependencyRef {
         throw "_dependsOn of '$DeclaringKey': each item must be an entry path from the map root."
     }
 
+    $path = $Item.Replace('\', '/')
+    if ($path.Split('/') -contains '..') {
+        throw "_dependsOn of '$DeclaringKey': '$Item' is not supported; use the full path from the map root or ./name for a sibling."
+    }
+
+    $key = $Item
+    if ($path.StartsWith('./')) {
+        $name = $path.Substring(2)
+        $lastDot = $DeclaringKey.LastIndexOf('.')
+        $key = if ($lastDot -lt 0) { $name } else { "$($DeclaringKey.Substring(0, $lastDot)).$name" }
+    }
+
     return @{
         Path = $Item
-        Key  = $Item
+        Key  = $key
     }
 }
 
