@@ -1,93 +1,6 @@
 function Invoke-QBuild {
     [CmdletBinding()]
     param(
-        [ArgumentCompleter({
-                param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-                try {
-                    $userMap = try {
-                        Import-ConfigMap -Map $fakeBoundParameters.map -Fallback "./.build.map.ps1" -ErrorAction Stop
-                    }
-                    catch {
-                        if ($_.Exception.Message -match '^map file .* not found$|^No map provided and fallback .* not found$|^map is null and defaultMapFile is not provided$') {
-                            $null
-                        }
-                        else {
-                            throw
-                        }
-                    }
-                    if ($userMap) {
-                        $userMap = $userMap | Assert-ConfigMap
-                    }
-
-                    $completionPrefix = ""
-                    $completionWord = $wordToComplete
-                    $selectedEntries = @()
-                    $lastComma = $wordToComplete.LastIndexOf(',')
-                    if ($lastComma -ge 0) {
-                        $completionPrefix = $wordToComplete.Substring(0, $lastComma + 1)
-                        $completionWord = $wordToComplete.Substring($lastComma + 1)
-                        $selectedEntries = $wordToComplete.Substring(0, $lastComma) -split ','
-                    }
-
-                    $entryCompParams = @{}
-                    foreach ($k in $PSBoundParameters.Keys) { $entryCompParams[$k] = $PSBoundParameters[$k] }
-                    $entryCompParams['wordToComplete'] = $completionWord
-
-                    $completions = [System.Collections.Generic.List[string]]::new()
-                    if ($userMap) {
-                        foreach ($c in @(Get-EntryCompletion $userMap -language "build" @entryCompParams)) {
-                            if ($c) { $completions.Add([string]$c) | Out-Null }
-                        }
-                    }
-
-                    $configMapModule = (Get-Command Invoke-QBuild).Module
-                    # Dot-sourced configmap.ps1 (no module) exposes the helpers in the caller's scope
-                    $internalCommands = if ($configMapModule) {
-                        & $configMapModule { param($m) Get-ConfigMapInternalCommandPaths -Map $m } $userMap
-                    }
-                    else {
-                        Get-ConfigMapInternalCommandPaths -Map $userMap
-                    }
-                    foreach ($item in $internalCommands.GetEnumerator()) {
-                        if (-not ([string]$item.Key).StartsWith($completionWord)) {
-                            continue
-                        }
-                        if (-not $completions.Contains([string]$item.Key)) {
-                            $completions.Add([string]$item.Key) | Out-Null
-                        }
-                    }
-
-                    try {
-                        $resolvedMapPath = Resolve-MapPath -Map $userMap
-                        if ($resolvedMapPath) {
-                            foreach ($procName in @(Get-ConfigMapProcessNamesInMap -Map $userMap)) {
-                                $procWords = Get-ConfigMapProcessCompleteWord `
-                                    -ProcessName (Get-ConfigMapProcessCliName -ProcessName $procName) `
-                                    -MapPath $resolvedMapPath `
-                                    -Word $completionWord
-                                if ($null -eq $procWords) { continue }
-                                foreach ($w in @($procWords)) {
-                                    if ($w -and -not $completions.Contains([string]$w)) {
-                                        $completions.Add([string]$w) | Out-Null
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    catch {
-                        # No file path / process discovery failure → keep map-only completions
-                    }
-
-                    if ($completionPrefix) {
-                        $result = $completions | Where-Object { $_ -notin $selectedEntries } | ForEach-Object { "$completionPrefix$_" }
-                        return @($result)
-                    }
-                    return @($completions)
-                }
-                catch {
-                    return "ERROR [-entry]: $($_.Exception.Message) $($_.ScriptStackTrace)"
-                }
-            })]
         [Parameter(Position = 0)]
         $entry = $null,
 
@@ -99,82 +12,12 @@ function Invoke-QBuild {
         # Not positional. With dynamic parameters present, PowerShell binds these
         # slots out of order and treats the unbound strings as empty arguments.
         [Parameter(DontShow)]
-        [ArgumentCompleter({
-                param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-                try {
-                    $complete = {
-                        param($Ast, $Bound, $Word)
-                        Get-QBuildProcessArgumentCompletion `
-                            -CommandAst $Ast `
-                            -FakeBoundParameters $Bound `
-                            -Word $Word `
-                            -Position Action
-                    }
-                    # Loaded from configmap.ps1 there is no module to enter: the helpers are already in scope.
-                    $configMapModule = (Get-Command Invoke-QBuild).Module
-                    if ($configMapModule) {
-                        return & $configMapModule $complete $commandAst $fakeBoundParameters $wordToComplete
-                    }
-                    return & $complete $commandAst $fakeBoundParameters $wordToComplete
-                }
-                catch {
-                    return @()
-                }
-            })]
         [string]$ProcessAction,
 
         [Parameter(DontShow)]
-        [ArgumentCompleter({
-                param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-                try {
-                    $complete = {
-                        param($Ast, $Bound, $Word)
-                        Get-QBuildProcessArgumentCompletion `
-                            -CommandAst $Ast `
-                            -FakeBoundParameters $Bound `
-                            -Word $Word `
-                            -Position Value
-                    }
-                    # Loaded from configmap.ps1 there is no module to enter: the helpers are already in scope.
-                    $configMapModule = (Get-Command Invoke-QBuild).Module
-                    if ($configMapModule) {
-                        return & $configMapModule $complete $commandAst $fakeBoundParameters $wordToComplete
-                    }
-                    return & $complete $commandAst $fakeBoundParameters $wordToComplete
-                }
-                catch {
-                    return @()
-                }
-            })]
         [string]$ProcessValue,
 
         [Parameter(ValueFromRemainingArguments = $true, DontShow = $true)]
-        [ArgumentCompleter({
-                param ($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-                try {
-                    $complete = {
-                        param($Ast, $Bound, $Word)
-                        $position = Get-QBuildRemainingArgumentPosition `
-                            -CommandAst $Ast `
-                            -FakeBoundParameters $Bound `
-                            -Word $Word
-                        if (-not $position) { return @() }
-                        Get-QBuildProcessArgumentCompletion `
-                            -CommandAst $Ast `
-                            -FakeBoundParameters $Bound `
-                            -Word $Word `
-                            -Position $position
-                    }
-                    $configMapModule = (Get-Command Invoke-QBuild).Module
-                    if ($configMapModule) {
-                        return & $configMapModule $complete $commandAst $fakeBoundParameters $wordToComplete
-                    }
-                    return & $complete $commandAst $fakeBoundParameters $wordToComplete
-                }
-                catch {
-                    return @()
-                }
-            })]
         [string[]]$RemainingArguments
     )
     dynamicparam {
@@ -342,4 +185,132 @@ function Invoke-QBuild {
     }
 }
 
+function Get-QBuildEntryCompletion {
+    <#
+    .SYNOPSIS
+        Completes the qbuild -entry argument: map entries, internal commands and external process words.
+    .DESCRIPTION
+        A comma-separated word ("clean,b") completes its last item and skips entries already listed.
+    #>
+    param(
+        [AllowEmptyString()]
+        [string]$WordToComplete = '',
+        [hashtable]$FakeBoundParameters = @{}
+    )
+
+    try {
+        $userMap = try {
+            Import-ConfigMap -Map $FakeBoundParameters.map -Fallback "./.build.map.ps1" -ErrorAction Stop
+        }
+        catch {
+            if ($_.Exception.Message -match '^map file .* not found$|^No map provided and fallback .* not found$|^map is null and defaultMapFile is not provided$') {
+                $null
+            }
+            else {
+                throw
+            }
+        }
+        if ($userMap) {
+            $userMap = $userMap | Assert-ConfigMap
+        }
+
+        $completionPrefix = ""
+        $completionWord = $WordToComplete
+        $selectedEntries = @()
+        $lastComma = $WordToComplete.LastIndexOf(',')
+        if ($lastComma -ge 0) {
+            $completionPrefix = $WordToComplete.Substring(0, $lastComma + 1)
+            $completionWord = $WordToComplete.Substring($lastComma + 1)
+            $selectedEntries = $WordToComplete.Substring(0, $lastComma) -split ','
+        }
+
+        $completions = [System.Collections.Generic.List[string]]::new()
+        if ($userMap) {
+            foreach ($c in @(Get-EntryCompletion $userMap -language "build" -wordToComplete $completionWord)) {
+                if ($c) { $completions.Add([string]$c) | Out-Null }
+            }
+        }
+
+        foreach ($item in (Get-ConfigMapInternalCommandPaths -Map $userMap).GetEnumerator()) {
+            if (-not ([string]$item.Key).StartsWith($completionWord)) {
+                continue
+            }
+            if (-not $completions.Contains([string]$item.Key)) {
+                $completions.Add([string]$item.Key) | Out-Null
+            }
+        }
+
+        try {
+            $resolvedMapPath = Resolve-MapPath -Map $userMap
+            if ($resolvedMapPath) {
+                foreach ($procName in @(Get-ConfigMapProcessNamesInMap -Map $userMap)) {
+                    $procWords = Get-ConfigMapProcessCompleteWord `
+                        -ProcessName (Get-ConfigMapProcessCliName -ProcessName $procName) `
+                        -MapPath $resolvedMapPath `
+                        -Word $completionWord
+                    if ($null -eq $procWords) { continue }
+                    foreach ($w in @($procWords)) {
+                        if ($w -and -not $completions.Contains([string]$w)) {
+                            $completions.Add([string]$w) | Out-Null
+                        }
+                    }
+                }
+            }
+        }
+        catch {
+            # No file path / process discovery failure → keep map-only completions
+        }
+
+        if ($completionPrefix) {
+            $result = $completions | Where-Object { $_ -notin $selectedEntries } | ForEach-Object { "$completionPrefix$_" }
+            return @($result)
+        }
+        return @($completions)
+    }
+    catch {
+        return "ERROR [-entry]: $($_.Exception.Message) $($_.ScriptStackTrace)"
+    }
+}
+
 Set-Alias -Name "qbuild" -Value "Invoke-QBuild" -Force
+
+# Registered rather than declared as [ArgumentCompleter] attributes: attribute scriptblocks
+# run outside the module, so they cannot reach its private helpers. These scriptblocks are
+# bound to the scope that loads this file (the module, or the caller of configmap.ps1).
+# Registering for Invoke-QBuild also covers the qbuild alias.
+Register-ArgumentCompleter -CommandName Invoke-QBuild -ParameterName entry -ScriptBlock {
+    param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+    Get-QBuildEntryCompletion -WordToComplete $wordToComplete -FakeBoundParameters $fakeBoundParameters
+}
+
+Register-ArgumentCompleter -CommandName Invoke-QBuild -ParameterName ProcessAction -ScriptBlock {
+    param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+    try {
+        Get-QBuildProcessArgumentCompletion -CommandAst $commandAst -FakeBoundParameters $fakeBoundParameters -Word $wordToComplete -Position Action
+    }
+    catch {
+        @()
+    }
+}
+
+Register-ArgumentCompleter -CommandName Invoke-QBuild -ParameterName ProcessValue -ScriptBlock {
+    param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+    try {
+        Get-QBuildProcessArgumentCompletion -CommandAst $commandAst -FakeBoundParameters $fakeBoundParameters -Word $wordToComplete -Position Value
+    }
+    catch {
+        @()
+    }
+}
+
+Register-ArgumentCompleter -CommandName Invoke-QBuild -ParameterName RemainingArguments -ScriptBlock {
+    param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+    try {
+        $position = Get-QBuildRemainingArgumentPosition -CommandAst $commandAst -FakeBoundParameters $fakeBoundParameters -Word $wordToComplete
+        if (-not $position) { return @() }
+        Get-QBuildProcessArgumentCompletion -CommandAst $commandAst -FakeBoundParameters $fakeBoundParameters -Word $wordToComplete -Position $position
+    }
+    catch {
+        @()
+    }
+}
