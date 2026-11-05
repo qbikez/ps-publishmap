@@ -11,7 +11,7 @@ function Initialize-ConfigMap([Parameter(Mandatory = $true)] $file) {
     Write-Host "Initializing configmap file '$file'"
     $defaultConfig | Out-File $file
 
-    $fullPath = (Get-Item $file).FullName
+    $fullPath = (Get-Item $file -Force).FullName
     $dir = Split-Path $fullPath -Parent
     $defaultUtils = Get-Content $script:samplesPath/_default/.config-utils.ps1
     $defaultUtils | Out-File (Join-Path $dir ".config-utils.ps1")

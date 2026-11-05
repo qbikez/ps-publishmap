@@ -46,6 +46,23 @@ Describe "qconf !init" {
         }
     }
 
+    It "should create the dotfile map and its utils without errors" {
+        # Dotfiles are hidden on Linux/macOS; init must still resolve the new map's directory.
+        $initDir = Join-Path $testRoot "dotfile-init"
+        New-Item -ItemType Directory -Path $initDir -Force | Out-Null
+
+        Push-Location $initDir
+        try {
+            $output = @(Initialize-ConfigMap -file "./.configuration.map.ps1" 2>&1 6>$null)
+            @($output | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] }) | Should -BeNullOrEmpty
+            Test-Path ".configuration.map.ps1" | Should -BeTrue
+            Test-Path ".config-utils.ps1" | Should -BeTrue
+        }
+        finally {
+            Pop-Location
+        }
+    }
+
     It "should include !init in completions when no local map but parent has one" {
         # clean up any existing map files first
         Remove-Item (Join-Path $childDir ".configuration.map.ps1") -ErrorAction Ignore
