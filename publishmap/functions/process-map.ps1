@@ -59,84 +59,70 @@ function import-singlemapfile($file) {
     return $pmap
 }
 
-# this is imported from native .dll
-# function import-genericgroup($group,
-#     $fullpath, 
-#     $settings = $null,
-#     $settingskey = "settings",
-#     $specialkeys = @("settings", "global_profiles")
-# ) {
-#  #   Measure-function  "$($MyInvocation.MyCommand.Name)" {
+<#
+.Synopsis
+Applies `_inherit_from` chains between sibling entries of a group.
+#>
+function Add-InheritedFromSiblings($entry, $siblings) {
+    $inheritFrom = $entry._inherit_from
+    if ($null -eq $inheritFrom) { return }
+    if (!$siblings.Contains($inheritFrom)) {
+        write-verbose "cannot find inheritance base '$inheritFrom' for '$($entry._fullpath)'"
+        return
+    }
 
-#         Write-Verbose "processing map path $fullpath"
-   
-#         $result = {}        
+    $hierarchy = @()
+    $cur = $entry
+    while ($null -ne $cur._inherit_from -and !$entry.Contains("_inherited_from")) {
+        $hierarchy += , $cur
+        $cur = $siblings[$cur._inherit_from]
+    }
+    for ($i = $hierarchy.Count - 1; $i -ge 0; $i--) {
+        $cur = $hierarchy[$i]
+        if ($cur.Contains("_inherited_from")) { continue }
+        $base = $siblings[$cur._inherit_from]
+        Add-InheritedProperties -from $base -to $cur -valuesOnly -exclude @("_inherit_from", "_inherited_from")
+        $null = add-property $cur -name _inherited_from -value $cur._inherit_from
+    }
+}
 
-#         # only direct children inherit settings
-#         $onelevelsettingsinheritance = $true
+function import-genericgroup($group,
+    $fullpath,
+    $settings = $null,
+    $settingskey = "settings",
+    $specialkeys = @("settings", "global_profiles")
+) {
+    Write-Verbose "processing map path $fullpath"
 
-#         $childsettings = $null 
-#         #get settings for children
-#         if ($null -ne $group.$settingskey) {
-#             $childsettings = $group.$settingskey
-#         } else {
-#             if (!$onelevelsettingsinheritance) {
-#                 $childsettings = $settings
-#             }
-#         }
-    
-#         <#
-#     if ($null -ne $settings) {
-#         inherit-globalsettings $group $settings
-#     }
-#     #>
+    # only direct children inherit settings
+    $childsettings = $null
+    if ($group.Contains($settingskey)) {
+        $childsettings = $group[$settingskey]
+    }
 
-#         $keys = get-propertynames $group
-#         foreach($projk in $keys) {
-#             #do not process special global settings
-#             if ($projk -in $specialkeys) {
-#                 continue
-#             }
-#             $subgroup = $group.$projk
-#             if (!($subgroup -is [System.Collections.IDictionary])) {
-#                 continue
-#             }
-#             $path = "$fullpath.$projk"            
+    foreach ($projk in @($group.Keys)) {
+        if ($projk -in $specialkeys) {
+            continue
+        }
+        $subgroup = $group[$projk]
+        if (!($subgroup -is [System.Collections.IDictionary])) {
+            continue
+        }
 
+        Add-InheritedFromSiblings $subgroup $group
+        Add-InheritedProperties -from $group -to $subgroup -valuesOnly
+        if ($null -ne $settings) {
+            Add-GlobalSettings $group $settings
+        }
+        $null = import-genericgroup $subgroup "$fullpath.$projk" -settings $childsettings -settingskey $settingskey -specialkeys $specialkeys
+    }
 
-#             inherit-properties -from $group -to $subgroup -valuesonly
-#             # this should be run only once per group, right? 
-#             # why is this needed here?
-#             if ($null -ne $settings) {
-#                 inherit-globalsettings $group $settings
-#             }
-#             $r = import-genericgroup $subgroup $path -settings $childsettings -settingskey $settingskey -specialkeys $specialkeys
-#         }
-        
+    if ($null -ne $settings) {
+        Add-GlobalSettings $group $settings
+    }
 
-
-#         if ($null -ne $settings) {
-#             inherit-globalsettings $group $settings
-        
-#             <#  $keys = get-propertynames $group
-#         foreach($projk in $keys) {
-#             $subgroup = $group.$projk
-#             if ($projk -in $specialkeys) {
-#                 continue
-#             }
-#             if (!($subgroup -is [System.Collections.IDictionary])) {
-#                 continue
-#             }
-#             inherit-properties -from $group -to $subgroup -valuesonly
-#         }
-#         #>
-#         }
-    
-    
-
-#         return $map
-#  #   }
-# }
+    return $group
+}
 
 function add-metaproperties
 {
