@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Where the perf workflow spends its 8 minutes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: one narrow column, three figures zooming in: job -> one suite run -> per-scenario table. */
+:root {
+  color-scheme: light;
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --ink: #12161c;
+  --ink-2: #4d5562;
+  --muted: #7d8592;
+  --rule: #dfe3e9;
+  --accent: #2a78d6;
+  --s1: #2a78d6; /* list: budget-capped */
+  --s2: #eb6834; /* TAB edited */
+  --s3: #1baf7a; /* TAB warm */
+  --s4: #eda100; /* new-shell */
+  --s5: #9aa1ab; /* overhead / not a test */
+  --base: #2a78d6;
+  --head: #eb6834;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #14171c; --surface: #1b1f25; --ink: #eef0f3; --ink-2: #b9c0ca; --muted: #8b93a0; --rule: #2e343d;
+    --accent: #3987e5; --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #5d6470;
+    --base: #3987e5; --head: #d95926;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #14171c; --surface: #1b1f25; --ink: #eef0f3; --ink-2: #b9c0ca; --muted: #8b93a0; --rule: #2e343d;
+  --accent: #3987e5; --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #5d6470;
+  --base: #3987e5; --head: #d95926;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.55 var(--font-body); }
+main { max-width: 960px; margin: 0 auto; padding: 32px 20px 64px; display: grid; gap: 28px; }
+h1 { font-size: 26px; line-height: 1.25; margin: 0 0 6px; font-weight: 600; text-wrap: balance; }
+h2 { font-size: 17px; margin: 0 0 4px; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 68ch; color: var(--ink-2); }
+code, .mono { font-family: var(--font-mono); font-size: 0.9em; }
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 20px; display: grid; gap: 14px; }
+.sub { color: var(--muted); font-size: 13px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; }
+.tile b { display: block; font: 600 24px/1.2 var(--font-body); font-variant-numeric: tabular-nums; }
+.tile span { color: var(--muted); font-size: 13px; }
+
+/* bars */
+.bar { display: flex; gap: 2px; height: 34px; width: 100%; }
+.seg { height: 100%; min-width: 2px; position: relative; cursor: default; outline-offset: 2px; }
+.seg:first-child { border-radius: 4px 0 0 4px; }
+.seg:last-child { border-radius: 0 4px 4px 0; }
+.seg:hover, .seg:focus-visible { filter: brightness(1.12); outline: 2px solid var(--ink); }
+.seg .lbl { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 500; color: #fff; white-space: nowrap; overflow: hidden; pointer-events: none; }
+.axis { position: relative; height: 18px; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.axis span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.axis span:first-child { transform: none; }
+.axis span:last-child { transform: translateX(-100%); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-2); }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.annot { display: flex; gap: 2px; font-size: 12px; color: var(--ink-2); }
+.annot div { text-align: center; border-top: 1px solid var(--rule); padding-top: 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* loop diagram */
+.loop { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.step { border: 1px solid var(--rule); border-radius: 8px; padding: 10px 12px; font-size: 13.5px; color: var(--ink-2); }
+.step b { color: var(--ink); display: block; font-size: 13px; margin-bottom: 2px; }
+
+/* table */
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; font-variant-numeric: tabular-nums; min-width: 720px; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+th { font-weight: 500; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+td.num, th.num { text-align: right; }
+tr.group td { color: var(--muted); font-size: 12px; padding-top: 14px; border-bottom: none; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--rule); white-space: nowrap; color: var(--ink-2); }
+.pill i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+.wbar { display: flex; align-items: center; gap: 8px; min-width: 170px; }
+.wbar .track { flex: 1; height: 10px; }
+.wbar .fill { height: 100%; border-radius: 0 4px 4px 0; }
+.est { color: var(--muted); }
+tfoot td { font-weight: 600; border-bottom: none; }
+
+/* terminal block: always dark, independent of theme */
+.term { margin: 0; background: #0f1319; color: #d7dde6; border: 1px solid #262d38; border-radius: 10px; overflow-x: auto; font: 13px/1.7 var(--font-mono); }
+.term .t-bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid #262d38; color: #7d8592; font-size: 11.5px; position: sticky; left: 0; }
+.term .t-bar i { width: 10px; height: 10px; border-radius: 50%; background: #3a414c; display: inline-block; }
+.term .t-bar span { margin-left: 8px; }
+.term code { display: block; padding: 12px 16px 14px; font-size: 13px; white-space: pre; }
+.t-prompt { color: #6f7885; }
+.t-cmd { color: #f0f3f7; font-weight: 500; }
+.t-flag { color: #7fb4f5; }
+.t-str { color: #6fd3a6; }
+.t-num { color: #ffb84d; font-weight: 500; }
+.t-comment { color: #6f7885; font-style: italic; }
+.notes { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--ink-2); font-size: 13.5px; max-width: 80ch; }
+.notes b { color: var(--ink); font-weight: 600; }
+table.mini { min-width: 560px; }
+.hl { color: var(--accent); font-weight: 600; }
+#tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 12.5px; padding: 6px 9px; border-radius: 6px; max-width: 280px; opacity: 0; transition: opacity .08s; z-index: 10; }
+@media (prefers-reduced-motion: reduce) { #tip { transition: none; } }
+@media (max-width: 480px) { main { padding: 20px 16px 48px; } h1 { font-size: 22px; } .seg .lbl { font-size: 10px; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Where the perf workflow spends its 8 minutes</h1>
+    <p>Measured from the <code>configmap perf</code> run #8 on PR #74, on a Windows runner. Times come from the log timestamps; the five other recent runs took 6&#8239;m&#8239;26&#8239;s to 7&#8239;m&#8239;54&#8239;s for the same step. The workflow step runs:</p>
+    <pre class="term" aria-label="Command run by the workflow" style="margin-top:14px"><span class="t-bar"><i></i><i></i><i></i><span>pwsh — configmap perf · Compare with base</span></span><code><span class="t-prompt">PS&gt;</span> <span class="t-cmd">./configmap/test/perf/Compare-Perf.ps1</span> <span class="t-flag">-Base</span> <span class="t-str">"origin/master"</span> <span class="t-flag">-Fixture</span> <span class="t-str">workspace-M, samples</span>
+<span class="t-comment"># defaults, not passed by the workflow:</span>
+     <span class="t-flag">-Rounds</span> <span class="t-num">3</span> <span class="t-flag">-Iterations</span> <span class="t-num">30</span> <span class="t-flag">-ScenarioBudgetSeconds</span> <span class="t-num">10</span> <span class="t-flag">-NewShellIterations</span> <span class="t-num">5</span></code></pre>
+  </header>
+
+  <section class="tiles" aria-label="Summary">
+    <div class="tile"><b>8 m 13 s</b><span>whole job</span></div>
+    <div class="tile"><b>7 m 54 s</b><span>“Compare with base” step</span></div>
+    <div class="tile"><b>6 × ~77 s</b><span>suite runs: 3 rounds × base + head</span></div>
+    <div class="tile"><b>44 %</b><span>of each run is the three budget-capped <code>list</code> scenarios</span></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-job">
+    <div>
+      <h2 id="h-job">1 · The whole job</h2>
+      <p class="sub">Each block is one fresh <code>pwsh</code> running <code>Invoke-PerfSuite.ps1</code> against one side. The order alternates every round so machine drift hits both sides.</p>
+    </div>
+    <div class="bar" id="jobbar" role="img" aria-label="Job timeline"></div>
+    <div class="axis" id="jobaxis"></div>
+    <div class="legend">
+      <span><i style="background:var(--base)"></i>base (origin/master)</span>
+      <span><i style="background:var(--head)"></i>head (PR merge commit)</span>
+      <span><i style="background:var(--s5)"></i>checkout, setup, report, comment</span>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-run">
+    <div>
+      <h2 id="h-run">2 · Inside one suite run (~77 s)</h2>
+      <p class="sub">Average of the six runs, in execution order. Colour shows what makes a scenario stop.</p>
+    </div>
+    <div class="bar" id="runbar" role="img" aria-label="One suite run broken down by scenario"></div>
+    <div class="axis" id="runaxis"></div>
+    <div class="annot" id="runannot" aria-hidden="true"></div>
+    <div class="legend">
+      <span><i style="background:var(--s1)"></i><code>list</code>: stops at the 10 s budget (n = 9–19)</span>
+      <span><i style="background:var(--s2)"></i>TAB after an edit: 30 iterations × ~200 ms</span>
+      <span><i style="background:var(--s3)"></i>TAB warm: 30 iterations × 35–80 ms</span>
+      <span><i style="background:var(--s4)"></i>new-shell: 1 + 5 fresh <code>pwsh</code> processes</span>
+      <span><i style="background:var(--s5)"></i>process start, import, internal helpers</span>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-loop">
+    <div>
+      <h2 id="h-loop">How one scenario samples</h2>
+      <p class="sub"><code>Measure-Scenario</code> in <code>configmap/test/perf/Invoke-PerfSuite.ps1</code>. This loop runs once per scenario, per side, per round: 3 rounds × base + head = <b>6 times per job</b>, each time in a fresh <code>pwsh</code>.</p>
+    </div>
+    <pre class="term" aria-label="Stop condition"><code><span class="t-flag">while</span> ($times.Count <span class="t-flag">-lt</span> <span class="t-cmd">$Iterations</span> <span class="t-flag">-and</span>
+       ($times.Count <span class="t-flag">-lt</span> <span class="t-num">3</span> <span class="t-flag">-or</span> $budget.Elapsed.TotalSeconds <span class="t-flag">-lt</span> <span class="t-cmd">$ScenarioBudgetSeconds</span>)) { ... }
+<span class="t-comment"># stops at 30 samples, or at 10 s once it has at least 3, whichever comes first</span></code></pre>
+    <div class="loop">
+      <div class="step"><b>1 · Warm-up</b>Runs the action once, untimed. It runs before the budget clock starts and is not a sample.</div>
+      <div class="step"><b>2 · Timed loop</b><code>Setup</code> (e.g. touch a map file) → read allocations → stopwatch around the action. Every sample is kept.</div>
+      <div class="step"><b>3 · Stop</b>30 samples, <em>or</em> at least 3 samples and 10 s elapsed. The budget is wall-clock, so <code>Setup</code> and the allocation reads count against it.</div>
+      <div class="step"><b>4 · Report</b>Median, p95, min and median allocated KB. Compare-Perf takes the median of the 3 per-round medians.</div>
+    </div>
+    <ul class="notes">
+      <li><b>Minimum 3 samples.</b> A 5 s call still runs 3 times (~15 s) before the budget can stop it.</li>
+      <li><b>Budget wins above ~333 ms per call</b> (10 s ÷ 30). In the CI fixtures only the <code>list</code> scenarios are that slow.</li>
+      <li><b>new-shell is different.</b> It skips this loop and always starts 1 untimed + <code>NewShellIterations</code> (5) fresh <code>pwsh</code> processes, with no budget.</li>
+    </ul>
+    <div class="tablewrap">
+      <table class="mini">
+        <thead><tr><th>Example from run #8</th><th class="num">ms per call</th><th>What stops it</th><th class="num">n</th></tr></thead>
+        <tbody>
+          <tr><td><code>list (warm)</code> · workspace-M</td><td class="num"><span class="hl">~940</span></td><td><span class="pill"><i style="background:var(--s1)"></i>10 s budget</span></td><td class="num"><span class="hl">9–13</span></td></tr>
+          <tr><td><code>TAB entry (edited)</code> · workspace-M</td><td class="num"><span class="hl">~195</span></td><td><span class="pill"><i style="background:var(--s2)"></i>30 iterations, after ~6 s</span></td><td class="num">30</td></tr>
+          <tr><td><code>TAB param name (warm)</code> · workspace-M</td><td class="num"><span class="hl">~35</span></td><td><span class="pill"><i style="background:var(--s3)"></i>30 iterations, after ~1 s</span></td><td class="num">30</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-table">
+    <div>
+      <h2 id="h-table">3 · Every scenario</h2>
+      <p class="sub">Per run = wall time inside one suite run (incl. warm-up and setup). Job total = × 6. <span class="est">Grey</span> values are split out of a combined log gap, so they are estimates.</p>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Scenario</th><th>Stops at</th><th class="num">n</th><th class="num">ms / iteration</th><th>Per run</th><th class="num">Job total</th></tr></thead>
+        <tbody id="rows"></tbody>
+        <tfoot><tr><td colspan="4">One suite run / all six</td><td id="sumrun"></td><td class="num" id="sumjob"></td></tr></tfoot>
+      </table>
+    </div>
+  </section>
+</main>
+<div id="tip" role="tooltip"></div>
+<script>
+// Job timeline, run #8 (seconds from job start 21:41:30).
+const job = [
+  { l: 'Set up job + checkout', d: 8.4, c: 's5' },
+  { l: 'Compare setup: 2 worktrees, fixtures, AV warm-up pass', d: 12.1, c: 's5' },
+  { l: 'Round 1 · base', d: 76.0, c: 'base' },
+  { l: 'Round 1 · head', d: 77.5, c: 'head' },
+  { l: 'Round 2 · head', d: 74.7, c: 'head' },
+  { l: 'Round 2 · base', d: 77.4, c: 'base' },
+  { l: 'Round 3 · base', d: 82.2, c: 'base' },
+  { l: 'Round 3 · head', d: 74.5, c: 'head' },
+  { l: 'Report, upload artifact, PR comment, cleanup', d: 10.2, c: 's5' }
+];
+// One suite run, averaged over the six runs. est = split out of a combined log gap.
+const scen = [
+  { g: 'workspace-M', l: 'pwsh start + Import-Module', d: 2.0, c: 's5', stop: '—', n: '', ms: '', est: true },
+  { g: 'workspace-M', l: 'list (warm)', d: 11.2, c: 's1', stop: 'budget', n: '9–13', ms: '938', est: true },
+  { g: 'workspace-M', l: 'list (edited)', d: 11.2, c: 's1', stop: 'budget', n: '12–15', ms: '752' },
+  { g: 'workspace-M', l: 'TAB entry (warm)', d: 2.5, c: 's3', stop: '30 iter', n: '30', ms: '77' },
+  { g: 'workspace-M', l: 'TAB nested (warm)', d: 2.5, c: 's3', stop: '30 iter', n: '30', ms: '78' },
+  { g: 'workspace-M', l: 'TAB param name (warm)', d: 1.1, c: 's3', stop: '30 iter', n: '30', ms: '35' },
+  { g: 'workspace-M', l: 'TAB param value (warm)', d: 1.1, c: 's3', stop: '30 iter', n: '30', ms: '35' },
+  { g: 'workspace-M', l: 'TAB pkg script (warm)', d: 1.8, c: 's3', stop: '30 iter', n: '30', ms: '55' },
+  { g: 'workspace-M', l: 'TAB entry (edited)', d: 6.1, c: 's2', stop: '30 iter', n: '30', ms: '195' },
+  { g: 'workspace-M', l: 'new-shell: import + TAB', d: 7.5, c: 's4', stop: '5 + 1', n: '5', ms: '~1,300', est: true },
+  { g: 'samples', l: 'list (warm)', d: 11.6, c: 's1', stop: 'budget', n: '12–19', ms: '647', est: true },
+  { g: 'samples', l: 'TAB entry (warm)', d: 2.2, c: 's3', stop: '30 iter', n: '30', ms: '71' },
+  { g: 'samples', l: 'TAB entry (edited)', d: 7.3, c: 's2', stop: '30 iter', n: '30', ms: '231' },
+  { g: 'samples', l: 'new-shell: import + TAB', d: 7.7, c: 's4', stop: '5 + 1', n: '5', ms: '~1,300' },
+  { g: 'in-memory-1k', l: 'internal: Get-MapEntries + Get-EntryCompletion', d: 1.2, c: 's5', stop: '30 iter', n: '30', ms: '0.3 / 38' }
+];
+
+const tip = document.getElementById('tip');
+function fmt(s) { return s >= 60 ? `${Math.floor(s / 60)} m ${Math.round(s % 60)} s` : `${s.toFixed(1)} s`; }
+function showTip(e, html) {
+  tip.innerHTML = html; tip.style.opacity = 1;
+  const r = tip.getBoundingClientRect();
+  let x = e.clientX + 12, y = e.clientY + 14;
+  if (x + r.width > innerWidth - 8) x = e.clientX - r.width - 12;
+  if (y + r.height > innerHeight - 8) y = e.clientY - r.height - 14;
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+}
+function hideTip() { tip.style.opacity = 0; }
+
+function drawBar(el, items, labelFn, tipFn) {
+  const total = items.reduce((a, b) => a + b.d, 0);
+  for (const it of items) {
+    const s = document.createElement('div');
+    s.className = 'seg'; s.tabIndex = 0;
+    s.style.flex = `${it.d} 1 0`;
+    s.style.background = `var(--${it.c})`;
+    s.setAttribute('aria-label', `${it.l}: ${fmt(it.d)}`);
+    const lab = labelFn(it, total);
+    if (lab) { const t = document.createElement('span'); t.className = 'lbl'; t.textContent = lab; s.appendChild(t); }
+    s.addEventListener('mousemove', e => showTip(e, tipFn(it, total)));
+    s.addEventListener('mouseleave', hideTip);
+    s.addEventListener('focus', e => { const r = s.getBoundingClientRect(); showTip({ clientX: r.left + r.width / 2, clientY: r.bottom }, tipFn(it, total)); });
+    s.addEventListener('blur', hideTip);
+    el.appendChild(s);
+  }
+  return total;
+}
+function drawAxis(el, total, ticks, f) {
+  for (const t of ticks) {
+    const s = document.createElement('span');
+    s.style.left = (t / total * 100) + '%';
+    s.textContent = f(t);
+    el.appendChild(s);
+  }
+}
+
+const jobTotal = drawBar(document.getElementById('jobbar'), job,
+  (it, tot) => it.d / tot > 0.08 ? it.l.replace('Round ', 'R').replace(' · ', ' ') : '',
+  it => `<b>${it.l}</b><br>${fmt(it.d)}`);
+drawAxis(document.getElementById('jobaxis'), jobTotal, [0, 120, 240, 360, jobTotal], t => t === 0 ? '0' : fmt(t));
+
+const runTotal = drawBar(document.getElementById('runbar'), scen,
+  (it, tot) => it.d / tot > 0.12 ? it.l.replace(' (warm)', '').replace(' (edited)', ' ✎').replace('new-shell: import + TAB', 'new-shell') : '',
+  it => `<b>${it.g} · ${it.l}</b><br>${it.est ? '~' : ''}${fmt(it.d)} per run${it.n ? `<br>n = ${it.n} × ${it.ms} ms` : ''}${it.stop ? `<br>stops at: ${it.stop}` : ''}`);
+drawAxis(document.getElementById('runaxis'), runTotal, [0, 20, 40, 60, runTotal], t => t === 0 ? '0' : fmt(t));
+
+// Fixture brackets under the run bar.
+const annot = document.getElementById('runannot');
+const groups = [];
+for (const it of scen) { const last = groups[groups.length - 1]; if (last && last.g === it.g) last.d += it.d; else groups.push({ g: it.g, d: it.d }); }
+for (const g of groups) { const d = document.createElement('div'); d.style.flex = `${g.d} 1 0`; d.textContent = g.d / runTotal > 0.1 ? `${g.g} · ${fmt(g.d)}` : ''; annot.appendChild(d); }
+
+// Table.
+const max = Math.max(...scen.map(s => s.d));
+const tbody = document.getElementById('rows');
+let lastG = null;
+for (const s of scen) {
+  if (s.g !== lastG) { const r = tbody.insertRow(); r.className = 'group'; const c = r.insertCell(); c.colSpan = 6; c.textContent = s.g; lastG = s.g; }
+  const r = tbody.insertRow();
+  const est = s.est ? ' est' : '';
+  r.innerHTML = `
+    <td>${s.l}</td>
+    <td><span class="pill"><i style="background:var(--${s.c})"></i>${s.stop}</span></td>
+    <td class="num">${s.n}</td>
+    <td class="num">${s.ms}</td>
+    <td><div class="wbar"><div class="track"><div class="fill" style="width:${s.d / max * 100}%;background:var(--${s.c})"></div></div><span class="mono${est}">${s.est ? '~' : ''}${s.d.toFixed(1)} s</span></div></td>
+    <td class="num${est}">${s.est ? '~' : ''}${fmt(s.d * 6)}</td>`;
+}
+document.getElementById('sumrun').innerHTML = `<span class="mono">${runTotal.toFixed(1)} s</span>`;
+document.getElementById('sumjob').textContent = fmt(runTotal * 6);
+</script>
+</body>
+</html>

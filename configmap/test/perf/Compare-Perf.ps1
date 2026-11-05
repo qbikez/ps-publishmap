@@ -26,8 +26,8 @@ param(
     [string]$Head,
     [ValidateRange(1, 20)]
     [int]$Rounds = 3,
-    [int]$Iterations = 30,
-    [double]$ScenarioBudgetSeconds = 10,
+    [int]$Iterations = 10,
+    [double]$ScenarioBudgetSeconds = 8,
     [int]$NewShellIterations = 5,
     [ValidateSet('workspace-M', 'workspace-XL', 'flat-1k', 'samples')]
     [string[]]$Fixture = @('workspace-M', 'workspace-XL', 'flat-1k', 'samples'),
