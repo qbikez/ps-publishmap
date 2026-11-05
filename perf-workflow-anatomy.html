@@ -92,6 +92,18 @@ tr.group td { color: var(--muted); font-size: 12px; padding-top: 14px; border-bo
 .est { color: var(--muted); }
 tfoot td { font-weight: 600; border-bottom: none; }
 
+/* terminal block: always dark, independent of theme */
+.term { margin: 14px 0 0; background: #0f1319; color: #d7dde6; border: 1px solid #262d38; border-radius: 10px; overflow-x: auto; font: 13px/1.7 var(--font-mono); }
+.term .t-bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid #262d38; color: #7d8592; font-size: 11.5px; position: sticky; left: 0; }
+.term .t-bar i { width: 10px; height: 10px; border-radius: 50%; background: #3a414c; display: inline-block; }
+.term .t-bar span { margin-left: 8px; }
+.term code { display: block; padding: 12px 16px 14px; font-size: 13px; white-space: pre; }
+.t-prompt { color: #6f7885; }
+.t-cmd { color: #f0f3f7; font-weight: 500; }
+.t-flag { color: #7fb4f5; }
+.t-str { color: #6fd3a6; }
+.t-num { color: #ffb84d; font-weight: 500; }
+.t-comment { color: #6f7885; font-style: italic; }
 #tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 12.5px; padding: 6px 9px; border-radius: 6px; max-width: 280px; opacity: 0; transition: opacity .08s; z-index: 10; }
 @media (prefers-reduced-motion: reduce) { #tip { transition: none; } }
 @media (max-width: 480px) { main { padding: 20px 16px 48px; } h1 { font-size: 22px; } .seg .lbl { font-size: 10px; } }
@@ -101,7 +113,10 @@ tfoot td { font-weight: 600; border-bottom: none; }
 <main>
   <header>
     <h1>Where the perf workflow spends its 8 minutes</h1>
-    <p>Measured from the <code>configmap perf</code> run #8 on PR #74 (Windows runner, <code>-Fixture workspace-M, samples</code>, defaults <code>-Rounds 3 -Iterations 30 -ScenarioBudgetSeconds 10 -NewShellIterations 5</code>). Times come from the log timestamps; the five other recent runs took 6&#8239;m&#8239;26&#8239;s to 7&#8239;m&#8239;54&#8239;s for the same step.</p>
+    <p>Measured from the <code>configmap perf</code> run #8 on PR #74, on a Windows runner. Times come from the log timestamps; the five other recent runs took 6&#8239;m&#8239;26&#8239;s to 7&#8239;m&#8239;54&#8239;s for the same step. The workflow step runs:</p>
+    <pre class="term" aria-label="Command run by the workflow"><span class="t-bar"><i></i><i></i><i></i><span>pwsh — configmap perf · Compare with base</span></span><code><span class="t-prompt">PS&gt;</span> <span class="t-cmd">./configmap/test/perf/Compare-Perf.ps1</span> <span class="t-flag">-Base</span> <span class="t-str">"origin/master"</span> <span class="t-flag">-Fixture</span> <span class="t-str">workspace-M, samples</span>
+<span class="t-comment"># defaults, not passed by the workflow:</span>
+     <span class="t-flag">-Rounds</span> <span class="t-num">3</span> <span class="t-flag">-Iterations</span> <span class="t-num">30</span> <span class="t-flag">-ScenarioBudgetSeconds</span> <span class="t-num">10</span> <span class="t-flag">-NewShellIterations</span> <span class="t-num">5</span></code></pre>
   </header>
 
   <section class="tiles" aria-label="Summary">
