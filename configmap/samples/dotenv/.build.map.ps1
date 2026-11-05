@@ -14,6 +14,14 @@
         _template   = @{ type = 'dotenv'; file = '.env'; keys = 'auto' }
     }
 
+    # Same as api, but exclude keeps API_KEY (and anything matching SECRET_*) out of the per-key entries:
+    # only api_safe.API_URL and api_safe.FLAG exist, so the secret never shows up in list or completion.
+    api_safe    = [ordered]@{
+        _settings   = @{ process = 'options' }
+        description = 'API settings (per-key entries without secrets)'
+        _template   = @{ type = 'dotenv'; file = '.env'; keys = 'auto'; exclude = @('API_KEY', 'SECRET_*') }
+    }
+
     # Hand-written sub-entries, no _template: each one gets and sets a single key in .env.
     api_manual  = [ordered]@{
         description = 'API settings (manually configured keys)'
