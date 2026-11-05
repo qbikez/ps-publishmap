@@ -500,6 +500,16 @@ Describe "hierarchical completion" {
         $completions | Should -Contain "parent*"
     }
 
+    It "should complete case-insensitively for '<word>'" -ForEach @(
+        @{ word = 'PAREN' }
+        @{ word = 'pArEnT.WRITE' }
+    ) {
+        $completions = Get-EntryCompletion -map $targets -language build -wordToComplete $word @{}
+
+        $completions | Should -Contain "parent.write:simple"
+        $completions | Should -Not -Contain "regular"
+    }
+
     It "should complete 'parent.' to show all parent child commands" {
         $completions = Get-EntryCompletion -map $targets -language build -wordToComplete "parent." @{}
         

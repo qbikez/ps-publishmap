@@ -232,7 +232,7 @@ function Get-QBuildEntryCompletion {
         }
 
         foreach ($item in (Get-ConfigMapInternalCommandPaths -Map $userMap).GetEnumerator()) {
-            if (-not ([string]$item.Key).StartsWith($completionWord)) {
+            if (-not ([string]$item.Key).StartsWith($completionWord, [System.StringComparison]::OrdinalIgnoreCase)) {
                 continue
             }
             if (-not $completions.Contains([string]$item.Key)) {
