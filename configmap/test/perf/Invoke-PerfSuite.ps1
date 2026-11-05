@@ -225,7 +225,7 @@ try {
         if (!(Test-Path $dir)) { continue }
         Set-Location $dir
         $childMap = Join-Path $dir 'p03\.build.map.ps1'
-        $touch = { (Get-Item $childMap).LastWriteTimeUtc = [datetime]::UtcNow }.GetNewClosure()
+        $touch = { (Get-Item -LiteralPath $childMap -Force).LastWriteTimeUtc = [datetime]::UtcNow }.GetNewClosure()
 
         $list = { qbuild list 6>&1 | Out-String }
         $results.Add((Measure-Scenario -Name 'list (warm)' -Fixture $fixture -Action $list))
@@ -251,7 +251,7 @@ try {
     if (Test-Path $samplesDir) {
         Set-Location $samplesDir
         $rootMap = Join-Path $samplesDir '.build.map.ps1'
-        $touchRoot = { (Get-Item $rootMap).LastWriteTimeUtc = [datetime]::UtcNow }.GetNewClosure()
+        $touchRoot = { (Get-Item -LiteralPath $rootMap -Force).LastWriteTimeUtc = [datetime]::UtcNow }.GetNewClosure()
         $results.Add((Measure-Scenario -Name 'list (warm)' -Fixture 'samples' -Action { qbuild list 6>&1 | Out-String }))
         $results.Add((Measure-Scenario -Name 'TAB entry (warm)' -Fixture 'samples' -Action { Measure-Tab 'qbuild ' }))
         $results.Add((Measure-Scenario -Name 'TAB entry (edited)' -Fixture 'samples' -Action { Measure-Tab 'qbuild ' } -Setup $touchRoot))
