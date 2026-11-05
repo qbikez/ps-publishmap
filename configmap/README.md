@@ -323,7 +323,9 @@ built at run time from the git-tracked samples.
 The scenarios are `qbuild list` and TAB on an entry, a nested entry, a parameter
 name, a parameter value and a package script. Each one runs warm (loaded session),
 edited (a child map was just touched, so the discovery cache is rebuilt) and
-new-shell (the first TAB in a fresh `pwsh`). The `module` row is the module load
+new-shell (the first TAB on the fixture in a fresh `pwsh`, read from the disk
+cache; module import and one-time warm-up, done by an untimed TAB on a copy of
+the fixture, are excluded). The `module` row is the module load
 time: `Import-Module` in a fresh `pwsh`, with its allocations, measured once per run
 whatever fixtures are selected (`-ImportIterations`, default 10). They only use
 `Import-Module`, `qbuild`, `qbuild list` and `TabExpansion2`, so the current suite

@@ -11,7 +11,8 @@
     Cache states:
       warm      - repeated call in a loaded session (discovery cache memory hit)
       edited    - a child map was just touched, so the discovery cache is rebuilt
-      new-shell - fresh pwsh: first TAB after module import (discovery cache disk hit)
+      new-shell - fresh pwsh: first TAB on the fixture (discovery cache disk hit),
+                  excluding module import and one-time session warm-up
 
     Module load time ('module' fixture) is Import-Module in a fresh pwsh, measured
     once per run independent of the fixtures, with its allocations.
@@ -167,9 +168,14 @@ function Measure-NewShell {
     param([string]$Fixture, [string]$Directory, [string]$Line)
 
     $probe = {
-        param($ModulePath, $Directory, $Line)
+        param($ModulePath, $Directory, $WarmupDirectory, $Line)
         Get-ChildItem env: | Where-Object Name -like 'QCONF_*' | ForEach-Object { Remove-Item "env:$($_.Name)" }
         Import-Module $ModulePath
+        # Untimed TAB on an identical copy: pays the one-time code costs of a new
+        # session (script compilation, type loading) through the same code paths,
+        # so the timed TAB measures only the disk cache load and the map work.
+        Set-Location $WarmupDirectory
+        $null = TabExpansion2 $Line $Line.Length
         Set-Location $Directory
         $before = [GC]::GetTotalAllocatedBytes($true)
         $sw = [System.Diagnostics.Stopwatch]::StartNew()
@@ -178,12 +184,15 @@ function Measure-NewShell {
         $alloc = [GC]::GetTotalAllocatedBytes($true) - $before
         @{ tabMs = $tabMs; alloc = $alloc; count = $count } | ConvertTo-Json -Compress
     }
-    $probeArgs = @($ModulePath, $Directory, $Line)
+    # A sibling keeps relative paths and parent-map lookups identical.
+    $warmup = "$Directory-warmup"
+    $probeArgs = @($ModulePath, $Directory, $warmup, $Line)
 
     $tab = [System.Collections.Generic.List[double]]::new()
     $allocs = [System.Collections.Generic.List[long]]::new()
     try {
-        # Writes the disk cache so every timed run is a disk hit.
+        Copy-Item $Directory $warmup -Recurse -Force
+        # Writes the disk cache of both copies so every timed run is a disk hit.
         $null = Invoke-FreshShell -Probe $probe -ArgumentList $probeArgs
 
         foreach ($i in 1..$NewShellIterations) {
@@ -197,6 +206,9 @@ function Measure-NewShell {
         Write-Host ("  {0,-14} {1,-34} FAILED: {2}" -f $Fixture, 'new-shell', $_) -ForegroundColor Yellow
         [pscustomobject]@{ Scenario = "new-shell: TAB '$Line'"; Fixture = $Fixture; Gate = $true; Error = "$_" }
         return
+    }
+    finally {
+        Remove-Item $warmup -Recurse -Force -ErrorAction Ignore
     }
 
     New-ScenarioResult -Name "new-shell: TAB '$Line'" -Fixture $Fixture -Gate $true -Times $tab -Allocs $allocs
