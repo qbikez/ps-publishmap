@@ -16,8 +16,16 @@
 
     Module load time ('module' fixture) is Import-Module in a fresh pwsh, measured
     once per run independent of the fixtures, with its allocations.
+
+    -ProfileDir traces one extra run of every in-process scenario with the Profiler
+    module (Install-PSResource Profiler) after it is timed, so timings are unaffected.
+    It writes <fixture>-<scenario>.speedscope.json (open in https://speedscope.app)
+    and profile-report.md with the slowest functions and lines by self time.
+    new-shell and module import scenarios run in child processes and are not traced.
 .EXAMPLE
     ./Invoke-PerfSuite.ps1
+.EXAMPLE
+    ./Invoke-PerfSuite.ps1 -Fixture samples -ProfileDir ./perf-profile
 .EXAMPLE
     ./Invoke-PerfSuite.ps1 -FixtureRoot $env:TEMP/perf -OutFile result.json
 #>
@@ -26,6 +34,9 @@ param(
     [string]$ModulePath = (Join-Path $PSScriptRoot '..\..\configmap.psm1'),
     # Prepared by New-PerfFixture.ps1. Omitted: a temporary copy of all fixtures.
     [string]$FixtureRoot,
+    # flat-1k also runs the in-memory internal helper scenarios.
+    [ValidateSet('workspace-M', 'workspace-XL', 'flat-1k', 'samples')]
+    [string[]]$Fixture = @('workspace-M', 'workspace-XL', 'flat-1k', 'samples'),
     [ValidateRange(3, 10000)]
     [int]$Iterations = 10,
     # Slow scenarios stop after this many seconds (but run at least 3 iterations).
@@ -35,7 +46,12 @@ param(
     [ValidateRange(1, 1000)]
     [int]$ImportIterations = 10,
     [string]$Label = 'local',
-    [string]$OutFile
+    [string]$OutFile,
+    # Traces each in-process scenario with the Profiler module and writes the results here.
+    [string]$ProfileDir,
+    # Functions and lines listed per scenario in profile-report.md.
+    [ValidateRange(1, 50)]
+    [int]$ProfileTop = 10
 )
 
 $ErrorActionPreference = 'Stop'
@@ -47,11 +63,17 @@ $ModulePath = (Resolve-Path $ModulePath).Path
 $tempFixtures = $null
 if (!$FixtureRoot) {
     $tempFixtures = Join-Path ([System.IO.Path]::GetTempPath()) "configmap-perf-fixtures-$([guid]::NewGuid())"
-    & (Join-Path $PSScriptRoot 'New-PerfFixture.ps1') -Path $tempFixtures
+    & (Join-Path $PSScriptRoot 'New-PerfFixture.ps1') -Path $tempFixtures -Name $Fixture
     $FixtureRoot = $tempFixtures
 }
 $FixtureRoot = (Resolve-Path $FixtureRoot).Path
 Import-Module $ModulePath -Force
+$profileReport = $null
+if ($ProfileDir) {
+    Import-Module Profiler -ErrorAction Stop
+    $ProfileDir = (New-Item -ItemType Directory -Path $ProfileDir -Force).FullName
+    $profileReport = [System.Text.StringBuilder]::new()
+}
 
 function Measure-Scenario {
     param(
@@ -88,7 +110,47 @@ function Measure-Scenario {
 
     $result = New-ScenarioResult -Name $Name -Fixture $Fixture -Gate $Gate -Times $times -Allocs $allocs
     Write-Host ("  {0,-14} {1,-34} median {2,9:n1} ms  (n={3})" -f $Fixture, $Name, $result.MedianMs, $result.Iterations) -ForegroundColor DarkGray
+    if ($ProfileDir) { Trace-Scenario -Name $Name -Fixture $Fixture -Action $Action -Setup $Setup -ArgumentList $ArgumentList }
     $result
+}
+
+function Trace-Scenario {
+    param([string]$Name, [string]$Fixture, [scriptblock]$Action, [scriptblock]$Setup, [object[]]$ArgumentList)
+
+    $slug = "$Fixture-$Name" -replace '[^\w.-]+', '-' -replace '-+$', ''
+    $exportPath = Join-Path $ProfileDir $slug
+    if ($Setup) { & $Setup }
+    # Trace-Script runs the block from the Profiler module, so bind our variables now.
+    $traced = { $null = & $Action @ArgumentList }.GetNewClosure()
+    $trace = Trace-Script -ScriptBlock $traced -DisableWarning -ExportPath $exportPath 6>$null
+    Write-Host ("  {0,-14} {1,-34} traced  {2,9:n1} ms  -> {3}.speedscope.json" -f $Fixture, $Name, $trace.TotalDuration.TotalMilliseconds, $slug) -ForegroundColor DarkGray
+    Add-ProfileSection -Name $Name -Fixture $Fixture -Trace $trace -File "$slug.speedscope.json"
+}
+
+function Add-ProfileSection {
+    param([string]$Name, [string]$Fixture, $Trace, [string]$File)
+
+    $ms = { param($t) [string]::Format([cultureinfo]::InvariantCulture, '{0:0.0}', $t.TotalMilliseconds) }
+    $cell = { param($s) "$s" -replace '\|', '\|' -replace '\s+', ' ' }
+    $md = $profileReport
+    [void]$md.AppendLine("## $Fixture / $Name")
+    [void]$md.AppendLine()
+    [void]$md.AppendLine("Traced run: $(& $ms $Trace.TotalDuration) ms (tracing overhead included). Flame graph: ``$File``")
+    [void]$md.AppendLine()
+    [void]$md.AppendLine('| Function | Module | Self ms | Self % | Total ms | Calls |')
+    [void]$md.AppendLine('|---|---|--:|--:|--:|--:|')
+    foreach ($f in $Trace.Top50FunctionSelfDuration | Select-Object -First $ProfileTop) {
+        [void]$md.AppendLine("| $(& $cell $f.Function) | $($f.Module) | $(& $ms $f.SelfDuration) | $($f.SelfPercent) | $(& $ms $f.Duration) | $($f.HitCount) |")
+    }
+    [void]$md.AppendLine()
+    [void]$md.AppendLine('| Line | Function | Self ms | Self % | Hits | Text |')
+    [void]$md.AppendLine('|---|---|--:|--:|--:|---|')
+    foreach ($l in $Trace.Top50SelfDuration | Select-Object -First $ProfileTop) {
+        $text = & $cell $l.Text
+        if ($text.Length -gt 80) { $text = $text.Substring(0, 77) + '...' }
+        [void]$md.AppendLine("| $($l.File):$($l.Line) | $(& $cell $l.Function) | $(& $ms $l.SelfDuration) | $($l.SelfPercent) | $($l.HitCount) | ``$text`` |")
+    }
+    [void]$md.AppendLine()
 }
 
 function New-ScenarioResult {
@@ -220,7 +282,7 @@ $startLocation = Get-Location
 try {
     $results.Add((Measure-ModuleImport))
 
-    foreach ($fixture in 'workspace-M', 'workspace-XL') {
+    foreach ($fixture in @('workspace-M', 'workspace-XL') | Where-Object { $_ -in $Fixture }) {
         $dir = Join-Path $FixtureRoot $fixture
         if (!(Test-Path $dir)) { continue }
         Set-Location $dir
@@ -248,7 +310,7 @@ try {
     }
 
     $samplesDir = Join-Path $FixtureRoot 'samples'
-    if (Test-Path $samplesDir) {
+    if ('samples' -in $Fixture -and (Test-Path $samplesDir)) {
         Set-Location $samplesDir
         $rootMap = Join-Path $samplesDir '.build.map.ps1'
         $touchRoot = { (Get-Item -LiteralPath $rootMap -Force).LastWriteTimeUtc = [datetime]::UtcNow }.GetNewClosure()
@@ -259,14 +321,14 @@ try {
     }
 
     $flatDir = Join-Path $FixtureRoot 'flat-1k'
-    if (Test-Path $flatDir) {
+    if ('flat-1k' -in $Fixture -and (Test-Path $flatDir)) {
         Set-Location $flatDir
         $results.Add((Measure-Scenario -Name 'list (warm)' -Fixture 'flat-1k' -Action { qbuild list 6>&1 | Out-String }))
         $results.Add((Measure-Scenario -Name 'TAB entry (warm)' -Fixture 'flat-1k' -Action { Measure-Tab 'qbuild ' }))
     }
 
     # Internal helpers: report-only, they may legitimately change shape between versions.
-    if ((Get-Command Get-MapEntries, Get-EntryCompletion -Module ConfigMap -ErrorAction Ignore).Count -eq 2) {
+    if ('flat-1k' -in $Fixture -and (Get-Command Get-MapEntries, Get-EntryCompletion -Module ConfigMap -ErrorAction Ignore).Count -eq 2) {
         $map = [ordered]@{}
         foreach ($n in 1..1000) { $map["task$n"] = { } }
         $results.Add((Measure-Scenario -Name 'internal: Get-MapEntries' -Fixture 'in-memory-1k' -Gate $false -Action {
@@ -277,7 +339,7 @@ try {
                 }))
     }
     $xlMap = Join-Path $FixtureRoot 'workspace-XL\.build.map.ps1'
-    if (Test-Path $xlMap) {
+    if ('workspace-XL' -in $Fixture -and (Test-Path $xlMap)) {
         $results.Add((Measure-Scenario -Name 'internal: Import-ConfigMap' -Fixture 'workspace-XL' -Gate $false -Action {
                     Import-ConfigMap -Map $xlMap -LookUp:$false
                 }))
@@ -295,6 +357,13 @@ $report = [ordered]@{
     os         = [System.Runtime.InteropServices.RuntimeInformation]::OSDescription
     iterations = $Iterations
     results    = $results
+}
+
+if ($profileReport) {
+    $header = "# qbuild profile`n`n$ModulePath, pwsh $($PSVersionTable.PSVersion). One traced run per scenario after timing; sorted by self time.`n`n"
+    $profilePath = Join-Path $ProfileDir 'profile-report.md'
+    ($header + $profileReport.ToString()) | Set-Content $profilePath
+    Write-Host "profile: $profilePath" -ForegroundColor DarkGray
 }
 
 if ($OutFile) {
