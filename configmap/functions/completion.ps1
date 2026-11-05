@@ -369,10 +369,6 @@ function Get-ScriptArgs {
                 if ($attr.TypeName.ToString() -eq "switch") {
                     $paramType = [switch]
                 }
-                else {
-                    # $newAttr = New-Object -type System.Management.Automation.PSTypeNameAttribute($attr.TypeName.Name)
-                    # $paramAttributesCollect.Add($newAttr)
-                }
             }
             elseif ($attr -is [System.Management.Automation.Language.AttributeAst]) {
                 $typeName = $attr.TypeName.ToString() -replace '^.*\.', ''
