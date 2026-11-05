@@ -36,10 +36,16 @@
 
             $commands = [ordered]@{}
             foreach ($target in $Context.Targets) {
+                $targetBound = $boundForCommand
+                # The parent already ran this target's dependencies; the child process must not repeat them.
+                if (Test-ConfigMapEntryHasDependency $target.Value) {
+                    $targetBound = $boundForCommand.Clone()
+                    $targetBound.NoDeps = $true
+                }
                 $commands[$target.Key] = Format-QBuildCommand `
                     -mainCommand $Context.MainCommand `
                     -Entry $target.Key `
-                    -BoundParameters $boundForCommand `
+                    -BoundParameters $targetBound `
                     -RemainingArguments $Context.RemainingArguments
             }
 

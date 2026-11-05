@@ -17,6 +17,9 @@ function Invoke-QBuild {
         [Parameter(DontShow)]
         [string]$ProcessValue,
 
+        # Run only the requested entry, without its _dependsOn.
+        [switch]$NoDeps,
+
         [Parameter(ValueFromRemainingArguments = $true, DontShow = $true)]
         [string[]]$RemainingArguments
     )
@@ -100,88 +103,114 @@ function Invoke-QBuild {
     }
 
     process {
-        if ($entry -is [array]) {
-            foreach ($e in $entry) {
-                $params = @{}
-                foreach ($k in $PSBoundParameters.Keys) { $params[$k] = $PSBoundParameters[$k] }
-                $params['entry'] = $e
-                $global:LASTEXITCODE = 0
-                Invoke-QBuild @params
-                if ($global:LASTEXITCODE) {
-                    throw "Entry '$e' failed with exit code $global:LASTEXITCODE. Stopping."
+        # One run-once ledger per top-level call; nested calls (entry lists, dependencies) share it.
+        $ownsLedger = $null -eq $script:ConfigMapDependencyLedger
+        if ($ownsLedger) {
+            $script:ConfigMapDependencyLedger = New-ConfigMapDependencyLedger
+        }
+        try {
+            if ($entry -is [array]) {
+                foreach ($e in $entry) {
+                    $params = @{}
+                    foreach ($k in $PSBoundParameters.Keys) { $params[$k] = $PSBoundParameters[$k] }
+                    $params['entry'] = $e
+                    $global:LASTEXITCODE = 0
+                    Invoke-QBuild @params
+                    if ($global:LASTEXITCODE) {
+                        throw "Entry '$e' failed with exit code $global:LASTEXITCODE. Stopping."
+                    }
                 }
-            }
-            return
-        }
-
-        if (-not $entry -and $PSBoundParameters['Version']) {
-            $commandName = if ($MyInvocation.InvocationName) { $MyInvocation.InvocationName } else { 'qbuild' }
-            return "$commandName $(Get-ConfigMapModuleVersion)"
-        }
-
-        $mapPath = $map
-        $userMap = try {
-            . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" | Assert-ConfigMap
-        }
-        catch {
-            if ($_.Exception.Message -match '^map file .* not found$|^No map provided and fallback .* not found$|^map is null and defaultMapFile is not provided$') {
-                $null
-            }
-            else {
-                throw
-            }
-        }
-        $map = Merge-ConfigMapCommands -Map $userMap -Language build
-
-        if (-not $entry) {
-            $entry = 'list'
-        }
-
-        $isInternalCommand = Test-ConfigMapInternalCommand -Name $entry -Language build
-        if (!$userMap -and !$isInternalCommand) {
-            Write-Help -invocation $MyInvocation -mapPath "./.build.map.ps1"
-            return
-        }
-
-        $operationContext = New-ConfigMapOperationContext
-        $runContext = New-ConfigMapRunContext -Map $map -OperationContext $operationContext
-        $context = New-ConfigMapProcessContext `
-            -Map $map `
-            -UserMap $userMap `
-            -MapArgument $mapPath `
-            -Entry $entry `
-            -Command $command `
-            -Invocation $MyInvocation `
-            -OperationContext $operationContext `
-            -RunContext $runContext `
-            -BoundParameters $PSBoundParameters `
-            -ProcessAction $ProcessAction `
-            -ProcessValue $ProcessValue `
-            -RemainingArguments $RemainingArguments
-
-        if (-not $isInternalCommand) {
-            $processSettings = Get-ConfigMapSettingsForPath -Map $map -Path $entry -OperationContext $operationContext
-            $handler = Get-ConfigMapProcessHandler -Name $processSettings.Process
-            if ($null -ne $handler) {
-                if ($null -eq $handler.Invoke) {
-                    throw "Process handler '$($processSettings.Process)' has no Invoke implementation."
-                }
-                & $handler.Invoke $context
                 return
             }
 
-            Invoke-ConfigMapExternalProcess `
-                -ProcessName $processSettings.Process `
-                -Entry $entry `
+            if (-not $entry -and $PSBoundParameters['Version']) {
+                $commandName = if ($MyInvocation.InvocationName) { $MyInvocation.InvocationName } else { 'qbuild' }
+                return "$commandName $(Get-ConfigMapModuleVersion)"
+            }
+
+            $null = $PSBoundParameters.Remove('NoDeps')
+            $mapPath = $map
+            $userMap = try {
+                . $ImportConfigMap -Map $map -Fallback "./.build.map.ps1" | Assert-ConfigMap
+            }
+            catch {
+                if ($_.Exception.Message -match '^map file .* not found$|^No map provided and fallback .* not found$|^map is null and defaultMapFile is not provided$') {
+                    $null
+                }
+                else {
+                    throw
+                }
+            }
+            $map = Merge-ConfigMapCommands -Map $userMap -Language build
+
+            if (-not $entry) {
+                $entry = 'list'
+            }
+
+            $isInternalCommand = Test-ConfigMapInternalCommand -Name $entry -Language build
+            if (!$userMap -and !$isInternalCommand) {
+                Write-Help -invocation $MyInvocation -mapPath "./.build.map.ps1"
+                return
+            }
+
+            $operationContext = New-ConfigMapOperationContext
+            $runContext = New-ConfigMapRunContext -Map $map -OperationContext $operationContext
+            $context = New-ConfigMapProcessContext `
                 -Map $map `
+                -UserMap $userMap `
+                -MapArgument $mapPath `
+                -Entry $entry `
+                -Command $command `
+                -Invocation $MyInvocation `
+                -OperationContext $operationContext `
+                -RunContext $runContext `
                 -BoundParameters $PSBoundParameters `
                 -ProcessAction $ProcessAction `
                 -ProcessValue $ProcessValue `
                 -RemainingArguments $RemainingArguments
-            return
-        }
 
-        Invoke-ConfigMapExecProcess -Context $context
+            if (-not $isInternalCommand) {
+                $ledger = $script:ConfigMapDependencyLedger
+                $requestIdentity = ConvertTo-ConfigMapRunIdentity -Key $entry -Arguments (Get-QBuildRequestArgument -BoundParameters $PSBoundParameters)
+                if ($ledger.RanAsDependency.Contains($requestIdentity)) {
+                    Write-Host "Skipping '$entry': it already ran as a dependency." -ForegroundColor DarkGray
+                    return
+                }
+                if (-not $NoDeps) {
+                    $plan = Resolve-ConfigMapDependencyPlan -Map $map -EntryKey $entry -Completed $ledger.Completed -OperationContext $operationContext
+                    Invoke-ConfigMapDependencyPlan -Plan $plan -MapArgument $mapPath -Ledger $ledger
+                }
+
+                $processSettings = Get-ConfigMapSettingsForPath -Map $map -Path $entry -OperationContext $operationContext
+                $handler = Get-ConfigMapProcessHandler -Name $processSettings.Process
+                if ($null -ne $handler) {
+                    if ($null -eq $handler.Invoke) {
+                        throw "Process handler '$($processSettings.Process)' has no Invoke implementation."
+                    }
+                    & $handler.Invoke $context
+                    $null = $ledger.Completed.Add($requestIdentity)
+                    return
+                }
+
+                Invoke-ConfigMapExternalProcess `
+                    -ProcessName $processSettings.Process `
+                    -Entry $entry `
+                    -Map $map `
+                    -BoundParameters $PSBoundParameters `
+                    -ProcessAction $ProcessAction `
+                    -ProcessValue $ProcessValue `
+                    -RemainingArguments $RemainingArguments
+                $null = $ledger.Completed.Add($requestIdentity)
+                return
+            }
+
+            Invoke-ConfigMapExecProcess -Context $context
+        }
+        finally {
+            if ($ownsLedger) {
+                $script:ConfigMapDependencyLedger = $null
+            }
+        }
     }
 }
 

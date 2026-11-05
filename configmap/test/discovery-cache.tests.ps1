@@ -540,6 +540,19 @@ $data = (Get-Content (Join-Path $PSScriptRoot 'data.txt') -Raw).Trim()
         $underscore | Should -Not -Contain '_cacheDependsOn'
     }
 
+    It 'does not expose _dependsOn as a completion key' {
+        $map = @{
+            restore = { "r" }
+            build   = @{
+                _dependsOn = 'restore'
+                exec       = { "b" }
+            }
+        }
+
+        @(Get-EntryCompletion $map -language build -wordToComplete 'build.') | Should -Not -Contain 'build._dependsOn'
+        @(Get-EntryCompletion $map -language build -wordToComplete '_') | Should -Not -Contain '_dependsOn'
+    }
+
     It 'warns that file paths in _dependsOn now belong in _cacheDependsOn' {
         $dir = Join-Path $TestDrive 'legacy-depends-on'
         New-Item -ItemType Directory -Path $dir -Force | Out-Null

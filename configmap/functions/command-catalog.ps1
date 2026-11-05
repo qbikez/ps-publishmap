@@ -155,6 +155,7 @@ function Get-ConfigMapCommandCatalog {
             Description = $description
             IsParent    = [bool]$isParent
             Parameters  = $parameters
+            DependsOn   = @(Get-ConfigMapDependencyLabel $script)
         }
     }
 }
