@@ -880,6 +880,31 @@ Describe 'qconf user-secrets _template' {
         $secrets['Other:Key'] | Should -Be 'keep-me'
     }
 
+    It 'keeps non-ASCII values when dotnet reads stdin in a non-UTF-8 encoding' {
+        # dotnet decodes piped stdin with the console code page (Windows) or the locale
+        # charset (Unix); a Latin-1 locale stands in for a legacy Windows code page.
+        $localeBackup = $env:LC_ALL
+        $env:LC_ALL = 'en_US.ISO-8859-1'
+        try {
+            Write-ConfigMapFile $script:mapFile @'
+@{
+    text = @{
+        _template = 'user-secrets:App.csproj'
+        options = @{
+            polish = @{ 'Greeting' = 'zażółć "gęślą" jaźń' }
+        }
+    }
+}
+'@
+            qconf -map $script:mapFile text -value polish -ErrorAction Stop
+        }
+        finally {
+            $env:LC_ALL = $localeBackup
+        }
+
+        (Read-UserSecrets $script:csproj)['Greeting'] | Should -Be 'zażółć "gęślą" jaźń'
+    }
+
     It 'stores an empty option value and reports it as active' {
         Write-ConfigMapFile $script:mapFile @'
 @{
