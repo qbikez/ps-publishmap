@@ -93,7 +93,7 @@ tr.group td { color: var(--muted); font-size: 12px; padding-top: 14px; border-bo
 tfoot td { font-weight: 600; border-bottom: none; }
 
 /* terminal block: always dark, independent of theme */
-.term { margin: 14px 0 0; background: #0f1319; color: #d7dde6; border: 1px solid #262d38; border-radius: 10px; overflow-x: auto; font: 13px/1.7 var(--font-mono); }
+.term { margin: 0; background: #0f1319; color: #d7dde6; border: 1px solid #262d38; border-radius: 10px; overflow-x: auto; font: 13px/1.7 var(--font-mono); }
 .term .t-bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid #262d38; color: #7d8592; font-size: 11.5px; position: sticky; left: 0; }
 .term .t-bar i { width: 10px; height: 10px; border-radius: 50%; background: #3a414c; display: inline-block; }
 .term .t-bar span { margin-left: 8px; }
@@ -104,6 +104,10 @@ tfoot td { font-weight: 600; border-bottom: none; }
 .t-str { color: #6fd3a6; }
 .t-num { color: #ffb84d; font-weight: 500; }
 .t-comment { color: #6f7885; font-style: italic; }
+.notes { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--ink-2); font-size: 13.5px; max-width: 80ch; }
+.notes b { color: var(--ink); font-weight: 600; }
+table.mini { min-width: 560px; }
+.hl { color: var(--accent); font-weight: 600; }
 #tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 12.5px; padding: 6px 9px; border-radius: 6px; max-width: 280px; opacity: 0; transition: opacity .08s; z-index: 10; }
 @media (prefers-reduced-motion: reduce) { #tip { transition: none; } }
 @media (max-width: 480px) { main { padding: 20px 16px 48px; } h1 { font-size: 22px; } .seg .lbl { font-size: 10px; } }
@@ -114,7 +118,7 @@ tfoot td { font-weight: 600; border-bottom: none; }
   <header>
     <h1>Where the perf workflow spends its 8 minutes</h1>
     <p>Measured from the <code>configmap perf</code> run #8 on PR #74, on a Windows runner. Times come from the log timestamps; the five other recent runs took 6&#8239;m&#8239;26&#8239;s to 7&#8239;m&#8239;54&#8239;s for the same step. The workflow step runs:</p>
-    <pre class="term" aria-label="Command run by the workflow"><span class="t-bar"><i></i><i></i><i></i><span>pwsh — configmap perf · Compare with base</span></span><code><span class="t-prompt">PS&gt;</span> <span class="t-cmd">./configmap/test/perf/Compare-Perf.ps1</span> <span class="t-flag">-Base</span> <span class="t-str">"origin/master"</span> <span class="t-flag">-Fixture</span> <span class="t-str">workspace-M, samples</span>
+    <pre class="term" aria-label="Command run by the workflow" style="margin-top:14px"><span class="t-bar"><i></i><i></i><i></i><span>pwsh — configmap perf · Compare with base</span></span><code><span class="t-prompt">PS&gt;</span> <span class="t-cmd">./configmap/test/perf/Compare-Perf.ps1</span> <span class="t-flag">-Base</span> <span class="t-str">"origin/master"</span> <span class="t-flag">-Fixture</span> <span class="t-str">workspace-M, samples</span>
 <span class="t-comment"># defaults, not passed by the workflow:</span>
      <span class="t-flag">-Rounds</span> <span class="t-num">3</span> <span class="t-flag">-Iterations</span> <span class="t-num">30</span> <span class="t-flag">-ScenarioBudgetSeconds</span> <span class="t-num">10</span> <span class="t-flag">-NewShellIterations</span> <span class="t-num">5</span></code></pre>
   </header>
@@ -160,13 +164,31 @@ tfoot td { font-weight: 600; border-bottom: none; }
   <section class="card" aria-labelledby="h-loop">
     <div>
       <h2 id="h-loop">How one scenario samples</h2>
-      <p class="sub"><code>Measure-Scenario</code> in <code>configmap/test/perf/Invoke-PerfSuite.ps1</code></p>
+      <p class="sub"><code>Measure-Scenario</code> in <code>configmap/test/perf/Invoke-PerfSuite.ps1</code>. This loop runs once per scenario, per side, per round: 3 rounds × base + head = <b>6 times per job</b>, each time in a fresh <code>pwsh</code>.</p>
     </div>
+    <pre class="term" aria-label="Stop condition"><code><span class="t-flag">while</span> ($times.Count <span class="t-flag">-lt</span> <span class="t-cmd">$Iterations</span> <span class="t-flag">-and</span>
+       ($times.Count <span class="t-flag">-lt</span> <span class="t-num">3</span> <span class="t-flag">-or</span> $budget.Elapsed.TotalSeconds <span class="t-flag">-lt</span> <span class="t-cmd">$ScenarioBudgetSeconds</span>)) { ... }
+<span class="t-comment"># stops at 30 samples, or at 10 s once it has at least 3, whichever comes first</span></code></pre>
     <div class="loop">
-      <div class="step"><b>1 · Warm-up</b>Runs the action once, untimed (after <code>Setup</code>, if any).</div>
-      <div class="step"><b>2 · Timed loop</b><code>Setup</code> (e.g. touch a map file) → read allocations → stopwatch around the action.</div>
-      <div class="step"><b>3 · Stop when</b>30 samples, <em>or</em> at least 3 samples and 10 s elapsed. Every sample is kept.</div>
+      <div class="step"><b>1 · Warm-up</b>Runs the action once, untimed. It runs before the budget clock starts and is not a sample.</div>
+      <div class="step"><b>2 · Timed loop</b><code>Setup</code> (e.g. touch a map file) → read allocations → stopwatch around the action. Every sample is kept.</div>
+      <div class="step"><b>3 · Stop</b>30 samples, <em>or</em> at least 3 samples and 10 s elapsed. The budget is wall-clock, so <code>Setup</code> and the allocation reads count against it.</div>
       <div class="step"><b>4 · Report</b>Median, p95, min and median allocated KB. Compare-Perf takes the median of the 3 per-round medians.</div>
+    </div>
+    <ul class="notes">
+      <li><b>Minimum 3 samples.</b> A 5 s call still runs 3 times (~15 s) before the budget can stop it.</li>
+      <li><b>Budget wins above ~333 ms per call</b> (10 s ÷ 30). In the CI fixtures only the <code>list</code> scenarios are that slow.</li>
+      <li><b>new-shell is different.</b> It skips this loop and always starts 1 untimed + <code>NewShellIterations</code> (5) fresh <code>pwsh</code> processes, with no budget.</li>
+    </ul>
+    <div class="tablewrap">
+      <table class="mini">
+        <thead><tr><th>Example from run #8</th><th class="num">ms per call</th><th>What stops it</th><th class="num">n</th></tr></thead>
+        <tbody>
+          <tr><td><code>list (warm)</code> · workspace-M</td><td class="num"><span class="hl">~940</span></td><td><span class="pill"><i style="background:var(--s1)"></i>10 s budget</span></td><td class="num"><span class="hl">9–13</span></td></tr>
+          <tr><td><code>TAB entry (edited)</code> · workspace-M</td><td class="num"><span class="hl">~195</span></td><td><span class="pill"><i style="background:var(--s2)"></i>30 iterations, after ~6 s</span></td><td class="num">30</td></tr>
+          <tr><td><code>TAB param name (warm)</code> · workspace-M</td><td class="num"><span class="hl">~35</span></td><td><span class="pill"><i style="background:var(--s3)"></i>30 iterations, after ~1 s</span></td><td class="num">30</td></tr>
+        </tbody>
+      </table>
     </div>
   </section>
 
