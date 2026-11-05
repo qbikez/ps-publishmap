@@ -316,7 +316,7 @@ function Get-EntryCompletion(
     $commandAst,
     $fakeBoundParameters
 ) {
-    return (Get-EntryCompletionKeys $map $language) | Sort-Object | ? { $_.startswith($wordToComplete) }
+    return (Get-EntryCompletionKeys $map $language) | Sort-Object | ? { $_.StartsWith($wordToComplete, [System.StringComparison]::OrdinalIgnoreCase) }
 }
 
 function Get-EntryDynamicParam(
