@@ -1161,6 +1161,22 @@ Describe 'qbuild dotenv _template per-key entries' {
         @($result.Keys) | Should -Not -Contain 'api.API_KEY'
     }
 
+    It 'leaves excluded keys out of the parent entry value' {
+        Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options' }
+        _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto'; exclude = @('API_K*') }
+    }
+}
+'@
+
+        $result = qbuild -map $script:buildMap api -porcelain -ErrorAction Stop
+
+        @($result.Value.Keys) | Should -Contain 'API_URL'
+        @($result.Value.Keys) | Should -Not -Contain 'API_KEY'
+    }
+
     It 'works against the dotenv sample' {
         $sampleDir = Join-Path $PSScriptRoot '..' 'samples' 'dotenv'
         Copy-Item -Path (Join-Path $sampleDir '*') -Destination $script:workDir -Recurse -Force

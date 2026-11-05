@@ -458,7 +458,7 @@ function Expand-DotEnvKeyEntries {
     .DESCRIPTION
         `keys = 'auto'` reads `<file>.example` (or `.sample` / `.template`); any other string
         names the file to read keys from. `exclude` (string or array, `-like` wildcards allowed)
-        lists keys that get no child entry. Children are named after the key (`api.API_URL`),
+        lists keys that get no child entry and are left out of the parent value. Children are named after the key (`api.API_URL`),
         read and write just that key, and never replace an entry the map already defines.
         Explicit `options` are left alone; otherwise `options` becomes a scriptblock that
         reads the sibling `.env.*` files when asked, so completion sees file changes.

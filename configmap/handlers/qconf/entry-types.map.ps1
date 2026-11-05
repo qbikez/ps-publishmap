@@ -16,7 +16,13 @@ return [ordered]@{
         get = {
             param($ctx, $options, $_context)
             $file = Get-ConfigEntryTemplateFile -Entry $_context.self -TypeName 'dotenv'
-            Find-ActiveEnvOption -File $file -Options $options
+            $result = Find-ActiveEnvOption -File $file -Options $options
+            # Excluded keys still decide the active preset, but their values are never shown.
+            $excluded = @((Get-ConfigEntryTemplate -Entry $_context.self).exclude | Where-Object { $_ })
+            foreach ($key in @($result.Value.Keys)) {
+                if ($excluded | Where-Object { $key -like $_ }) { $result.Value.Remove($key) }
+            }
+            $result
         }
         set = {
             param($ctx, $key, $value, $_context)
