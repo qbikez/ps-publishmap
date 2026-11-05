@@ -1,5 +1,5 @@
-# Task dependencies: `qbuild pack` runs lint, restore, build, test and api.build first,
-# each once, then pack. See README.md.
+# Task dependencies: `qbuild pack` runs lint, restore, build, test, api.lint and api.build
+# first, each once, then pack. See README.md.
 [ordered]@{
     restore = @{
         description = 'Restore packages'
@@ -20,9 +20,13 @@
         exec        = { Write-Host 'running tests' }
     }
     api     = [ordered]@{
+        lint  = @{
+            description = 'Lint the API'
+            exec        = { Write-Host 'linting api' }
+        }
         build = @{
             description = 'Build the API'
-            _dependsOn  = 'restore'
+            _dependsOn  = @('restore', './lint')
             exec        = { Write-Host 'building api' }
         }
     }
