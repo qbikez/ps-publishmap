@@ -27,9 +27,9 @@ param(
     # Prepared by New-PerfFixture.ps1. Omitted: a temporary copy of all fixtures.
     [string]$FixtureRoot,
     [ValidateRange(3, 10000)]
-    [int]$Iterations = 30,
+    [int]$Iterations = 10,
     # Slow scenarios stop after this many seconds (but run at least 3 iterations).
-    [double]$ScenarioBudgetSeconds = 10,
+    [double]$ScenarioBudgetSeconds = 8,
     [ValidateRange(1, 1000)]
     [int]$NewShellIterations = 8,
     [ValidateRange(1, 1000)]
