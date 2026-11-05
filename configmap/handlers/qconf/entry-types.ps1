@@ -229,7 +229,9 @@ function Set-UserSecretOption {
     }
 
     # JSON on stdin merges every key into the store with a single dotnet spawn.
-    $null = $resolved | ConvertTo-Json -Compress | dotnet user-secrets set --project $Csproj 2>&1
+    # dotnet decodes stdin with the console code page (Windows) or locale charset (Unix),
+    # so escape non-ASCII to keep the bytes identical under any of them.
+    $null = $resolved | ConvertTo-Json -Compress -EscapeHandling EscapeNonAscii | dotnet user-secrets set --project $Csproj 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to set user secrets for '$Csproj'."
     }
