@@ -361,6 +361,38 @@ Describe 'Discovery cache' {
         Test-Path $cachePath | Should -BeTrue
     }
 
+    It 'reuses the cache for dotfile maps and includes without errors' {
+        # Dotfiles are hidden on Linux/macOS; dependency tracking must still read their mtime.
+        $dir = Join-Path $TestDrive 'dotfile-deps'
+        $child = Join-Path $dir 'child'
+        New-Item -ItemType Directory -Path $child -Force | Out-Null
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value @'
+@{
+    "#include" = @{ child = @{ prefix = $true } }
+    alpha = { "a" }
+}
+'@
+        Set-Content -Path (Join-Path $child '.build.map.ps1') -Value '@{ task = { "task" } }'
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $firstOutput = @(Get-EntryCompletion $map -language build -wordToComplete 'a' 2>&1)
+        @($firstOutput | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] }) | Should -BeNullOrEmpty
+        @($firstOutput | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] }) | Should -Be @('alpha')
+
+        $cachePath = Join-Path $dir '.configmap\discovery.build.cache.json'
+        $before = (Get-Item $cachePath).LastWriteTimeUtc
+
+        Start-Sleep -Milliseconds 50
+        & (Get-Module ConfigMap) { Clear-ConfigMapDiscoveryCacheMemory }
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $secondOutput = @(Get-EntryCompletion $map -language build -wordToComplete 'a' 2>&1)
+        @($secondOutput | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] }) | Should -BeNullOrEmpty
+        @($secondOutput | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] }) | Should -Be @('alpha')
+        (Get-Item $cachePath).LastWriteTimeUtc | Should -Be $before
+    }
+
     It 'rebuilds when a root _dependsOn file mtime changes' {
         $dir = Join-Path $TestDrive 'depends-on-mtime'
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
