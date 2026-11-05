@@ -29,6 +29,7 @@ param(
     [int]$Iterations = 30,
     [double]$ScenarioBudgetSeconds = 10,
     [int]$NewShellIterations = 5,
+    [int]$ImportIterations = 10,
     [ValidateSet('workspace-M', 'workspace-XL', 'flat-1k', 'samples')]
     [string[]]$Fixture = @('workspace-M', 'workspace-XL', 'flat-1k', 'samples'),
     [double]$TimeThresholdPercent = 25,
@@ -111,7 +112,7 @@ function Invoke-Side {
     try {
         $env:HOME = $Side.Home
         pwsh -NoProfile -NonInteractive -File $suite -ModulePath $Side.ModulePath -FixtureRoot $Side.Fixtures `
-            -Iterations $Iterations -ScenarioBudgetSeconds $ScenarioBudgetSeconds -NewShellIterations $NewShellIterations `
+            -Iterations $Iterations -ScenarioBudgetSeconds $ScenarioBudgetSeconds -NewShellIterations $NewShellIterations -ImportIterations $ImportIterations `
             -Label "$($Side.Name)@$($Side.Sha)" -OutFile $out
         if ($LASTEXITCODE -ne 0) { throw "Perf suite failed for $($Side.Name) in round $Round." }
     }
