@@ -81,6 +81,20 @@
             else {
                 & "scripts/lib/test.ps1" $publishmapRoot
             }
+
+            # configmap tests re-import the ConfigMap module that runs this entry, so give them
+            # their own process. Neither test script exits with Pester's result, so pass it on.
+            $configmapRoot = Join-Path $PSScriptRoot "configmap"
+            $testCommand = if ($null -ne $env:APPVEYOR_JOB_ID) {
+                "& '$PSScriptRoot/scripts/lib/test.appveyor.ps1' '$configmapRoot'"
+            }
+            else {
+                "& '$PSScriptRoot/scripts/lib/test.ps1' '$configmapRoot' -EnableExit"
+            }
+            pwsh -NoProfile -Command "$testCommand; exit `$LASTEXITCODE"
+            if ($LASTEXITCODE -ne 0) {
+                throw "configmap Pester tests failed (exit code $LASTEXITCODE)"
+            }
         }
         description = "Run both C# unit tests and PowerShell Pester tests"
     }
