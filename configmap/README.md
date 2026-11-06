@@ -593,7 +593,7 @@ Hierarchical command organization:
 ```
 
 ### Included Maps
-`#include` pulls in other build maps. A key is either a directory (which loads `<dir>/.build.map.ps1`) or a path to a map file (ending in `.ps1`). Paths are relative to the including map. Included maps load only when needed, and their entries run in the included map's directory.
+`#include` pulls in other build maps. A key is either a directory (which loads `<dir>/.build.map.ps1`) or a path to a map file (ending in `.ps1`). Paths are relative to the including map. Included maps load only when needed, and their entries run in the included map's directory. See `samples/include` (directories) and `samples/include-file` (map files).
 ```powershell
 "#include" = @{
     "child"                    = @{ prefix = $true }   # child/.build.map.ps1 -> child.<entry>

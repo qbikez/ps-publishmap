@@ -1339,6 +1339,19 @@ Describe "#include of a map file" {
         (Get-CompletionList $map -language build).Keys | Should -Contain 'tools.dirtask'
         Get-MapEntry $map 'tools.dirtask' -language build | Should -Not -BeNullOrEmpty
     }
+
+    It "includes two map files from one directory in the include-file sample" {
+        $sampleDir = (Resolve-Path (Join-Path $PSScriptRoot '..\samples\include-file')).Path
+        $map = Import-ConfigMap -Map (Join-Path $sampleDir '.build.map.ps1') -LookUp:$false
+
+        $keys = @((Get-CompletionList $map -language build).Keys)
+        $keys | Should -Contain 'top-level'
+        $keys | Should -Contain 'lint.check'
+        $keys | Should -Contain 'publish'
+
+        $result = Invoke-EntryCommand (Get-MapEntry $map 'lint.check' -language build) 6>$null
+        $result.pwd | Should -Be (Join-Path $sampleDir 'tools')
+    }
 }
 
 Describe "direct map entry resolution" {
