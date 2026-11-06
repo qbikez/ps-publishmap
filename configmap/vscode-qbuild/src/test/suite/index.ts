@@ -28,7 +28,7 @@ export async function run(): Promise<void> {
     assert.ok(symbols);
     assert.deepEqual(
       symbols.map((symbol) => symbol.name),
-      ["frontend"],
+      ["frontend", "api"],
     );
     assert.deepEqual(
       symbols[0].children.map((symbol) => symbol.name),
@@ -50,6 +50,37 @@ export async function run(): Promise<void> {
     const labels = completions.items.map(completionLabel);
     assert.ok(labels.includes("Debug"), `Got completions: ${labels.join(", ")}`);
     assert.ok(labels.includes("Process"), `Got completions: ${labels.join(", ")}`);
+
+    const templatePrefix = "_template = 'dotenv:";
+    const templateOpen = document.getText().indexOf(templatePrefix);
+    assert.ok(templateOpen >= 0);
+    const templatePosition = document.positionAt(
+      templateOpen + templatePrefix.length,
+    );
+    const fileCompletions = await vscode.commands.executeCommand<
+      vscode.CompletionList
+    >(
+      "vscode.executeCompletionItemProvider",
+      document.uri,
+      templatePosition,
+      ":",
+    );
+    const envFile = fileCompletions.items.find(
+      (item) => completionLabel(item) === ".env.example",
+    );
+    assert.ok(
+      envFile,
+      `Got completions: ${fileCompletions.items.map(completionLabel).join(", ")}`,
+    );
+    assert.ok(
+      !fileCompletions.items.some((item) => completionLabel(item) === "package.json"),
+      "package.json is not a dotenv file",
+    );
+    const envRange = envFile.range as vscode.Range;
+    assert.deepEqual(
+      [envRange.start.character, envRange.end.character],
+      [templatePosition.character, templatePosition.character],
+    );
 
     const workspaceSymbols = await vscode.commands.executeCommand<
       vscode.SymbolInformation[]
