@@ -86,7 +86,7 @@ test("offers known setting values", () => {
   );
   assert.deepEqual(
     labels("@{ _settings = @{\n Process = |\n} }"),
-    ["qbuild", "qrun"],
+    ["exec", "steps", "options", "bun", "npm"],
   );
 });
 
