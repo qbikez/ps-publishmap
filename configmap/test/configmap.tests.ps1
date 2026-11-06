@@ -1352,6 +1352,19 @@ Describe "#include of a map file" {
         $result = Invoke-EntryCommand (Get-MapEntry $map 'lint.check' -language build) 6>$null
         $result.pwd | Should -Be (Join-Path $sampleDir 'tools')
     }
+
+    It "lists a prefixed file include as one group row" {
+        $sampleDir = (Resolve-Path (Join-Path (Join-Path (Join-Path $PSScriptRoot '..') 'samples') 'include-file')).Path
+        $map = Import-ConfigMap -Map (Join-Path $sampleDir '.build.map.ps1') -LookUp:$false
+
+        # Each command name is its own Write-Host record, padded to the column width.
+        $records = InModuleScope ConfigMap -Parameters @{ map = $map } {
+            @(Write-MapHelp -map $map -invocation ([pscustomobject]@{ InvocationName = 'qbuild' }) 6>&1 | ForEach-Object { "$_" })
+        }
+        @($records | Where-Object { $_.TrimEnd() -eq 'lint' }) | Should -HaveCount 1
+        @($records | Where-Object { $_ -like 'lint.*' }) | Should -HaveCount 0
+        @($records | Where-Object { $_.TrimEnd() -eq 'publish' }) | Should -HaveCount 1
+    }
 }
 
 Describe "direct map entry resolution" {
