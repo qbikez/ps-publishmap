@@ -355,6 +355,24 @@ On GitHub, add the `perf` label to a PR to run the comparison on `workspace-M` a
 push while the label is present and posts the table as a PR comment. To accept a
 regression, add `perf-ok` and re-run the failed job.
 
+### `#include` vs dot-sourced child maps
+
+A map can pull in another map with `#include` (see `samples/include`) or by
+dot-sourcing it and putting the returned hashtable into its own (see
+`samples/include-dotsource`). To compare their speed:
+
+```powershell
+.\test\perf\Compare-IncludeMethods.ps1                                 # workspace-M, 3 rounds (~6 min)
+.\test\perf\Compare-IncludeMethods.ps1 -Rounds 1                       # quick check
+.\test\perf\Compare-IncludeMethods.ps1 -Fixture workspace-XL -Rounds 1 # opt-in, ~20 min
+```
+
+It copies each workspace fixture twice. One copy keeps the `#include` root map. In
+the other, the root map dot-sources every project map instead and lists them in
+`_cacheDependsOn`. The script then runs the same `list`, TAB, run and new-shell
+scenarios on both copies and prints the two side by side. It only reports and
+never fails.
+
 ### Internal benchmark
 
 Run the opt-in internal-function harness from the module directory:
