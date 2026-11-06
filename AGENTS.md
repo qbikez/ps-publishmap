@@ -128,7 +128,7 @@ Uses **Pester** for PowerShell testing. Test files follow the pattern `*.Tests.p
 
 configmap tests live in `configmap/test`. Load the working copy with `Import-Module ./configmap/configmap.psm1 -Force`, then run `Invoke-Pester ./configmap/test` (or a single `*.tests.ps1` file). When running tests, report the status of any failed tests.
 
-Performance: `configmap/test/perf/Compare-Perf.ps1 -Base master` A/B-compares `qbuild list` and TAB completion against a base revision (fixtures: `workspace-M`, `workspace-XL`, `flat-1k`, `samples`). On GitHub it runs `workspace-M` and `samples` when the `perf` label is on a PR; `perf-ok` accepts a regression.
+Performance: `configmap/test/perf/Compare-Perf.ps1 -Base master` A/B-compares `qbuild list` and TAB completion against a base revision (fixtures: `workspace-M`, `workspace-XL`, `flat-1k`, `samples`). On GitHub it runs `workspace-M` and `samples` when the `perf` label is on a PR; `perf-ok` accepts a regression. `configmap/test/perf/Compare-IncludeMethods.ps1` compares `#include` against dot-sourced child maps (samples: `configmap/samples/include`, `configmap/samples/include-dotsource`).
 
 VSCode tasks are configured for running individual test files with Pester integration and proper problem matching.
 

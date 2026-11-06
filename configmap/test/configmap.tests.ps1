@@ -1367,6 +1367,55 @@ Describe "#include of a map file" {
     }
 }
 
+Describe "dot-sourced child maps" {
+    BeforeAll {
+        $includeSampleDir = (Resolve-Path (Join-Path $PSScriptRoot "..\samples\include")).Path
+        $dotSourceSampleDir = (Resolve-Path (Join-Path $PSScriptRoot "..\samples\include-dotsource")).Path
+    }
+
+    It "exposes the same entries as the #include sample" {
+        $included = Import-ConfigMap -Map (Join-Path $includeSampleDir ".build.map.ps1") -LookUp:$false
+        $dotSourced = Import-ConfigMap -Map (Join-Path $dotSourceSampleDir ".build.map.ps1") -LookUp:$false
+
+        $includedKeys = @((Get-CompletionList $included -language "build").Keys | Sort-Object)
+        $dotSourcedKeys = @((Get-CompletionList $dotSourced -language "build").Keys | Sort-Object)
+
+        $includedKeys | Should -Contain "child.inner-task-1"
+        $includedKeys | Should -Contain "shared-task"
+        # A dot-sourced map nested under a key is an ordinary group, so it also lists the group and its build-all entry
+        $dotSourcedKeys | Should -Be (@($includedKeys) + "child", "child.all" | Sort-Object)
+    }
+
+    It "runs dot-sourced entries in the including map's directory" {
+        $map = Import-ConfigMap -Map (Join-Path $dotSourceSampleDir ".build.map.ps1") -LookUp:$false
+
+        $result = Invoke-EntryCommand (Get-MapEntry $map "child.inner-task-1" -language "build") 6>$null
+
+        $result.pwd | Should -Be $dotSourceSampleDir
+        $result.psscriptroot | Should -Be (Join-Path $dotSourceSampleDir "child")
+    }
+
+    It "rebuilds the discovery cache when a dot-sourced child map changes" {
+        $dir = Join-Path $TestDrive "include-dotsource"
+        Copy-Item -Path $dotSourceSampleDir -Destination $dir -Recurse
+        Get-ChildItem $dir -Recurse -Directory -Force -Filter ".configmap" | Remove-Item -Recurse -Force
+        $mapFile = Join-Path $dir ".build.map.ps1"
+        $childMap = Join-Path $dir "child\.build.map.ps1"
+        $getCache = {
+            & (Get-Module ConfigMap) { Clear-ConfigMapDiscoveryCacheMemory }
+            $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+            & (Get-Module ConfigMap) { param($Map) Get-ConfigMapDiscoveryCache -Map $Map -Language build } $map
+        }
+
+        $null = & $getCache
+        Set-Content -Path $childMap -Value '@{ "inner-task-1" = { }; "added" = { } }'
+        (Get-Item $childMap).LastWriteTimeUtc = [datetime]::UtcNow.AddMinutes(1)
+        $cache = & $getCache
+
+        @($cache.entries.hierarchical).key | Should -Contain "child.added"
+    }
+}
+
 Describe "direct map entry resolution" {
     It "does not enumerate ordinary nested entries" {
         InModuleScope ConfigMap {
