@@ -10,7 +10,7 @@ function Get-QBuildHostParameterName {
     [OutputType([string[]])]
     param()
 
-    @('entry', 'command', 'map', 'RemainingArguments')
+    @('entry', 'command', 'map', 'NoDeps', 'RemainingArguments')
 }
 
 function Invoke-QBuild {
@@ -31,6 +31,9 @@ function Invoke-QBuild {
 
         [Parameter(DontShow)]
         [string]$ProcessValue,
+
+        # Run only the requested entry, without its _dependsOn.
+        [switch]$NoDeps,
 
         [Parameter(ValueFromRemainingArguments = $true, DontShow = $true)]
         [string[]]$RemainingArguments
@@ -175,6 +178,11 @@ function Invoke-QBuild {
             -RemainingArguments $RemainingArguments
 
         if (-not $isInternalCommand) {
+            if (-not $NoDeps) {
+                $plan = Resolve-ConfigMapDependencyPlan -Map $map -EntryKey $entry -OperationContext $operationContext
+                Invoke-ConfigMapDependencyPlan -Plan $plan -MapArgument $mapPath
+            }
+
             $processSettings = Get-ConfigMapSettingsForPath -Map $map -Path $entry -OperationContext $operationContext
             $handler = Get-ConfigMapProcessHandler -Name $processSettings.Process
             if ($null -ne $handler) {

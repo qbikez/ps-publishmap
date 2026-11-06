@@ -18,6 +18,7 @@ $helpersPath = (Split-Path -Parent $MyInvocation.MyCommand.Definition)
 . "$helpersPath\functions\discovery-cache.ps1"
 . "$helpersPath\functions\command-catalog.ps1"
 . "$helpersPath\functions\invoke-entry.ps1"
+. "$helpersPath\functions\dependencies.ps1"
 . "$helpersPath\functions\help.ps1"
 . "$helpersPath\functions\initialize.ps1"
 . "$helpersPath\functions\agent-init.ps1"
