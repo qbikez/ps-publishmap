@@ -104,6 +104,102 @@ Describe 'qbuild _dependsOn' {
         }
     }
 
+    Context 'sibling references' {
+        It 'resolves ./name against the dependent''s group' {
+            $map = [ordered]@{
+                lint = { $global:depRan.Add('lint') }
+                api  = [ordered]@{
+                    lint = { $global:depRan.Add('api.lint') }
+                    pack = @{ _dependsOn = './lint'; exec = { $global:depRan.Add('api.pack') } }
+                }
+            }
+
+            qbuild -map $map api.pack
+
+            $global:depRan | Should -Be @('api.lint', 'api.pack')
+        }
+
+        It 'resolves ./name on a root entry against the map root' {
+            $map = [ordered]@{
+                lint  = { $global:depRan.Add('lint') }
+                build = @{ _dependsOn = './lint'; exec = { $global:depRan.Add('build') } }
+            }
+
+            qbuild -map $map build
+
+            $global:depRan | Should -Be @('lint', 'build')
+        }
+
+        It 'treats .\name like ./name' {
+            $map = [ordered]@{
+                api = [ordered]@{
+                    lint = { $global:depRan.Add('api.lint') }
+                    pack = @{ _dependsOn = '.\lint'; exec = { $global:depRan.Add('api.pack') } }
+                }
+            }
+
+            qbuild -map $map api.pack
+
+            $global:depRan | Should -Be @('api.lint', 'api.pack')
+        }
+
+        It 'resolves sibling references of a dependency against its own group' {
+            $map = [ordered]@{
+                api  = [ordered]@{
+                    lint  = { $global:depRan.Add('api.lint') }
+                    build = @{ _dependsOn = './lint'; exec = { $global:depRan.Add('api.build') } }
+                }
+                pack = @{ _dependsOn = 'api.build'; exec = { $global:depRan.Add('pack') } }
+            }
+
+            qbuild -map $map pack
+
+            $global:depRan | Should -Be @('api.lint', 'api.build', 'pack')
+        }
+
+        It 'prints the resolved key' {
+            $map = [ordered]@{
+                api = [ordered]@{
+                    lint = { }
+                    pack = @{ _dependsOn = './lint'; exec = { } }
+                }
+            }
+
+            qbuild -map $map api.pack
+
+            Should -Invoke -ModuleName ConfigMap Write-Host -ParameterFilter { "$Object" -eq '-> api.lint (dependency of api.pack)' }
+        }
+
+        It 'reports an unresolved sibling as written' {
+            $map = [ordered]@{
+                api = [ordered]@{
+                    pack = @{ _dependsOn = './missing'; exec = { } }
+                }
+            }
+
+            { qbuild -map $map api.pack } | Should -Throw "*'./missing' of 'api.pack'*not found*"
+        }
+
+        It 'rejects <item>' -ForEach @(
+            @{ item = '../lint' }
+            @{ item = '..\lint' }
+            @{ item = './../lint' }
+            @{ item = '.\..\lint' }
+            @{ item = 'api/../lint' }
+        ) {
+            $map = [ordered]@{
+                lint = { $global:depRan.Add('lint') }
+                api  = [ordered]@{
+                    lint = { $global:depRan.Add('api.lint') }
+                    pack = @{ _dependsOn = $item; exec = { $global:depRan.Add('api.pack') } }
+                }
+            }
+
+            { qbuild -map $map api.pack } | Should -Throw "*_dependsOn of 'api.pack'*'$item'*full path from the map root*"
+            $global:depRan | Should -BeNullOrEmpty
+        }
+    }
+
     Context 'arguments' {
         It 'does not pass the caller''s args to a dependency with the same parameter' {
             $map = [ordered]@{
@@ -257,6 +353,8 @@ Describe 'samples/dependencies' {
             'building'
             '-> test (dependency of pack)'
             'running tests'
+            '-> api.lint (dependency of api.build)'
+            'linting api'
             '-> api.build (dependency of pack)'
             'building api'
             'packing'
