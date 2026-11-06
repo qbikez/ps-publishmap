@@ -237,6 +237,41 @@ Describe 'Discovery cache' {
         @($cache.entries.hierarchical).key | Should -Contain 'lint.extra'
     }
 
+    It 'rebuilds a cache written before map-file includes existed' {
+        # Modules before map-file includes read "lint.build.map.ps1" as a directory include,
+        # recorded lint.build.map.ps1/.build.map.ps1 as a missing dependency, and cached no
+        # included entries. Such a cache still matches its dependencies, so only the version
+        # can reject it.
+        $dir = Join-Path $TestDrive 'include-file-legacy-cache'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value @'
+@{
+    "#include" = @{ "lint.build.map.ps1" = @{ prefix = $true } }
+    root = { "root" }
+}
+'@
+        Set-Content -Path (Join-Path $dir 'lint.build.map.ps1') -Value '@{ task = { "task" } }'
+        $rootEntry = @{ key = 'root'; parameters = @(); isParent = $false; process = ''; description = '' }
+        $legacyCache = @{
+            version      = 4
+            language     = 'build'
+            rootMap      = [System.IO.Path]::GetFullPath($mapFile)
+            dependencies = @(
+                @{ path = [System.IO.Path]::GetFullPath($mapFile); ticks = (Get-Item $mapFile).LastWriteTimeUtc.Ticks }
+                @{ path = (Join-Path $dir 'lint.build.map.ps1\.build.map.ps1'); ticks = $null }
+            )
+            entries      = @{ hierarchical = @($rootEntry); flatten = @($rootEntry) }
+        }
+        New-Item -ItemType Directory -Path (Join-Path $dir '.configmap') -Force | Out-Null
+        $legacyCache | ConvertTo-Json -Depth 8 | Set-Content -Path (Join-Path $dir '.configmap\discovery.build.cache.json')
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $cache = & (Get-Module ConfigMap) { param($Map) Get-ConfigMapDiscoveryCache -Map $Map -Language build } $map
+
+        @($cache.entries.hierarchical).key | Should -Contain 'lint.task'
+    }
+
     It 'rebuilds when a previously missing include appears' {
         $dir = Join-Path $TestDrive 'missing-include'
         New-Item -ItemType Directory -Path $dir -Force | Out-Null

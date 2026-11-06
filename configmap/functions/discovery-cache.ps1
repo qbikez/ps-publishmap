@@ -1,7 +1,9 @@
 #requires -version 7.0
 
 $script:discoveryCacheMemory = @{}
-$script:discoveryCacheVersion = 4
+# Bump whenever entry discovery changes, so caches written by other module versions are rebuilt.
+# 5: map-file includes ("#include" keys ending in .ps1).
+$script:discoveryCacheVersion = 5
 $script:ConfigMapLegacyDependsOnWarned = [System.Collections.Generic.HashSet[string]]::new()
 
 function Get-ConfigMapUserHome {
