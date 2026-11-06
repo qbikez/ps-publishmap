@@ -4,7 +4,7 @@ VS Code navigation and completion for qbuild `.build.map.ps1` files.
 
 ## Features
 
-- Completes qbuild metadata such as `_settings`, `exec`, `description`, `list`, `#include`, and `_cacheDependsOn`.
+- Completes qbuild metadata such as `_settings`, `exec`, `description`, `list`, `#include`, `_dependsOn`, and `_cacheDependsOn`.
 - Completes supported keys inside `_settings` and `prefix` inside include configuration.
 - Adds nested map entries to Breadcrumbs, Outline, Go to Symbol in Editor, and Go to Symbol in Workspace (`Ctrl+T`).
 - Parses map text without executing it.
