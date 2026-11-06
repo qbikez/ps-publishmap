@@ -1277,6 +1277,96 @@ $global:ConfigMapIncludeLoadCount++
     }
 }
 
+Describe "#include of a map file" {
+    BeforeAll {
+        $root = Join-Path $TestDrive 'include-file'
+        $tools = Join-Path $root 'tools'
+        New-Item -ItemType Directory -Path $tools -Force | Out-Null
+        Set-Content -Path (Join-Path $tools 'lint.build.map.ps1') -Value @'
+@{
+    _settings = @{ Debug = 'lint-file' }
+    check = { @{ pwd = $PWD.Path } }
+}
+'@
+        Set-Content -Path (Join-Path $tools '.build.map.ps1') -Value '@{ dirtask = { } }'
+
+        $newMap = {
+            param($Prefix)
+            @{
+                _baseDir   = $root
+                top        = { }
+                '#include' = @{
+                    'tools/lint.build.map.ps1' = @{ prefix = $Prefix }
+                }
+            }
+        }
+    }
+
+    It "lists entries of a prefixed map file under its name" {
+        $keys = (Get-CompletionList (& $newMap $true) -language build).Keys
+
+        $keys | Should -Contain 'lint.check'
+        $keys | Should -Contain 'top'
+        $keys | Should -Not -Contain 'tools.dirtask'
+    }
+
+    It "merges entries of an unprefixed map file" {
+        $keys = (Get-CompletionList (& $newMap $false) -language build).Keys
+
+        $keys | Should -Contain 'check'
+    }
+
+    It "runs an entry of an included map file in that file's directory" {
+        $entry = Get-MapEntry (& $newMap $true) 'lint.check' -language build
+        $entry | Should -Not -BeNullOrEmpty
+
+        (Invoke-EntryCommand $entry).pwd | Should -Be $tools
+    }
+
+    It "applies the included map file's settings" {
+        InModuleScope ConfigMap -ArgumentList (& $newMap $true) {
+            param($Map)
+            (qbuild -map $Map '!settings' 'lint.check').Debug | Should -Be 'lint-file'
+        }
+    }
+
+    It "names a prefixed .build.map.ps1 file after its directory" {
+        $map = @{
+            _baseDir   = $root
+            '#include' = @{ 'tools/.build.map.ps1' = @{ prefix = $true } }
+        }
+
+        (Get-CompletionList $map -language build).Keys | Should -Contain 'tools.dirtask'
+        Get-MapEntry $map 'tools.dirtask' -language build | Should -Not -BeNullOrEmpty
+    }
+
+    It "includes two map files from one directory in the include-file sample" {
+        $sampleDir = (Resolve-Path (Join-Path $PSScriptRoot '..\samples\include-file')).Path
+        $map = Import-ConfigMap -Map (Join-Path $sampleDir '.build.map.ps1') -LookUp:$false
+
+        $keys = @((Get-CompletionList $map -language build).Keys)
+        $keys | Should -Contain 'top-level'
+        $keys | Should -Contain 'lint.check'
+        $keys | Should -Contain 'publish'
+
+        $result = Invoke-EntryCommand (Get-MapEntry $map 'lint.check' -language build) 6>$null
+        $result.pwd | Should -Be (Join-Path $sampleDir 'tools')
+    }
+
+    It "lists a prefixed file include as one group row" {
+        $sampleDir = (Resolve-Path (Join-Path (Join-Path (Join-Path $PSScriptRoot '..') 'samples') 'include-file')).Path
+        $map = Import-ConfigMap -Map (Join-Path $sampleDir '.build.map.ps1') -LookUp:$false
+
+        # Each command name is its own Write-Host record, padded to the column width.
+        $records = InModuleScope ConfigMap -Parameters @{ map = $map } {
+            @(Write-MapHelp -map $map -invocation ([pscustomobject]@{ InvocationName = 'qbuild' }) 6>&1 | ForEach-Object { "$_" })
+        }
+        @($records | Where-Object { $_.TrimEnd() -eq 'lint' }) | Should -HaveCount 1
+        @($records | Where-Object { $_ -like 'lint.*' }) | Should -HaveCount 0
+        @($records | Where-Object { $_.TrimEnd() -eq 'publish' }) | Should -HaveCount 1
+    }
+}
+
 Describe "dot-sourced child maps" {
     BeforeAll {
         $includeSampleDir = (Resolve-Path (Join-Path $PSScriptRoot "..\samples\include")).Path

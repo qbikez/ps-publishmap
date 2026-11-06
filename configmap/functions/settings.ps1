@@ -132,11 +132,11 @@ function Find-ConfigMapAncestorSettings {
 
     foreach ($inc in @($includes.GetEnumerator())) {
         $usePrefix = $inc.Value -is [System.Collections.IDictionary] -and $inc.Value.prefix -eq $true
-        if (-not $usePrefix -or $inc.Key -ne $segment) {
+        if (-not $usePrefix -or (Get-IncludePrefix "$($inc.Key)") -ne $segment) {
             continue
         }
 
-        $included = Import-IncludedConfigMap -DirectoryName "$($inc.Key)" -BaseDir $baseDir -Cache $Cache -Loading $Loading
+        $included = Import-IncludedConfigMap -Include "$($inc.Key)" -BaseDir $baseDir -Cache $Cache -Loading $Loading
         if (-not $included) {
             continue
         }
@@ -170,7 +170,7 @@ function Find-ConfigMapAncestorSettings {
             continue
         }
 
-        $included = Import-IncludedConfigMap -DirectoryName "$($inc.Key)" -BaseDir $baseDir -Cache $Cache -Loading $Loading
+        $included = Import-IncludedConfigMap -Include "$($inc.Key)" -BaseDir $baseDir -Cache $Cache -Loading $Loading
         if (-not $included) {
             continue
         }

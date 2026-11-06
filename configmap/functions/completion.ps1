@@ -199,7 +199,7 @@ function Merge-IncludeDirectives {
     .SYNOPSIS
         Processes #include directives and merges included map entries
     .PARAMETER includes
-        Hashtable with include configuration (directory names as keys with prefix option)
+        Hashtable with include configuration (directory names or map file paths as keys, with prefix option)
     .PARAMETER baseDir
         Base directory for resolving include paths. Defaults to $PWD if not specified.
     #>
@@ -221,22 +221,20 @@ function Merge-IncludeDirectives {
     }
 
     foreach ($kvp in $includes.GetEnumerator()) {
-        $dirName = $kvp.Key
+        $include = "$($kvp.Key)"
         $includeConfig = $kvp.Value
 
-        $includePath = Join-Path $baseDir $dirName
-        $mapFile = Join-Path $includePath '.build.map.ps1'
-        $fullMapPath = [System.IO.Path]::GetFullPath($mapFile)
+        $fullMapPath = Resolve-IncludedMapFile -Include $include -BaseDir $baseDir
 
-        if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
-            $OperationContext.Dependencies[$fullMapPath] = (Get-Item -LiteralPath $mapFile -Force).LastWriteTimeUtc.Ticks
+        if (Test-Path -LiteralPath $fullMapPath -PathType Leaf) {
+            $OperationContext.Dependencies[$fullMapPath] = (Get-Item -LiteralPath $fullMapPath -Force).LastWriteTimeUtc.Ticks
         }
         else {
             $OperationContext.Dependencies[$fullMapPath] = $null
         }
 
         $includedMap = Import-IncludedConfigMap `
-            -DirectoryName $dirName `
+            -Include $include `
             -BaseDir $baseDir `
             -Cache $OperationContext.IncludeCache `
             -Loading $OperationContext.LoadingIncludes
@@ -258,9 +256,10 @@ function Merge-IncludeDirectives {
             $usePrefix = $includeConfig.prefix -eq $true
         }
 
+        $prefix = Get-IncludePrefix $include
         foreach ($entry in $includedEntries.GetEnumerator()) {
             if ($usePrefix) {
-                $key = "$dirName$separator$($entry.Key)"
+                $key = "$prefix$separator$($entry.Key)"
             }
             else {
                 $key = $entry.Key
