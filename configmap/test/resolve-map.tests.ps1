@@ -46,8 +46,8 @@ Describe 'Import-IncludedConfigMap' {
         & (Get-Module ConfigMap) {
             param($BaseDir, $ExpectedBaseDir, $Cache, $Loading)
 
-            $first = Import-IncludedConfigMap -DirectoryName 'child' -BaseDir $BaseDir -Cache $Cache -Loading $Loading
-            $second = Import-IncludedConfigMap -DirectoryName 'child' -BaseDir $BaseDir -Cache $Cache -Loading $Loading
+            $first = Import-IncludedConfigMap -Include 'child' -BaseDir $BaseDir -Cache $Cache -Loading $Loading
+            $second = Import-IncludedConfigMap -Include 'child' -BaseDir $BaseDir -Cache $Cache -Loading $Loading
 
             $first | Should -Be $second
             $first._baseDir | Should -Be $ExpectedBaseDir
@@ -64,14 +64,14 @@ Describe 'Import-IncludedConfigMap' {
 
         $first = & (Get-Module ConfigMap) {
             param($BaseDir, $Cache, $Loading)
-            Import-IncludedConfigMap -DirectoryName 'cached' -BaseDir $BaseDir -Cache $Cache -Loading $Loading
+            Import-IncludedConfigMap -Include 'cached' -BaseDir $BaseDir -Cache $Cache -Loading $Loading
         } $TestDrive $cache $loading
 
         Mock Test-Path -ModuleName ConfigMap { $true }
 
         $second = & (Get-Module ConfigMap) {
             param($BaseDir, $Cache, $Loading)
-            Import-IncludedConfigMap -DirectoryName 'cached' -BaseDir $BaseDir -Cache $Cache -Loading $Loading
+            Import-IncludedConfigMap -Include 'cached' -BaseDir $BaseDir -Cache $Cache -Loading $Loading
         } $TestDrive $cache $loading
 
         $second | Should -Be $first
@@ -84,7 +84,7 @@ Describe 'Import-IncludedConfigMap' {
         & (Get-Module ConfigMap) {
             param($BaseDir)
 
-            Import-IncludedConfigMap -DirectoryName 'empty' -BaseDir $BaseDir -Cache @{} -Loading @{} |
+            Import-IncludedConfigMap -Include 'empty' -BaseDir $BaseDir -Cache @{} -Loading @{} |
                 Should -BeNullOrEmpty
         } $TestDrive
     }

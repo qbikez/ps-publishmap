@@ -211,6 +211,32 @@ Describe 'Discovery cache' {
         @($cache.entries.hierarchical).key | Should -Contain 'child.extra'
     }
 
+    It 'rebuilds when an included map file changes' {
+        $dir = Join-Path $TestDrive 'include-file-mtime'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value @'
+@{
+    "#include" = @{ "lint.build.map.ps1" = @{ prefix = $true } }
+    root = { "root" }
+}
+'@
+        $childMap = Join-Path $dir 'lint.build.map.ps1'
+        Set-Content -Path $childMap -Value '@{ task = { "task" } }'
+        $getCache = {
+            & (Get-Module ConfigMap) { Clear-ConfigMapDiscoveryCacheMemory }
+            $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+            & (Get-Module ConfigMap) { param($Map) Get-ConfigMapDiscoveryCache -Map $Map -Language build } $map
+        }
+
+        $null = & $getCache
+        Set-Content -Path $childMap -Value '@{ task = { "task" }; extra = { "extra" } }'
+        (Get-Item $childMap).LastWriteTimeUtc = [datetime]::UtcNow.AddMinutes(1)
+        $cache = & $getCache
+
+        @($cache.entries.hierarchical).key | Should -Contain 'lint.extra'
+    }
+
     It 'rebuilds when a previously missing include appears' {
         $dir = Join-Path $TestDrive 'missing-include'
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
