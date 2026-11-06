@@ -134,8 +134,7 @@ function Format-TmuxCommand {
 
     $parts += $Entry
 
-    $skip = @(
-        'entry', 'map', 'command', 'RemainingArguments',
+    $skip = (Get-QBuildHostParameterName) + @(
         'Verbose', 'Debug', 'ErrorAction', 'WarningAction', 'InformationAction',
         'OutVariable', 'OutBuffer', 'PipelineVariable'
     )

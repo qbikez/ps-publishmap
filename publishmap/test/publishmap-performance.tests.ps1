@@ -1,37 +1,42 @@
-. "$PSScriptRoot\includes.ps1"
+BeforeAll {
+    . $PSScriptRoot/includes.ps1
 
-function convertto-array([Parameter(ValueFromPipeline = $true)] $enumerable, [switch][bool]$flatten = $true) {
-    $a = @()
-    if ($enumerable -is [hashtable]) {
-        $enumerable = $enumerable.Values
-    }
+    function convertto-array([Parameter(ValueFromPipeline = $true)] $enumerable, [switch][bool]$flatten = $true) {
+        $a = @()
+        if ($enumerable -is [hashtable]) {
+            $enumerable = $enumerable.Values
+        }
     
-    if ($enumerable -is [System.Collections.IEnumerable]) {
-        if (!$flatten) {
-            $a += $enumerable.Values        
-        } else {
-            foreach ($val in $enumerable.GetEnumerator()) {
-                if ($val -is [System.Collections.IEnumerable]) {
-                    $a += convertto-array $val -flatten:$flatten
-                }
-                else {
-                    $a += $val
+        if ($enumerable -is [System.Collections.IEnumerable]) {
+            if (!$flatten) {
+                $a += $enumerable.Values        
+            } else {
+                foreach ($val in $enumerable.GetEnumerator()) {
+                    if ($val -is [System.Collections.IEnumerable]) {
+                        $a += convertto-array $val -flatten:$flatten
+                    }
+                    else {
+                        $a += $val
+                    }
                 }
             }
-        }
 
-        return $a
-    }
-    else {
-        throw "don't know how to convert type $($enumerable.GetType().FullName) to array"
+            return $a
+        }
+        else {
+            throw "don't know how to convert type $($enumerable.GetType().FullName) to array"
+        }
     }
 }
 
 
-Describe "parse publish map performance" {
-    $maps = @(gci "$PSScriptRoot\input\performance" -filter "publishmap.*.config.ps1" | % { 
+BeforeDiscovery {
+    $maps = @(gci "$PSScriptRoot/input/performance" -filter "publishmap.*.config.ps1" | % {
             @{ file = $_.name; item = $_ }
         })
+}
+
+Describe "parse publish map performance" {
 
     Context "When map is parsed" {
         It "Should take reasonable time for file '<file>'" -TestCases $maps {
@@ -49,7 +54,7 @@ Describe "parse publish map performance" {
                 $arr = $global:perfcounters | convertto-array 
                 $arr | sort elapsed | format-table -Wrap  | out-string | write-host
             }
-            $r.TotalSeconds | Should BeLessThan 10
+            $r.TotalSeconds | Should -BeLessThan 10
             
         }
     }

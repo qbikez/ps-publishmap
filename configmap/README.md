@@ -335,6 +335,19 @@ can drive an older checkout. To measure a single revision (it runs on a temporar
 
 ```powershell
 .\test\perf\Invoke-PerfSuite.ps1
+.\test\perf\Invoke-PerfSuite.ps1 -Fixture samples   # one fixture
+```
+
+To see where the time goes, add `-ProfileDir` (needs the
+[Profiler](https://github.com/nohwnd/Profiler) module: `Install-PSResource Profiler`).
+After timing each in-process scenario, the suite traces one more run of it and
+writes `<fixture>-<scenario>.speedscope.json` (open in https://speedscope.app) and
+`profile-report.md`, with the top functions and lines by self time
+(`-ProfileTop`, default 10). Timings are not affected. new-shell and module
+import scenarios run in child processes and are not traced.
+
+```powershell
+.\test\perf\Invoke-PerfSuite.ps1 -Fixture samples -ProfileDir ./perf-profile
 ```
 
 On GitHub, add the `perf` label to a PR to run the comparison on `workspace-M` and
