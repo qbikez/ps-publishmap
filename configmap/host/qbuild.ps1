@@ -71,7 +71,14 @@ function Invoke-QBuild {
                 return
             }
 
-            $settings = Get-ConfigMapSettingsForPath -Map $dynMap -Path $entry
+            # A local copy: assigning $entry here would leak into the process block.
+            $entryPath = $entry
+            $generatedEntry = Resolve-ConfigMapProcessGeneratedEntry -Map $dynMap -Path $entry
+            if ($generatedEntry) {
+                $entryPath = $generatedEntry.Entry
+            }
+
+            $settings = Get-ConfigMapSettingsForPath -Map $dynMap -Path $entryPath
             $handler = Get-ConfigMapProcessHandler -Name $settings.Process
             if ($null -ne $handler) {
                 if ($null -ne $handler.GetDynamicParam) {
@@ -79,7 +86,8 @@ function Invoke-QBuild {
                         -Map $dynMap `
                         -UserMap $dynUserMap `
                         -MapArgument $map `
-                        -Entry $entry `
+                        -Entry $entryPath `
+                        -GeneratedEntry $generatedEntry.Name `
                         -Command $command `
                         -Invocation $MyInvocation `
                         -BoundParameters $PSBoundParameters `
@@ -159,12 +167,19 @@ function Invoke-QBuild {
         }
 
         $operationContext = New-ConfigMapOperationContext
+        $generatedEntry = if (-not $isInternalCommand) {
+            Resolve-ConfigMapProcessGeneratedEntry -Map $map -Path $entry -OperationContext $operationContext
+        }
+        if ($generatedEntry) {
+            $entry = $generatedEntry.Entry
+        }
         $runContext = New-ConfigMapRunContext -Map $map -OperationContext $operationContext
         $context = New-ConfigMapProcessContext `
             -Map $map `
             -UserMap $userMap `
             -MapArgument $mapPath `
             -Entry $entry `
+            -GeneratedEntry $generatedEntry.Name `
             -Command $command `
             -Invocation $MyInvocation `
             -OperationContext $operationContext `
@@ -243,6 +258,17 @@ function Get-QBuildEntryCompletion {
         if ($userMap) {
             foreach ($c in @(Get-EntryCompletion $userMap -language "build" -wordToComplete $completionWord)) {
                 if ($c) { $completions.Add([string]$c) | Out-Null }
+            }
+
+            $generatedEntry = Resolve-ConfigMapProcessGeneratedEntry -Map $userMap -Path $completionWord
+            if ($generatedEntry) {
+                $handler = Get-ConfigMapProcessHandler -Name $generatedEntry.Process
+                try { $names = @((& $handler.GetEntries @{ Map = $userMap; Entry = $generatedEntry.Entry }).Keys) } catch { $names = @() }
+                foreach ($name in $names) {
+                    if ($name.StartsWith($generatedEntry.Name, [System.StringComparison]::OrdinalIgnoreCase)) {
+                        $completions.Add("$($generatedEntry.Entry).$name") | Out-Null
+                    }
+                }
             }
         }
 

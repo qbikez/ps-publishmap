@@ -10,11 +10,12 @@ Set-Location $PSScriptRoot
 
 qbuild list              # shows web and web-bun next to plain entries
 qbuild web               # lists package.json scripts (same as `qbuild web list`)
-qbuild web build         # npm run build
-qbuild web greet -- Ada  # npm run greet -- Ada
-qbuild web-bun build     # bun run build (requires bun)
-qbuild web <tab>         # completes list, build, greet
+qbuild web.build         # npm run build
+qbuild web.greet -- Ada  # npm run greet -- Ada
+qbuild web-bun.build     # bun run build (requires bun)
+qbuild web.<tab>         # completes web.build, web.greet
 ```
 
 npm only forwards arguments that follow `--`, so qbuild inserts it for you; bun gets the
 trailing arguments as-is. An unknown script name throws and names the available ones.
+Scripts are entries, not actions: `qbuild web build` throws and points to `qbuild web.build`.
