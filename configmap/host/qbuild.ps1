@@ -1,3 +1,18 @@
+function Get-QBuildHostParameterName {
+    <#
+    .SYNOPSIS
+        Names of qbuild's own parameters, which must not be forwarded to entries or child command lines.
+
+    .DESCRIPTION
+        ProcessAction and ProcessValue are not included: they carry the entry's own
+        arguments, and some callers forward them.
+    #>
+    [OutputType([string[]])]
+    param()
+
+    @('entry', 'command', 'map', 'RemainingArguments')
+}
+
 function Invoke-QBuild {
     [CmdletBinding()]
     param(

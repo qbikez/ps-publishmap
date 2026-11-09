@@ -1,17 +1,13 @@
 param([switch][bool]$internal = $false)
 
-$publishmapPath = "$psscriptroot\.."
-import-module Pester
+$publishmapPath = Join-Path $PSScriptRoot ".."
 
-# $inputDir = "$psscriptroot\input"
-
-if ($internal) {    
-    .  "$publishmapPath\imports.ps1"
+if ($internal) {
+    . (Join-Path $publishmapPath "imports.ps1")
 } else {
     if ($null -ne (get-module PublishMap)) {
         write-information "reloading PublishMap module"
         remove-module PublishMap
     }
-    import-module "$publishmapPath\PublishMap.psm1"
+    import-module (Join-Path $publishmapPath "publishmap.psm1")
 }
-

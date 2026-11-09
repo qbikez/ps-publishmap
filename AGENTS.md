@@ -15,6 +15,7 @@ The size of a change is not a reason to skip this. The only exceptions are:
 - documentation-only changes
 - pure refactors already covered by existing tests (run them before and after)
 - formatting-only changes
+- test tooling and dev scripts (e.g. `configmap/test/perf`, build, lint and CI helpers); verify them by running them instead
 
 See "Tests" under Coding Guidelines for test-writing conventions.
 
