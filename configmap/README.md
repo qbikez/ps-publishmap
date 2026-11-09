@@ -355,6 +355,24 @@ On GitHub, add the `perf` label to a PR to run the comparison on `workspace-M` a
 push while the label is present and posts the table as a PR comment. To accept a
 regression, add `perf-ok` and re-run the failed job.
 
+### `#include` vs dot-sourced child maps
+
+A map can pull in another map with `#include` (see `samples/include`) or by
+dot-sourcing it and putting the returned hashtable into its own (see
+`samples/include-dotsource`). To compare their speed:
+
+```powershell
+.\test\perf\Compare-IncludeMethods.ps1                                 # workspace-M, 3 rounds (~6 min)
+.\test\perf\Compare-IncludeMethods.ps1 -Rounds 1                       # quick check
+.\test\perf\Compare-IncludeMethods.ps1 -Fixture workspace-XL -Rounds 1 # opt-in, ~20 min
+```
+
+It copies each workspace fixture twice. One copy keeps the `#include` root map. In
+the other, the root map dot-sources every project map instead and lists them in
+`_cacheDependsOn`. The script then runs the same `list`, TAB, run and new-shell
+scenarios on both copies and prints the two side by side. It only reports and
+never fails.
+
 ### Internal benchmark
 
 Run the opt-in internal-function harness from the module directory:
@@ -592,6 +610,17 @@ Hierarchical command organization:
 }
 ```
 
+### Included Maps
+`#include` pulls in other build maps. A key is either a directory (which loads `<dir>/.build.map.ps1`) or a path to a map file (ending in `.ps1`). Paths are relative to the including map. Included maps load only when needed, and their entries run in the included map's directory. See `samples/include` (directories) and `samples/include-file` (map files).
+```powershell
+"#include" = @{
+    "child"                    = @{ prefix = $true }   # child/.build.map.ps1 -> child.<entry>
+    "tools/lint.build.map.ps1" = @{ prefix = $true }   # -> lint.<entry>
+    "shared/tasks.ps1"         = @{ prefix = $false }  # entries merged into this map
+}
+```
+A prefixed map file is named after its file name without the `.build.map.ps1`, `.map.ps1` or `.ps1` suffix (`.lint.map.ps1` -> `lint`). A file named `.build.map.ps1` takes its directory's name.
+
 ## Requirements
 
 - PowerShell 7.0 or higher
@@ -666,6 +695,7 @@ The following keys have special meaning in map files:
 - `validate` - Validation function (for qconf)
 - `_template` - Built-in entry type: `@{ type; file }` or `"appsettings:{filepath}"` / `"dotenv:{filepath}"`, or `@{ type = "user-secrets"; csproj }` / `"user-secrets:{csproj}"`, that fills get/set when omitted; author get/set override the fill-in and can call `$_context.base`
 - `description` - Command description
+- `#include` - Include other maps by directory or map file path (see [Included Maps](#included-maps))
 - `completions` - Custom tab completion values
 - `_dependsOn` - Entries to run first (see [Dependencies](#dependencies))
 - `_cacheDependsOn` - Files that invalidate the discovery cache (see [Discovery cache](#discovery-cache))

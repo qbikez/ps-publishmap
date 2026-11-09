@@ -1,0 +1,136 @@
+{
+  "$comment": "Keys and values of qbuild build maps, used for editor completion. configmap/test/map-schema.tests.ps1 checks this file against the module.",
+  "entryKeys": [
+    {
+      "key": "_settings",
+      "detail": "qbuild settings inherited by this entry and its children",
+      "insertText": "_settings = @{ ${1} }"
+    },
+    {
+      "key": "exec",
+      "detail": "Script or child entries executed by this entry",
+      "insertText": "exec = {\n\t${0}\n}",
+      "processes": ["exec", "steps"]
+    },
+    {
+      "key": "description",
+      "detail": "Description shown by qbuild help and list",
+      "insertText": "description = '${1:Description}'"
+    },
+    {
+      "key": "list",
+      "detail": "Explicit nested entry container",
+      "insertText": "list = @{\n\t${0}\n}"
+    },
+    {
+      "key": "#include",
+      "detail": "Include entries from another build map",
+      "insertText": "'#include' = @{\n\t${0}\n}"
+    },
+    {
+      "key": "_dependsOn",
+      "detail": "Entries to run first",
+      "insertText": "_dependsOn = @('${1:entry}')"
+    },
+    {
+      "key": "_cacheDependsOn",
+      "detail": "Discovery-cache file dependencies",
+      "insertText": "_cacheDependsOn = @('${1:path}')"
+    },
+    {
+      "key": "_template",
+      "detail": "Built-in get/set for a config file: 'dotenv:.env', 'appsettings:appsettings.json' or 'user-secrets:app.csproj'",
+      "insertText": "_template = '${1}'",
+      "retrigger": true,
+      "processes": ["options"]
+    },
+    {
+      "key": "options",
+      "detail": "Named presets: option name -> values to write",
+      "insertText": "options = [ordered]@{\n\t${1:local} = @{ ${0} }\n}",
+      "processes": ["options"]
+    },
+    {
+      "key": "get",
+      "detail": "Script returning the active option: param($ctx, $options, $_context)",
+      "insertText": "get = {\n\tparam(\\$ctx, \\$options, \\$_context)\n\t${0}\n}",
+      "processes": ["options"]
+    },
+    {
+      "key": "set",
+      "detail": "Script applying an option: param($ctx, $key, $value, $_context)",
+      "insertText": "set = {\n\tparam(\\$ctx, \\$key, \\$value, \\$_context)\n\t${0}\n}",
+      "processes": ["options"]
+    },
+    {
+      "key": "validate",
+      "detail": "Script checking the current configuration",
+      "insertText": "validate = {\n\t${0}\n}",
+      "processes": ["options"]
+    }
+  ],
+  "hiddenReservedKeys": ["_baseDir", "_sourceFile", "_internal", "skipped"],
+  "settings": [
+    { "key": "Debug", "detail": "Enable ConfigMap debug behavior", "type": "boolean", "default": "$false" },
+    { "key": "Concurrently", "detail": "Run eligible child entries concurrently", "type": "boolean", "default": "$false" },
+    { "key": "TmuxAutoWindow", "detail": "Create tmux windows automatically", "type": "boolean", "default": "$false" },
+    { "key": "DiscoveryCache", "detail": "Enable qbuild command discovery cache", "type": "boolean", "default": "$true" },
+    {
+      "key": "DiscoveryCacheLocation",
+      "detail": "Select local or user discovery cache storage",
+      "values": [
+        { "value": "local", "detail": "Project-local cache" },
+        { "value": "user", "detail": "Per-user cache" }
+      ]
+    },
+    { "key": "Process", "detail": "Select how the entry runs", "valuesFrom": "processes" },
+    { "key": "ForceCheck", "detail": "steps: run each step's check before deciding to run it", "type": "boolean", "default": "$false" },
+    { "key": "UseWorkDir", "detail": "Run entry scripts in the caller's directory instead of the map's", "type": "boolean", "default": "$false" }
+  ],
+  "processes": [
+    { "name": "exec", "detail": "Run the entry exec scriptblock (default)" },
+    { "name": "steps", "detail": "Multi-step process with persisted state" },
+    { "name": "options", "detail": "Configuration get/set/show" },
+    { "name": "bun", "detail": "Run package.json scripts with bun" },
+    { "name": "npm", "detail": "Run package.json scripts with npm" }
+  ],
+  "defaultProcess": "exec",
+  "processAliases": { "qrun": "steps", "qconf": "options" },
+  "templates": [
+    {
+      "type": "appconfig",
+      "shortForm": "appsettings",
+      "pathKey": "file",
+      "fileMatch": "^appsettings.*\\.json$",
+      "detail": "Options stored in an appsettings JSON file",
+      "keys": []
+    },
+    {
+      "type": "dotenv",
+      "shortForm": "dotenv",
+      "pathKey": "file",
+      "fileMatch": "^\\.env",
+      "detail": "Options from .env files; .env.<name> files become presets",
+      "keys": [
+        {
+          "key": "keys",
+          "detail": "'auto' adds one entry per key of <file>.example, or a path to the file listing the keys",
+          "values": [{ "value": "'auto'", "detail": "Keys from <file>.example, .sample or .template" }]
+        },
+        {
+          "key": "exclude",
+          "detail": "Keys (wildcards allowed) kept out of per-key entries",
+          "insertText": "exclude = @('${1:SECRET_*}')"
+        }
+      ]
+    },
+    {
+      "type": "user-secrets",
+      "shortForm": "user-secrets",
+      "pathKey": "csproj",
+      "fileMatch": "\\.csproj$",
+      "detail": "Options stored in .NET user secrets of a project",
+      "keys": []
+    }
+  ]
+}

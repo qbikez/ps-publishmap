@@ -16,6 +16,7 @@ export function activate(context: vscode.ExtensionContext): void {
       new QbuildCompletionProvider(),
       "_",
       "'",
+      ":",
     ),
     vscode.languages.registerDocumentSymbolProvider(
       buildMapSelector,
