@@ -4,9 +4,9 @@
 # Try:
 #   qbuild list
 #   qbuild web               # lists package.json scripts
-#   qbuild web build
-#   qbuild web greet -- Ada  # arguments after the script name are forwarded
-#   qbuild web <tab>         # completes script names
+#   qbuild web.build
+#   qbuild web.greet -- Ada  # arguments after the script name are forwarded
+#   qbuild web.<tab>         # completes script names
 #   qbuild clean
 
 [ordered]@{
