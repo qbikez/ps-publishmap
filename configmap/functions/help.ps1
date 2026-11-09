@@ -27,12 +27,10 @@ function Write-CommandHelpLine {
     if ($paramInfo) {
         Write-Host " [$paramInfo]" -ForegroundColor DarkGray -NoNewline
     }
+    Write-Host "  $description" -ForegroundColor White -NoNewline:($dependsOn.Count -gt 0)
     if ($dependsOn.Count -gt 0) {
-        Write-Host "  $description" -ForegroundColor White -NoNewline
         Write-Host " (needs: $($dependsOn -join ', '))" -ForegroundColor DarkGray
-        return
     }
-    Write-Host "  $description" -ForegroundColor White
 }
 
 function Get-CommandHelpParamInfo {
@@ -262,7 +260,7 @@ function Write-MapHelp {
             $description = [string]$item.description
             $argList = @($item.parameters) | Where-Object { $_ } | ForEach-Object { "-$($_.name)" }
             $paramInfo = ($argList -join " ")
-            Write-CommandHelpLine $name $description $paramInfo $maxNameLength -dependsOn @($item.dependsOn | Where-Object { $_ })
+            Write-CommandHelpLine $name $description $paramInfo $maxNameLength -dependsOn (@($item.dependsOn).Where({ $_ }))
         }
         return
     }

@@ -188,18 +188,17 @@ function Invoke-QBuild {
                         throw "Process handler '$($processSettings.Process)' has no Invoke implementation."
                     }
                     & $handler.Invoke $context
-                    $null = $ledger.Completed.Add($requestIdentity)
-                    return
                 }
-
-                Invoke-ConfigMapExternalProcess `
-                    -ProcessName $processSettings.Process `
-                    -Entry $entry `
-                    -Map $map `
-                    -BoundParameters $PSBoundParameters `
-                    -ProcessAction $ProcessAction `
-                    -ProcessValue $ProcessValue `
-                    -RemainingArguments $RemainingArguments
+                else {
+                    Invoke-ConfigMapExternalProcess `
+                        -ProcessName $processSettings.Process `
+                        -Entry $entry `
+                        -Map $map `
+                        -BoundParameters $PSBoundParameters `
+                        -ProcessAction $ProcessAction `
+                        -ProcessValue $ProcessValue `
+                        -RemainingArguments $RemainingArguments
+                }
                 $null = $ledger.Completed.Add($requestIdentity)
                 return
             }

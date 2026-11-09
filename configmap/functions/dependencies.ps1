@@ -6,7 +6,7 @@ $script:ConfigMapDependencyLedger = $null
 function Test-ConfigMapEntryHasDependency {
     param($Entry)
 
-    return $Entry -is [System.Collections.IDictionary] -and $Entry.Contains('_dependsOn') -and $null -ne $Entry['_dependsOn']
+    return $Entry -is [System.Collections.IDictionary] -and $null -ne $Entry['_dependsOn']
 }
 
 function Get-ConfigMapDependencyLabel {
@@ -123,11 +123,11 @@ function Test-ConfigMapExecGroupEntry {
     if ($Entry -isnot [System.Collections.IDictionary] -or (Get-EntryHasExec $Entry)) {
         return $false
     }
-    if (-not (Test-IsParentEntry $Entry -ReservedKeys (Get-MapLanguage build).reservedKeys)) {
+    if (-not (Test-IsParentEntry $Entry)) {
         return $false
     }
     $settings = Get-ConfigMapSettingsForPath -Map $Map -Path $Key -OperationContext $OperationContext
-    return $settings.Process -eq $script:ConfigMapDefaultProcessName
+    return Test-ConfigMapProcessIsBuiltin -ProcessName $settings.Process
 }
 
 function Get-ConfigMapDependencySource {
@@ -154,7 +154,7 @@ function Get-ConfigMapDependencySource {
     }
 
     $entry = Get-MapEntry $Map $Key -language build -OperationContext $OperationContext
-    if ($null -eq $entry -or (Test-ConfigMapExecGroupEntry -Map $Map -Key $Key -Entry $entry -OperationContext $OperationContext)) {
+    if (-not (Test-ConfigMapEntryHasDependency $entry) -or (Test-ConfigMapExecGroupEntry -Map $Map -Key $Key -Entry $entry -OperationContext $OperationContext)) {
         return
     }
     @{ Key = $Key; Entry = $entry }
@@ -191,7 +191,8 @@ function Add-ConfigMapDependencyPlanItem {
         foreach ($item in @($source.Entry['_dependsOn'])) {
             $ref = ConvertTo-ConfigMapDependencyRef -Item $item -DeclaringKey $source.Key
             if ($State.Stack.Contains($ref.Key)) {
-                $chain = @($State.Stack.GetRange($State.Stack.IndexOf($ref.Key), $State.Stack.Count - $State.Stack.IndexOf($ref.Key))) + $ref.Key
+                $start = $State.Stack.IndexOf($ref.Key)
+                $chain = @($State.Stack[$start..($State.Stack.Count - 1)]) + $ref.Key
                 throw "Dependency cycle: $($chain -join ' -> ')"
             }
             if ($State.Completed.Contains($ref.Identity) -or $State.Planned.Contains($ref.Identity)) {
@@ -204,12 +205,8 @@ function Add-ConfigMapDependencyPlanItem {
             $State.Stack.RemoveAt($State.Stack.Count - 1)
 
             $null = $State.Planned.Add($ref.Identity)
-            $State.Plan.Add(@{
-                    Key          = $ref.Key
-                    Arguments    = $ref.Arguments
-                    Identity     = $ref.Identity
-                    DependentKey = $source.Key
-                })
+            $ref.DependentKey = $source.Key
+            $State.Plan.Add($ref)
         }
     }
 }
@@ -219,7 +216,7 @@ function Resolve-ConfigMapDependencyPlan {
     .SYNOPSIS
         Ordered dependencies to run before EntryKey: depth-first, each identity once, skipping completed runs.
     .OUTPUTS
-        List of @{ Key; Arguments; Identity; DependentKey }. Throws on cycles and unresolved items.
+        List of @{ Path; Key; Arguments; Identity; DependentKey }. Throws on cycles and unresolved items.
     #>
     param(
         [Parameter(Mandatory)]
@@ -258,6 +255,24 @@ function Test-ConfigMapDependencyRunActive {
     return $null -ne $script:ConfigMapDependencyLedger -and $script:ConfigMapDependencyLedger.ActiveDepth -gt 0
 }
 
+function Get-ConfigMapChildBoundParameter {
+    <#
+    .SYNOPSIS
+        Bound parameters for a child qbuild process (concurrently, tmux): adds NoDeps when the parent already ran Entry's dependencies.
+    #>
+    param(
+        $Bound,
+        $Entry
+    )
+
+    if (-not (Test-ConfigMapEntryHasDependency $Entry)) {
+        return $Bound
+    }
+    $childBound = $Bound.Clone()
+    $childBound.NoDeps = $true
+    return $childBound
+}
+
 function Get-QBuildRequestArgument {
     <#
     .SYNOPSIS
@@ -265,7 +280,7 @@ function Get-QBuildRequestArgument {
     #>
     param([System.Collections.IDictionary]$BoundParameters)
 
-    $hostKeys = @('entry', 'command', 'map', 'NoDeps') + [System.Management.Automation.PSCmdlet]::CommonParameters
+    $hostKeys = @('entry', 'command', 'map') + [System.Management.Automation.PSCmdlet]::CommonParameters
     $arguments = @{}
     foreach ($name in $BoundParameters.Keys) {
         if ($name -notin $hostKeys) {
@@ -288,11 +303,7 @@ function Invoke-ConfigMapDependencyPlan {
 
     foreach ($step in $Plan) {
         Write-Host "-> $($step.Key) (dependency of $($step.DependentKey))" -ForegroundColor Cyan
-        $arguments = @{}
-        foreach ($name in $step.Arguments.Keys) {
-            $arguments[$name] = $step.Arguments[$name]
-        }
-
+        $arguments = $step.Arguments
         $global:LASTEXITCODE = 0
         $Ledger.ActiveDepth++
         try {

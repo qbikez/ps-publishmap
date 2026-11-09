@@ -56,16 +56,10 @@
                 return @{ Handled = $false }
             }
 
-            $boundForCommand = $Context.Bound
-            # Dependencies already ran here; the window must not repeat them.
-            if (Test-ConfigMapEntryHasDependency $Context.TargetEntry) {
-                $boundForCommand = $Context.Bound.Clone()
-                $boundForCommand.NoDeps = $true
-            }
             $tmuxCommand = Format-TmuxCommand `
                 -mainCommand $Context.MainCommand `
                 -Entry $Context.TargetKey `
-                -BoundParameters $boundForCommand `
+                -BoundParameters (Get-ConfigMapChildBoundParameter -Bound $Context.Bound -Entry $Context.TargetEntry) `
                 -RemainingArguments $Context.RemainingArguments
 
             Write-Verbose "[tmux] Invoking command in tmux session '$($tmuxInfo.sessionName)', window '$($Context.TargetKey)': $tmuxCommand"
