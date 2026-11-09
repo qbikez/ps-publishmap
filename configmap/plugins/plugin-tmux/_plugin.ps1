@@ -44,6 +44,10 @@
                 Write-Verbose "[tmux] Auto-window is disabled or map argument is present. Skipping tmux handling."
                 return @{ Handled = $false }
             }
+            if (Test-ConfigMapDependencyRunActive) {
+                Write-Verbose "[tmux] '$($Context.TargetKey)' runs as a dependency; keeping it in this process so it finishes first."
+                return @{ Handled = $false }
+            }
 
             $tmuxInfo = Get-TmuxInfo
             if ($null -eq $tmuxInfo `
@@ -55,7 +59,7 @@
             $tmuxCommand = Format-TmuxCommand `
                 -mainCommand $Context.MainCommand `
                 -Entry $Context.TargetKey `
-                -BoundParameters $Context.Bound `
+                -BoundParameters (Get-ConfigMapChildBoundParameter -Bound $Context.Bound -Entry $Context.TargetEntry) `
                 -RemainingArguments $Context.RemainingArguments
 
             Write-Verbose "[tmux] Invoking command in tmux session '$($tmuxInfo.sessionName)', window '$($Context.TargetKey)': $tmuxCommand"

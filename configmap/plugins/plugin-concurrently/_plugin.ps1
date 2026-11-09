@@ -39,7 +39,7 @@
                 $commands[$target.Key] = Format-QBuildCommand `
                     -mainCommand $Context.MainCommand `
                     -Entry $target.Key `
-                    -BoundParameters $boundForCommand `
+                    -BoundParameters (Get-ConfigMapChildBoundParameter -Bound $boundForCommand -Entry $target.Value) `
                     -RemainingArguments $Context.RemainingArguments
             }
 

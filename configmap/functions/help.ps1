@@ -20,14 +20,17 @@ function Get-RelativeMapDisplayPath {
 }
 
 function Write-CommandHelpLine {
-    param($name, $description, $paramInfo, $maxNameLength)
+    param($name, $description, $paramInfo, $maxNameLength, [string[]]$dependsOn = @())
     $paddedName = $name.PadRight($maxNameLength)
     Write-Host "    " -NoNewline
     Write-Host "$paddedName" -ForegroundColor Green -NoNewline
     if ($paramInfo) {
         Write-Host " [$paramInfo]" -ForegroundColor DarkGray -NoNewline
     }
-    Write-Host "  $description" -ForegroundColor White
+    Write-Host "  $description" -ForegroundColor White -NoNewline:($dependsOn.Count -gt 0)
+    if ($dependsOn.Count -gt 0) {
+        Write-Host " (needs: $($dependsOn -join ', '))" -ForegroundColor DarkGray
+    }
 }
 
 function Get-CommandHelpParamInfo {
@@ -283,7 +286,7 @@ function Write-MapHelp {
             $description = [string]$item.description
             $argList = @($item.parameters) | Where-Object { $_ } | ForEach-Object { "-$($_.name)" }
             $paramInfo = ($argList -join " ")
-            Write-CommandHelpLine $name $description $paramInfo $maxNameLength
+            Write-CommandHelpLine $name $description $paramInfo $maxNameLength -dependsOn (@($item.dependsOn).Where({ $_ }))
         }
         return
     }
@@ -324,7 +327,7 @@ function Write-MapHelp {
             $description = $script.description
         }
 
-        Write-CommandHelpLine $name $description (Get-CommandHelpParamInfo $script) $maxNameLength
+        Write-CommandHelpLine $name $description (Get-CommandHelpParamInfo $script) $maxNameLength -dependsOn (Get-ConfigMapDependencyLabel $script)
     }
 }
 

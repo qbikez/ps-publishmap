@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>configmap settings: before and after the run context</title>
+<style>
+  :root {
+    --ink: #1f2328; --muted: #59636e; --line: #d0d7de; --bg: #ffffff; --panel: #f6f8fa;
+    --base: #e7ecf2; --map: #dbe7f7; --entry: #e5dcf5; --nested: #fbe3cf;
+    --bad: #c62828; --bad-bg: #fde8e8; --good: #1b7f3b; --good-bg: #e3f4e8;
+    --accent: #0b5cad;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 28px 32px 36px; font: 14px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 22px; }
+  .sub code, p code, li code { font: 12.5px ui-monospace, "Cascadia Code", Consolas, monospace; background: var(--panel); padding: 1px 4px; border-radius: 4px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .panel { border: 1px solid var(--line); border-radius: 10px; padding: 18px 18px 14px; background: #fff; }
+  .panel h2 { font-size: 16px; margin: 0 0 2px; }
+  .panel .tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 10px; margin-bottom: 8px; }
+  .before .tag { background: var(--bad-bg); color: var(--bad); }
+  .after .tag { background: var(--good-bg); color: var(--good); }
+  .panel p { margin: 4px 0 12px; color: var(--muted); }
+  svg { width: 100%; height: auto; display: block; }
+  svg text { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(--ink); }
+  svg .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+  svg .muted { fill: var(--muted); }
+  ul { margin: 8px 0 0; padding-left: 18px; }
+  li { margin: 3px 0; }
+  .legend { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 14px; color: var(--muted); }
+</style>
+</head>
+<body>
+<h1>How configmap passes settings: before and after the run context</h1>
+<p class="sub">Example map: <code>outer</code> has <code>_settings = @{ process = 'steps' }</code>; its step <code>step1</code> runs <code>qbuild inner</code>; <code>inner</code> is a plain scriptblock with no <code>_settings</code>.</p>
+
+<div class="grid">
+
+<!-- BEFORE -->
+<section class="panel before">
+  <span class="tag">Before</span>
+  <h2>One module variable, scopes stack on top of it</h2>
+  <p>Each entry pushed its <code>_settings</code> onto <code>$script:ConfigMapSettings</code>. A nested <code>qbuild</code> pushed on top of whatever was already there.</p>
+  <svg viewBox="0 0 520 520" role="img" aria-label="Settings scopes stacking on one global variable">
+    <defs>
+      <marker id="arrUp" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#59636e"/>
+      </marker>
+    </defs>
+
+    <!-- global variable label -->
+    <rect x="20" y="478" width="360" height="30" rx="6" fill="#1f2328"/>
+    <text x="200" y="498" text-anchor="middle" class="mono" style="fill:#fff;font-size:13px">$script:ConfigMapSettings</text>
+
+    <!-- stack (bottom to top) -->
+    <g>
+      <rect x="20" y="430" width="360" height="40" rx="6" fill="var(--base)" stroke="#b9c3cf"/>
+      <text x="34" y="455" style="font-size:13px">base: defaults + QCONF_*</text>
+      <text x="366" y="455" text-anchor="end" class="mono muted" style="font-size:12px">process = exec</text>
+
+      <rect x="20" y="384" width="360" height="40" rx="6" fill="var(--map)" stroke="#a9c1e3"/>
+      <text x="34" y="409" style="font-size:13px">+ map _settings</text>
+
+      <rect x="20" y="338" width="360" height="40" rx="6" fill="var(--entry)" stroke="#bfaee0"/>
+      <text x="34" y="363" style="font-size:13px">+ outer._settings</text>
+      <text x="366" y="363" text-anchor="end" class="mono" style="font-size:12px">process = steps</text>
+
+      <rect x="20" y="292" width="360" height="40" rx="6" fill="var(--entry)" stroke="#bfaee0"/>
+      <text x="34" y="317" style="font-size:13px">+ step1 (no _settings)</text>
+      <text x="366" y="317" text-anchor="end" class="mono muted" style="font-size:12px">process = steps</text>
+    </g>
+
+    <!-- nested boundary -->
+    <line x1="10" y1="276" x2="390" y2="276" stroke="#59636e" stroke-dasharray="5 4"/>
+    <text x="20" y="266" class="mono" style="font-size:12.5px">step1 runs  qbuild inner</text>
+
+    <g>
+      <rect x="20" y="198" width="360" height="40" rx="6" fill="var(--nested)" stroke="#e7b48c"/>
+      <text x="34" y="223" style="font-size:13px">+ inner map _settings</text>
+
+      <rect x="20" y="152" width="360" height="40" rx="6" fill="var(--bad-bg)" stroke="var(--bad)" stroke-width="1.5"/>
+      <text x="34" y="177" style="font-size:13px">+ inner (no _settings)</text>
+      <text x="366" y="177" text-anchor="end" class="mono" style="font-size:12px;fill:var(--bad);font-weight:600">process = steps ✗</text>
+    </g>
+
+    <!-- growth arrow -->
+    <line x1="410" y1="470" x2="410" y2="160" stroke="#59636e" stroke-width="1.5" marker-end="url(#arrUp)"/>
+    <text x="420" y="300" class="muted" style="font-size:12px">each scope</text>
+    <text x="420" y="316" class="muted" style="font-size:12px">builds on</text>
+    <text x="420" y="332" class="muted" style="font-size:12px">the one below</text>
+
+    <!-- result -->
+    <rect x="20" y="34" width="490" height="86" rx="8" fill="var(--bad-bg)" stroke="var(--bad)"/>
+    <text x="34" y="58" style="font-size:13.5px;font-weight:600;fill:var(--bad)">Result: inner is dispatched to the steps handler</text>
+    <text x="34" y="80" class="mono" style="font-size:12.5px">Process 'inner' has no steps.</text>
+    <text x="34" y="102" class="muted" style="font-size:12.5px">useWorkDir, forceCheck, DiscoveryCache… leak the same way.</text>
+  </svg>
+</section>
+
+<!-- AFTER -->
+<section class="panel after">
+  <span class="tag">After</span>
+  <h2>Each invocation builds its own run context</h2>
+  <p>Settings come from the base settings plus the map, never from the caller. Child contexts are passed down explicitly.</p>
+  <svg viewBox="0 0 520 520" role="img" aria-label="Separate run contexts for outer and nested qbuild">
+    <defs>
+      <marker id="arrDown" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#0b5cad"/>
+      </marker>
+      <marker id="arrGrey" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#59636e"/>
+      </marker>
+    </defs>
+
+    <!-- shared base -->
+    <rect x="150" y="8" width="220" height="34" rx="6" fill="var(--base)" stroke="#b9c3cf"/>
+    <text x="260" y="30" text-anchor="middle" style="font-size:12.5px">base: defaults + QCONF_*</text>
+    <line x1="200" y1="42" x2="125" y2="74" stroke="#59636e" stroke-dasharray="4 3" marker-end="url(#arrGrey)"/>
+    <line x1="320" y1="42" x2="395" y2="74" stroke="#59636e" stroke-dasharray="4 3" marker-end="url(#arrGrey)"/>
+
+    <!-- outer tree -->
+    <text x="20" y="96" class="mono" style="font-size:12.5px;font-weight:600">qbuild outer</text>
+    <rect x="20" y="104" width="220" height="62" rx="6" fill="var(--map)" stroke="#a9c1e3"/>
+    <text x="32" y="124" style="font-size:12.5px;font-weight:600">RunContext</text>
+    <text x="32" y="142" class="muted" style="font-size:11.5px">Map · Operation caches</text>
+    <text x="32" y="158" class="mono muted" style="font-size:11.5px">Settings = base + map</text>
+
+    <line x1="130" y1="166" x2="130" y2="194" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#arrDown)"/>
+    <rect x="20" y="198" width="220" height="44" rx="6" fill="var(--entry)" stroke="#bfaee0"/>
+    <text x="32" y="216" style="font-size:12.5px">child: outer</text>
+    <text x="32" y="233" class="mono" style="font-size:11.5px">process = steps</text>
+
+    <line x1="130" y1="242" x2="130" y2="270" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#arrDown)"/>
+    <rect x="20" y="274" width="220" height="62" rx="6" fill="var(--entry)" stroke="#bfaee0"/>
+    <text x="32" y="292" style="font-size:12.5px">child: outer.step1</text>
+    <text x="32" y="309" class="mono" style="font-size:11.5px">process = steps</text>
+    <text x="32" y="326" class="mono muted" style="font-size:11.5px">$_context.settings (read-only)</text>
+
+    <!-- inner tree -->
+    <text x="280" y="96" class="mono" style="font-size:12.5px;font-weight:600">qbuild inner</text>
+    <rect x="280" y="104" width="220" height="62" rx="6" fill="var(--map)" stroke="#a9c1e3"/>
+    <text x="292" y="124" style="font-size:12.5px;font-weight:600">new RunContext</text>
+    <text x="292" y="142" class="muted" style="font-size:11.5px">Map · Operation caches</text>
+    <text x="292" y="158" class="mono muted" style="font-size:11.5px">Settings = base + map</text>
+
+    <line x1="390" y1="166" x2="390" y2="194" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#arrDown)"/>
+    <rect x="280" y="198" width="220" height="44" rx="6" fill="var(--good-bg)" stroke="var(--good)" stroke-width="1.5"/>
+    <text x="292" y="216" style="font-size:12.5px">child: inner</text>
+    <text x="292" y="233" class="mono" style="font-size:11.5px;fill:var(--good);font-weight:600">process = exec ✓</text>
+
+    <!-- nested call -->
+    <path d="M240,305 H260 V135 H275" fill="none" stroke="#59636e" stroke-dasharray="5 4" marker-end="url(#arrGrey)"/>
+    <text x="300" y="268" class="muted" style="font-size:11.5px">step1 calls qbuild inner;</text>
+    <text x="300" y="284" class="muted" style="font-size:11.5px">no context is passed</text>
+
+    <!-- passing note -->
+    <text x="20" y="362" class="muted" style="font-size:11.5px">→ passed as -RunContext / $Context.RunContext to handlers,</text>
+    <text x="20" y="377" class="muted" style="font-size:11.5px">  Invoke-EntryCommand and plugin hooks ($Context.Settings)</text>
+
+    <!-- scripts box -->
+    <rect x="20" y="398" width="490" height="108" rx="8" fill="var(--panel)" stroke="var(--line)"/>
+    <text x="34" y="420" style="font-size:13px;font-weight:600">Current settings for scripts</text>
+    <text x="34" y="442" style="font-size:12.5px">While a map script or hook runs, Invoke-WithRunContext sets</text>
+    <text x="34" y="460" class="mono" style="font-size:12px">$script:ConfigMapSettings</text>
+    <text x="216" y="460" style="font-size:12.5px">to that entry's settings, and restores it after,</text>
+    <text x="34" y="478" style="font-size:12.5px">so Get-ConfigMapSetting keeps working in scripts.</text>
+    <text x="34" y="496" class="muted" style="font-size:12.5px">Module code never reads it; it takes settings from the context.</text>
+  </svg>
+</section>
+
+</div>
+
+<div class="legend">
+  <ul>
+    <li><b>Base settings</b>: defaults plus <code>QCONF_*</code>, captured at import (refreshed by <code>Update-ConfigMapSettings</code>).</li>
+    <li><b>Run context</b>: <code>New-ConfigMapRunContext</code> per <code>qbuild</code>/<code>qrun</code>/<code>qconf</code> call; <code>New-ConfigMapEntryContext</code> derives a child per entry from the base and the map.</li>
+    <li><b>Discovery cache</b>: settings for a loaded map are base + that map's <code>DiscoveryCache*</code> overrides, so a running entry doesn't affect them either.</li>
+  </ul>
+</div>
+</body>
+</html>

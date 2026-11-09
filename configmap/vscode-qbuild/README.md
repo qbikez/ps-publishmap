@@ -4,7 +4,7 @@ VS Code navigation and completion for qbuild `.build.map.ps1` files.
 
 ## Features
 
-- Completes qbuild metadata such as `_settings`, `exec`, `description`, `list`, `#include`, and `_cacheDependsOn`.
+- Completes qbuild metadata such as `_settings`, `exec`, `description`, `list`, `#include`, `_dependsOn`, and `_cacheDependsOn`.
 - Completes keys for the entry's process (`_settings.process`, inherited from parent entries): `options` entries get `_template`, `options`, `get`, `set`, and `validate`; `exec` is offered only where the process runs it.
 - Completes every `_settings` key with its values, including the process types `exec`, `steps`, `options`, `bun`, and `npm`.
 - Completes `_template` short forms (`dotenv:`, `appsettings:`, `user-secrets:`) and then matching files next to the map, and the `type`, `file`/`csproj`, `keys`, and `exclude` keys of the hashtable form.

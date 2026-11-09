@@ -37,7 +37,7 @@ test("offers map metadata and suppresses keys already present", () => {
   assert.ok(!suggestions.includes("description"));
 });
 
-test("offers _cacheDependsOn for discovery-cache files", () => {
+test("offers _dependsOn for entries and _cacheDependsOn for cache files", () => {
   const { text, offset } = marked(`
 @{
   |
@@ -46,6 +46,7 @@ test("offers _cacheDependsOn for discovery-cache files", () => {
   const suggestions = getCompletionSuggestions(parseMap(text), offset);
   const byLabel = new Map(suggestions.map((s) => [s.label, s]));
 
+  assert.match(byLabel.get("_dependsOn")?.detail ?? "", /run first/);
   assert.match(byLabel.get("_cacheDependsOn")?.detail ?? "", /cache/);
 });
 

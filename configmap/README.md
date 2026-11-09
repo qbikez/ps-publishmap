@@ -241,7 +241,7 @@ Maps that generate entries from other files should declare those files with `_ca
 }
 ```
 
-> **Breaking change:** this key used to be `_dependsOn`, which is now reserved for task dependencies. Rename existing file lists to `_cacheDependsOn`. While the cache is built, qbuild warns once about any `_dependsOn` item that looks like a file.
+> **Breaking change:** this key used to be `_dependsOn`, which now declares [task dependencies](#dependencies). Rename existing file lists to `_cacheDependsOn`. While the cache is built, qbuild warns once about any `_dependsOn` item that looks like a file. Running an entry whose `_dependsOn` item is not an entry fails with an error that points here.
 
 Enabled by default. Opt out per map or for the whole process:
 
@@ -651,6 +651,39 @@ Build-map entries can set `_settings.process` to select a runner:
 Legacy map values `qrun` and `qconf` still normalize to `steps` / `options`.
 Standalone `qrun` / `qconf` CLIs are **deprecated** — prefer unified `qbuild` with the process types above. See [docs/process-cli.md](docs/process-cli.md).
 
+## Dependencies
+
+`_dependsOn` lists entries to run before an entry, as in `just` or `mise`. Each dependency runs at most once per `qbuild` call, even when several requested entries share it:
+
+```powershell
+[ordered]@{
+    restore = { dotnet restore }
+    build   = @{
+        _dependsOn = 'restore'
+        exec       = { param($Configuration = 'Debug') dotnet build -c $Configuration --no-restore }
+    }
+    test    = @{
+        _dependsOn = @('restore', @{ entry = 'build'; args = @{ Configuration = 'Release' } })
+        exec       = { dotnet test -c Release --no-build }
+    }
+}
+```
+
+```text
+qbuild test         # restore, build -Configuration Release, then test
+qbuild build,test   # restore once, then build (Debug), build (Release), test
+qbuild test -NoDeps # just test
+qbuild list         # test  (needs: restore, build -Configuration:Release)
+```
+
+- **Items** are entry paths from the map root (`'api.build'`), or `'./name'` for a sibling in the same group. `'../'` is not supported. Use `@{ entry = '<path>'; args = @{ ... } }` to pass arguments. Arguments for `options` and `steps` entries go in the same way, e.g. `args = @{ ProcessAction = 'set'; ProcessValue = 'prod' }`.
+- **Run once:** a run is the entry path plus its arguments, so the same entry with different `args` runs again. The caller's own arguments and `--` passthrough go only to the requested entry, never to its dependencies. A requested entry that already ran as a dependency in the same call is skipped.
+- **Order and failure:** dependencies run depth-first, one at a time, before the entry. A dependency that throws, or leaves a non-zero `$LASTEXITCODE`, stops the run. Cycles are reported with their chain (`a -> b -> a`).
+- **Process types:** every dependency is dispatched like `qbuild <entry> -NoDeps`, so `steps`, `options` and `npm`/`bun` entries work as dependencies. Any entry with a hashtable body can declare `_dependsOn`. A bare scriptblock entry has to become `@{ _dependsOn = ...; exec = { ... } }`.
+- **Groups:** `_dependsOn` is not inherited. A group's own list applies when you run `group.all`, together with each child's. A group without `exec` cannot be a dependency; depend on `group.all` instead.
+- **Plugins:** with `Concurrently` or `TmuxAutoWindow`, dependencies run first in the calling process, and the parallel children or windows start with `-NoDeps`.
+- **Compared with `exec = @('a', 'b')`:** that form runs sub-entries of the same entry in order every time. `_dependsOn` declares prerequisites anywhere in the map and runs each one once.
+
 ## Reserved Keys
 
 The following keys have special meaning in map files:
@@ -664,6 +697,7 @@ The following keys have special meaning in map files:
 - `description` - Command description
 - `#include` - Include other maps by directory or map file path (see [Included Maps](#included-maps))
 - `completions` - Custom tab completion values
+- `_dependsOn` - Entries to run first (see [Dependencies](#dependencies))
 - `_cacheDependsOn` - Files that invalidate the discovery cache (see [Discovery cache](#discovery-cache))
 
 ## Examples

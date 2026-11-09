@@ -447,6 +447,7 @@ function New-ConfigMapDiscoveryEntryDescriptor {
         isParent    = [bool]$isParent
         description = $description
         parameters  = $parameters
+        dependsOn   = @(Get-ConfigMapDependencyLabel $Entry)
         # Process declared in the entry's own _settings ('' when inherited); lets list skip sub-paths without a map lookup.
         process     = [string](Get-EntryProcess $Entry -Default '')
     }
