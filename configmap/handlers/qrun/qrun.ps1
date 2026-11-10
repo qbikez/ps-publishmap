@@ -462,8 +462,13 @@ function Invoke-QRun {
                 try {
                     $settingsEntry = if ($stepEntry -is [System.Collections.IDictionary]) { $stepEntry } else { $processMapEntry }
                     $stepContext = New-ConfigMapEntryContext -Parent $runContext -EntryKey "$processKey.$stepName" -Entry $settingsEntry
+                    # Native commands do not throw, so a failing one shows only in LASTEXITCODE.
+                    $global:LASTEXITCODE = 0
                     Invoke-WithRunContext -Context $stepContext -ScriptBlock {
                         Invoke-EntryCommand -entry $stepEntry -key "exec" -bound $bound -RunContext $stepContext
+                    }
+                    if ($global:LASTEXITCODE) {
+                        throw "Step '$stepName' failed with exit code $global:LASTEXITCODE."
                     }
                 }
                 finally {

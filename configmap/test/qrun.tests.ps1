@@ -162,6 +162,30 @@ Describe 'qrun process runner' {
         Test-Path 'after.txt' | Should -BeTrue
     }
 
+    It 'fails the step when its exec exits with a non-zero exit code' {
+        $global:LASTEXITCODE = 0
+        $failMap = [ordered]@{
+            setup = [ordered]@{
+                ok    = { 'ok' | Set-Content 'ok.txt' }
+                boom  = { $global:LASTEXITCODE = 3 }
+                after = { 'after' | Set-Content 'after.txt' }
+            }
+        }
+
+        try {
+            { qrun -map $failMap setup } | Should -Throw "*'boom'*exit code 3*"
+            Test-Path 'after.txt' | Should -BeFalse
+
+            $stateFiles = @(Get-ChildItem -Path (Join-Path $script:workDir '.configmap' 'process') -Recurse -Filter '*.state.json')
+            $state = Get-Content $stateFiles[0].FullName -Raw | ConvertFrom-Json
+            $state.steps.ok.status | Should -Be 'Succeeded'
+            $state.steps.boom.status | Should -Be 'Failed'
+        }
+        finally {
+            $global:LASTEXITCODE = 0
+        }
+    }
+
     It 'resets state with -Reset' {
         qrun -map $script:map setup
         qrun -map $script:map setup -Reset
