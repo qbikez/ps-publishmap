@@ -46,13 +46,36 @@ Describe 'Import-IncludedConfigMap' {
         & (Get-Module ConfigMap) {
             param($BaseDir, $ExpectedBaseDir, $Cache, $Loading)
 
-            $first = Import-IncludedConfigMap -DirectoryName 'child' -BaseDir $BaseDir -Cache $Cache -Loading $Loading
-            $second = Import-IncludedConfigMap -DirectoryName 'child' -BaseDir $BaseDir -Cache $Cache -Loading $Loading
+            $first = Import-IncludedConfigMap -Include 'child' -BaseDir $BaseDir -Cache $Cache -Loading $Loading
+            $second = Import-IncludedConfigMap -Include 'child' -BaseDir $BaseDir -Cache $Cache -Loading $Loading
 
             $first | Should -Be $second
             $first._baseDir | Should -Be $ExpectedBaseDir
             $first.task._baseDir | Should -Be $ExpectedBaseDir
         } $TestDrive $includeDirectory $cache $loading
+    }
+
+    It 'returns a cached include without checking the filesystem again' {
+        $includeDirectory = Join-Path $TestDrive 'cached'
+        New-Item -ItemType Directory -Path $includeDirectory -Force | Out-Null
+        Set-Content -Path (Join-Path $includeDirectory '.build.map.ps1') -Value '@{ task = { "done" } }'
+        $cache = @{}
+        $loading = @{}
+
+        $first = & (Get-Module ConfigMap) {
+            param($BaseDir, $Cache, $Loading)
+            Import-IncludedConfigMap -Include 'cached' -BaseDir $BaseDir -Cache $Cache -Loading $Loading
+        } $TestDrive $cache $loading
+
+        Mock Test-Path -ModuleName ConfigMap { $true }
+
+        $second = & (Get-Module ConfigMap) {
+            param($BaseDir, $Cache, $Loading)
+            Import-IncludedConfigMap -Include 'cached' -BaseDir $BaseDir -Cache $Cache -Loading $Loading
+        } $TestDrive $cache $loading
+
+        $second | Should -Be $first
+        Should -Invoke Test-Path -ModuleName ConfigMap -Times 0 -Exactly
     }
 
     It 'returns null when an include directory has no map' {
@@ -61,7 +84,7 @@ Describe 'Import-IncludedConfigMap' {
         & (Get-Module ConfigMap) {
             param($BaseDir)
 
-            Import-IncludedConfigMap -DirectoryName 'empty' -BaseDir $BaseDir -Cache @{} -Loading @{} |
+            Import-IncludedConfigMap -Include 'empty' -BaseDir $BaseDir -Cache @{} -Loading @{} |
                 Should -BeNullOrEmpty
         } $TestDrive
     }

@@ -1,7 +1,10 @@
 #requires -version 7.0
 
 $script:discoveryCacheMemory = @{}
-$script:discoveryCacheVersion = 2
+# Bump whenever entry discovery changes, so caches written by other module versions are rebuilt.
+# 5: map-file includes ("#include" keys ending in .ps1).
+$script:discoveryCacheVersion = 5
+$script:ConfigMapLegacyDependsOnWarned = [System.Collections.Generic.HashSet[string]]::new()
 
 function Get-ConfigMapUserHome {
     if ($env:HOME) {
@@ -231,7 +234,33 @@ function Get-ConfigMapDiscoveryMemoryKey {
     return "$([System.IO.Path]::GetFullPath($SourceFile))|$Language|$Location"
 }
 
-function Add-ConfigMapDependsOnDependencies {
+function Get-ConfigMapNodeBaseDir {
+    param(
+        [System.Collections.IDictionary]$Node,
+        [System.Collections.IDictionary]$Map = $null
+    )
+
+    if ($Node._baseDir) { return [string]$Node._baseDir }
+    if ($Map -and $Map._baseDir) { return [string]$Map._baseDir }
+    if ($Map -and $Map._sourceFile) { return Split-Path -Parent $Map._sourceFile }
+    if ($Node._sourceFile) { return Split-Path -Parent $Node._sourceFile }
+    return $null
+}
+
+function Resolve-ConfigMapNodeFilePath {
+    param(
+        [string]$Path,
+        [string]$BaseDir
+    )
+
+    if ([System.IO.Path]::IsPathRooted($Path)) {
+        return [System.IO.Path]::GetFullPath($Path)
+    }
+    $resolved = if ($BaseDir) { Join-Path $BaseDir $Path } else { $Path }
+    return [System.IO.Path]::GetFullPath($resolved)
+}
+
+function Add-ConfigMapCacheDependency {
     param(
         [System.Collections.IDictionary]$Node,
         [hashtable]$OperationContext,
@@ -241,56 +270,54 @@ function Add-ConfigMapDependsOnDependencies {
     if (!$Node -or !$OperationContext) {
         return
     }
-    if (-not $Node.Contains('_dependsOn')) {
+    Write-ConfigMapLegacyDependsOnWarning -Node $Node -Map $Map
+    if (-not $Node.Contains('_cacheDependsOn') -or $null -eq $Node['_cacheDependsOn']) {
         return
     }
 
-    $raw = $Node['_dependsOn']
-    if ($null -eq $raw) {
-        return
-    }
-
-    $paths = if ($raw -is [System.Collections.IEnumerable] -and $raw -isnot [string]) {
-        @($raw)
-    }
-    else {
-        @($raw)
-    }
-
-    $baseDir = $null
-    if ($Node._baseDir) {
-        $baseDir = [string]$Node._baseDir
-    }
-    elseif ($Map -and $Map._baseDir) {
-        $baseDir = [string]$Map._baseDir
-    }
-    elseif ($Map -and $Map._sourceFile) {
-        $baseDir = Split-Path -Parent $Map._sourceFile
-    }
-    elseif ($Node._sourceFile) {
-        $baseDir = Split-Path -Parent $Node._sourceFile
-    }
-
-    foreach ($item in $paths) {
+    $baseDir = Get-ConfigMapNodeBaseDir -Node $Node -Map $Map
+    foreach ($item in @($Node['_cacheDependsOn'])) {
         if ($item -isnot [string] -or [string]::IsNullOrWhiteSpace($item)) {
             continue
         }
 
-        $path = $item
-
-        if ([System.IO.Path]::IsPathRooted($path)) {
-            $fullPath = [System.IO.Path]::GetFullPath($path)
-        }
-        else {
-            $resolved = if ($baseDir) { Join-Path $baseDir $path } else { $path }
-            $fullPath = [System.IO.Path]::GetFullPath($resolved)
-        }
-
+        $fullPath = Resolve-ConfigMapNodeFilePath -Path $item -BaseDir $baseDir
         if (Test-Path -LiteralPath $fullPath -PathType Leaf) {
-            $OperationContext.Dependencies[$fullPath] = (Get-Item -LiteralPath $fullPath).LastWriteTimeUtc.Ticks
+            $OperationContext.Dependencies[$fullPath] = (Get-Item -LiteralPath $fullPath -Force).LastWriteTimeUtc.Ticks
         }
         else {
             $OperationContext.Dependencies[$fullPath] = $null
+        }
+    }
+}
+
+function Write-ConfigMapLegacyDependsOnWarning {
+    <#
+    .SYNOPSIS
+        Warns when _dependsOn holds a file path: it used to list cache files, which now belong in
+        _cacheDependsOn. _dependsOn is reserved for task dependencies.
+    #>
+    param(
+        [System.Collections.IDictionary]$Node,
+        [System.Collections.IDictionary]$Map = $null
+    )
+
+    if (-not $Node.Contains('_dependsOn')) {
+        return
+    }
+
+    $baseDir = Get-ConfigMapNodeBaseDir -Node $Node -Map $Map
+    foreach ($item in @($Node['_dependsOn'])) {
+        if ($item -isnot [string] -or [string]::IsNullOrWhiteSpace($item)) {
+            continue
+        }
+        # './name' is a sibling task reference; any other separator means a path.
+        $hasPathSeparator = ($item -replace '^\./', '') -match '[\\/]'
+        $fullPath = Resolve-ConfigMapNodeFilePath -Path $item -BaseDir $baseDir
+        $existsOnDisk = Test-Path -LiteralPath $fullPath -PathType Leaf
+        # Discovery walks a map more than once per command; one warning per file per session is enough.
+        if (($hasPathSeparator -or $existsOnDisk) -and $script:ConfigMapLegacyDependsOnWarned.Add($fullPath)) {
+            Write-Warning "_dependsOn lists '$item', which looks like a file. Files that invalidate the discovery cache now go in _cacheDependsOn; _dependsOn is reserved for task dependencies."
         }
     }
 }
@@ -420,6 +447,8 @@ function New-ConfigMapDiscoveryEntryDescriptor {
         isParent    = [bool]$isParent
         description = $description
         parameters  = $parameters
+        # Process declared in the entry's own _settings ('' when inherited); lets list skip sub-paths without a map lookup.
+        process     = [string](Get-EntryProcess $Entry -Default '')
     }
 }
 
@@ -467,7 +496,7 @@ function Test-ConfigMapDiscoveryCacheValid {
 
         if (-not $exists) { return $false }
 
-        $currentTicks = (Get-Item -LiteralPath $path).LastWriteTimeUtc.Ticks
+        $currentTicks = (Get-Item -LiteralPath $path -Force).LastWriteTimeUtc.Ticks
         if ([int64]$currentTicks -ne [int64]$storedTicks) { return $false }
     }
 
@@ -518,7 +547,7 @@ function Build-ConfigMapDiscoveryCache {
 
     $sourceFile = [System.IO.Path]::GetFullPath($Map._sourceFile)
     $operationContext = New-ConfigMapOperationContext
-    $operationContext.Dependencies[$sourceFile] = (Get-Item -LiteralPath $sourceFile).LastWriteTimeUtc.Ticks
+    $operationContext.Dependencies[$sourceFile] = (Get-Item -LiteralPath $sourceFile -Force).LastWriteTimeUtc.Ticks
 
     $pair = Get-MapEntryListPair -map $Map -language $Language -OperationContext $operationContext
 

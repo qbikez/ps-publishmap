@@ -73,13 +73,25 @@
                 Pop-Location
             }
             
-            # Run PowerShell tests
-            $publishmapRoot = Join-Path $PSScriptRoot "publishmap"
-            if ($env:APPVEYOR_JOB_ID -ne $null) {
-                & "scripts/lib/test.appveyor.ps1" $publishmapRoot
+            # Run PowerShell tests. Each module gets its own process: configmap tests re-import the
+            # ConfigMap module that runs this entry. Neither test script exits with Pester's result,
+            # so pass it on. Run every suite before failing so one red suite doesn't hide another.
+            $failedSuites = @()
+            foreach ($module in "publishmap", "configmap") {
+                $moduleRoot = Join-Path $PSScriptRoot $module
+                $testCommand = if ($null -ne $env:APPVEYOR_JOB_ID) {
+                    "& '$PSScriptRoot/scripts/lib/test.appveyor.ps1' '$moduleRoot'"
+                }
+                else {
+                    "& '$PSScriptRoot/scripts/lib/test.ps1' '$moduleRoot' -EnableExit"
+                }
+                pwsh -NoProfile -Command "$testCommand; exit `$LASTEXITCODE"
+                if ($LASTEXITCODE -ne 0) {
+                    $failedSuites += "$module (exit code $LASTEXITCODE)"
+                }
             }
-            else {
-                & "scripts/lib/test.ps1" $publishmapRoot
+            if ($failedSuites.Count -gt 0) {
+                throw "Pester tests failed: $($failedSuites -join ', ')"
             }
         }
         description = "Run both C# unit tests and PowerShell Pester tests"

@@ -1,58 +1,16 @@
-@{
-    "write:simple"  = {
-        param([string] $message)
-        
-        write-host "WRITE: '$message'"
+# Aggregates every sample under a prefix, e.g. `qbuild build.<entry>`, `qbuild write.write:simple`.
+# Mirrors the `samples` perf fixture (test/perf/New-PerfFixture.ps1), which generates the same map.
+[ordered]@{
+    "#include" = [ordered]@{
+        "build"         = @{ prefix = $true }
+        "concurrent"    = @{ prefix = $true }
+        "dir-context"   = @{ prefix = $true }
+        "dotenv"        = @{ prefix = $true }
+        "hierarchical"  = @{ prefix = $true }
+        "include"       = @{ prefix = $true }
+        "pkg"           = @{ prefix = $true }
+        "playwright"    = @{ prefix = $true }
+        "process-mixed" = @{ prefix = $true }
+        "write"         = @{ prefix = $true }
     }
-    "write:wrapped" = @{
-        exec  = {
-            param([string] $message)
-        
-            write-host "WRAPPED: '$message'"
-        }
-
-        other = {
-            param([string] $message)
-        
-            write-host "OTHER: '$message'"
-        }
-    }
-    "write:custom"  = @{
-        go = {
-            param([string] $message)
-            return "CUSTOM: '$message'"
-        }
-    }
-    "write:getset"  = @{
-        go  = {
-            param([string] $message)
-            return "GO: '$message'"
-        }
-        get = { 
-            param([string] $message)
-            return "GET: '$message'"
-        }
-        set = {
-            param([string] $message)
-            write-host "SET: '$message'"
-        }
-    }
-    
-    "write:options" = {
-        options = {
-            return @{
-                "option1" = "value1"
-                "option2" = "value2"
-            }
-        }
-        get = { 
-            param([string] $message)
-            return "GET: '$message'"
-        }
-        set = {
-            param([string] $value, [string] $key)
-            write-host "SET: '$key' to '$value'"
-        }
-    }
-    
 }

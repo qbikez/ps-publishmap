@@ -129,7 +129,10 @@ function Register-ConfigMapProcess {
         # Map file holding the entries `qbuild !init.<name>` adds. Without one the process has no !init.<name>.
         [string]$InitTemplate,
         # param($Directory): whether bare `qbuild !init` includes this process. Omitted means always.
-        [scriptblock]$InitCondition
+        [scriptblock]$InitCondition,
+        # param($Context): child entries the process generates under an entry, as an ordered
+        # name -> description dictionary; `qbuild entry.<name>` runs one. Called only on demand.
+        [scriptblock]$GetEntries
     )
 
     if ([string]::IsNullOrWhiteSpace($Name)) {
@@ -144,6 +147,7 @@ function Register-ConfigMapProcess {
         Complete        = $Complete
         InitTemplate    = $InitTemplate
         InitCondition   = $InitCondition
+        GetEntries      = $GetEntries
     }
 }
 
@@ -164,6 +168,44 @@ function Get-ConfigMapProcessHandler {
     }
 
     return $script:ConfigMapProcessHandlers[$canonical]
+}
+
+function Resolve-ConfigMapProcessGeneratedEntry {
+    <#
+    .SYNOPSIS
+        Splits 'entry.name' into a map entry and the name of an entry its process generates.
+    .DESCRIPTION
+        Returns $null when the path is itself a map entry, or when its deepest existing
+        ancestor entry uses a handler without -GetEntries. The name keeps any further dots,
+        so a script named 'test.unit' stays one name. Whether the name exists is left to the
+        caller, so resolving never runs GetEntries.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Collections.IDictionary]$Map,
+        [AllowEmptyString()]
+        [string]$Path,
+        [hashtable]$OperationContext
+    )
+
+    if (!$Path.Contains('.')) { return $null }
+    if (@(Get-MapEntries $Map $Path -language 'build' -OperationContext $OperationContext).Count -gt 0) { return $null }
+
+    $separatorIndex = $Path.Length
+    while (($separatorIndex = $Path.LastIndexOf('.', $separatorIndex - 1)) -gt 0) {
+        $entry = $Path.Substring(0, $separatorIndex)
+        if (@(Get-MapEntries $Map $entry -language 'build' -OperationContext $OperationContext).Count -eq 0) { continue }
+
+        $settings = Get-ConfigMapSettingsForPath -Map $Map -Path $entry -OperationContext $OperationContext
+        $handler = Get-ConfigMapProcessHandler -Name $settings.Process
+        if ($null -eq $handler -or $null -eq $handler.GetEntries) { return $null }
+        return [pscustomobject]@{
+            Entry   = $entry
+            Name    = $Path.Substring($separatorIndex + 1)
+            Process = $settings.Process
+        }
+    }
+    return $null
 }
 
 function Unregister-ConfigMapProcess {
@@ -205,7 +247,9 @@ function New-ConfigMapProcessContext {
         [AllowEmptyString()]
         [string]$ProcessValue,
         [AllowNull()]
-        [string[]]$RemainingArguments
+        [string[]]$RemainingArguments,
+        # Name of the process-generated entry under Entry, for `qbuild entry.<name>`.
+        [string]$GeneratedEntry
     )
 
     $passthrough = @($RemainingArguments | Where-Object { $null -ne $_ })
@@ -222,6 +266,7 @@ function New-ConfigMapProcessContext {
         ProcessAction      = $ProcessAction
         ProcessValue       = $ProcessValue
         RemainingArguments = $passthrough
+        GeneratedEntry     = $GeneratedEntry
     }
 }
 
@@ -677,10 +722,8 @@ function ConvertTo-ConfigMapProcessSplat {
         [hashtable]$BoundParameters,
         [string[]]$RemainingArguments,
         [string[]]$SkipKeys = @(
-            'entry', 'command', 'map', 'ProcessAction', 'ProcessValue', 'RemainingArguments',
-            'Verbose', 'Debug', 'ErrorAction', 'WarningAction', 'InformationAction',
-            'ErrorVariable', 'WarningVariable', 'InformationVariable',
-            'OutVariable', 'OutBuffer', 'PipelineVariable', 'ProgressAction'
+            (Get-QBuildHostParameterName) + @('ProcessAction', 'ProcessValue') +
+            [System.Management.Automation.PSCmdlet]::CommonParameters
         )
     )
 
@@ -761,19 +804,24 @@ function Get-ConfigMapProcessNamesInMap {
     #>
     param(
         [Parameter(Mandatory = $true)]
-        [System.Collections.IDictionary]$Map,
-        $OperationContext
+        [System.Collections.IDictionary]$Map
     )
-
-    if (-not $OperationContext) {
-        $OperationContext = New-ConfigMapOperationContext
-    }
 
     $names = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     foreach ($key in @($Map.Keys)) {
         if ([string]$key -like '_*') { continue }
-        $resolved = Get-MapEntry $Map $key -language 'build' -OperationContext $OperationContext
-        $proc = Get-EntryProcess $resolved
+        # Runs on every qbuild entry TAB, so keep the per-key cost low on large maps: index the
+        # map directly (Get-MapEntry rescans it per key) and skip entries without their own
+        # process before any function call; they default to exec, which is never external.
+        $entry = $Map[$key]
+        if (
+            $entry -isnot [System.Collections.IDictionary] -or
+            $entry._settings -isnot [System.Collections.IDictionary] -or
+            -not $entry._settings.process
+        ) {
+            continue
+        }
+        $proc = Get-EntryProcess $entry
         if (
             $proc -and
             -not (Get-ConfigMapProcessHandler -Name $proc) -and

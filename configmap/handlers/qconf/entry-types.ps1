@@ -229,7 +229,9 @@ function Set-UserSecretOption {
     }
 
     # JSON on stdin merges every key into the store with a single dotnet spawn.
-    $null = $resolved | ConvertTo-Json -Compress | dotnet user-secrets set --project $Csproj 2>&1
+    # dotnet decodes stdin with the console code page (Windows) or locale charset (Unix),
+    # so escape non-ASCII to keep the bytes identical under any of them.
+    $null = $resolved | ConvertTo-Json -Compress -EscapeHandling EscapeNonAscii | dotnet user-secrets set --project $Csproj 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to set user secrets for '$Csproj'."
     }
@@ -455,7 +457,8 @@ function Expand-DotEnvKeyEntries {
 
     .DESCRIPTION
         `keys = 'auto'` reads `<file>.example` (or `.sample` / `.template`); any other string
-        names the file to read keys from. Children are named after the key (`api.API_URL`),
+        names the file to read keys from. `exclude` (string or array, `-like` wildcards allowed)
+        lists keys that get no child entry and are left out of the parent value. Children are named after the key (`api.API_URL`),
         read and write just that key, and never replace an entry the map already defines.
         Explicit `options` are left alone; otherwise `options` becomes a scriptblock that
         reads the sibling `.env.*` files when asked, so completion sees file changes.
@@ -481,8 +484,10 @@ function Expand-DotEnvKeyEntries {
             $keysFile = Resolve-DotEnvKeysFile -Keys $template.keys -Target $target
             if ($keysFile) {
                 $info = Read-DotEnvKeyInfo -File $keysFile
+                $excluded = @($template.exclude | Where-Object { $_ })
                 foreach ($key in $info.Keys) {
                     if ($entry.Contains($key)) { continue }
+                    if ($excluded | Where-Object { $key -like $_ }) { continue }
                     $entry[$key] = New-DotEnvKeyEntry -Key $key -Info $info[$key] -File $target -BaseDir $entry._baseDir
                 }
             }

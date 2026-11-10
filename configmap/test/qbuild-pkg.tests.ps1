@@ -35,8 +35,8 @@ Describe 'qbuild package script proxy' {
             ((qbuild list 6>&1) -join '') | Should -BeLike '*    web  Frontend*'
         }
 
-        It 'runs a script as bun run in the map directory' {
-            qbuild web dev
+        It 'runs a script entry as bun run in the map directory' {
+            qbuild web.dev
 
             $global:PkgCalls.Count | Should -Be 1
             $global:PkgCalls[0].Args | Should -Be @('run', 'dev')
@@ -44,7 +44,7 @@ Describe 'qbuild package script proxy' {
         }
 
         It 'forwards arguments after --' {
-            qbuild web dev -- --no-build --watch -d=1
+            qbuild web.dev -- --no-build --watch -d=1
 
             $global:PkgCalls[0].Args | Should -Be @('run', 'dev', '--no-build', '--watch', '-d=1')
         }
@@ -58,12 +58,12 @@ Describe 'qbuild package script proxy' {
             $global:PkgCalls.Count | Should -Be 0
         }
 
-        It 'lists scripts in the regular qbuild list format' {
+        It 'lists scripts as entries in the regular qbuild list format' {
             $out = (qbuild web 6>&1) -join ''
 
             $out | Should -Match 'COMMANDS:'
-            $out | Should -BeLike '*    dev    vite*'
-            $out | Should -BeLike '*    build  tsc -b*'
+            $out | Should -BeLike '*    web.dev    vite*'
+            $out | Should -BeLike '*    web.build  tsc -b*'
         }
 
         It 'lists scripts with the list action' {
@@ -73,8 +73,13 @@ Describe 'qbuild package script proxy' {
             $global:PkgCalls.Count | Should -Be 0
         }
 
-        It 'throws for an unknown script and names the available ones' {
-            { qbuild web nope } | Should -Throw -ExpectedMessage '*nope*dev*build*'
+        It 'throws for an unknown script entry and names the available ones' {
+            { qbuild web.nope } | Should -Throw -ExpectedMessage '*nope*web.dev*web.build*'
+            $global:PkgCalls.Count | Should -Be 0
+        }
+
+        It 'rejects a script name given as an action and points to the entry form' {
+            { qbuild web dev } | Should -Throw -ExpectedMessage "*'dev'*web.dev*"
             $global:PkgCalls.Count | Should -Be 0
         }
 
@@ -84,17 +89,45 @@ Describe 'qbuild package script proxy' {
             { qbuild list 6>&1 | Out-Null } | Should -Not -Throw
         }
 
-        It 'completes script names' {
-            $ast = [System.Management.Automation.Language.Parser]::ParseInput('qbuild web ', [ref]$null, [ref]$null).EndBlock.Statements[0].PipelineElements[0]
-            $completer = (Get-Command qbuild).Parameters['ProcessAction'].Attributes |
-                Where-Object { $_ -is [System.Management.Automation.ArgumentCompleterAttribute] } |
-                Select-Object -First 1
+        It 'completes only actions after the entry' {
+            $line = 'qbuild web '
+            $result = @((TabExpansion2 $line $line.Length).CompletionMatches.CompletionText)
 
-            $result = @(& $completer.ScriptBlock 'qbuild' 'ProcessAction' '' $ast @{ entry = 'web' })
+            $result | Should -Be @('list')
+        }
 
-            $result | Should -Contain 'dev'
-            $result | Should -Contain 'build'
-            $result | Should -Contain 'list'
+        It 'completes script entries after the entry and a dot' {
+            $line = 'qbuild web.'
+            $result = @((TabExpansion2 $line $line.Length).CompletionMatches.CompletionText)
+
+            $result | Should -Contain 'web.dev'
+            $result | Should -Contain 'web.build'
+            $result | Should -Not -Contain 'web.list'
+        }
+
+        It 'completes a partial script entry' {
+            $line = 'qbuild web.bu'
+            $result = @((TabExpansion2 $line $line.Length).CompletionMatches.CompletionText)
+
+            $result | Should -Be @('web.build')
+        }
+    }
+
+    Context 'nested entry' {
+        It 'runs a script of a package entry inside a group' {
+            "@{ front = @{ web = @{ _settings = @{ process = 'bun' } } } }" | Set-Content .build.map.ps1
+
+            qbuild front.web.build
+
+            $global:PkgCalls[0].Args | Should -Be @('run', 'build')
+        }
+    }
+
+    Context 'exec entries' {
+        It 'still reports an unknown child of an exec entry as not found' {
+            "@{ clean = { 'cleaned' } }" | Set-Content .build.map.ps1
+
+            { qbuild clean.nope } | Should -Throw -ExpectedMessage "*'clean.nope' not found*"
         }
     }
 
@@ -102,7 +135,7 @@ Describe 'qbuild package script proxy' {
         It 'inserts -- before script arguments' {
             "@{ web = @{ _settings = @{ process = 'npm' } } }" | Set-Content .build.map.ps1
 
-            qbuild web dev -- --watch
+            qbuild web.dev -- --watch
 
             $global:PkgCalls[0].Tool | Should -Be 'npm'
             $global:PkgCalls[0].Args | Should -Be @('run', 'dev', '--', '--watch')

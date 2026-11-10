@@ -157,33 +157,76 @@ function Add-BaseDir {
     return $map
 }
 
-function Import-IncludedConfigMap {
+function Test-IncludeIsMapFile {
+    # An #include key names either a directory holding .build.map.ps1 or a map file itself
+    param([string]$Include)
+
+    return $Include.EndsWith('.ps1', [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function Resolve-IncludedMapFile {
+    [OutputType([string])]
     param(
-        [string]$DirectoryName,
-        [string]$BaseDir,
-        [hashtable]$Cache,
-        [hashtable]$Loading
+        [string]$Include,
+        [string]$BaseDir
     )
 
     if ([string]::IsNullOrEmpty($BaseDir)) {
         $BaseDir = (Get-Location).Path
     }
 
-    $includePath = Join-Path $BaseDir $DirectoryName
-    if (!(Test-Path $includePath -PathType Container)) {
-        return $null
+    $path = Join-Path $BaseDir $Include
+    if (!(Test-IncludeIsMapFile $Include)) {
+        $path = Join-Path $path '.build.map.ps1'
     }
 
-    $mapFile = Join-Path $includePath '.build.map.ps1'
-    if (!(Test-Path $mapFile -PathType Leaf)) {
-        return $null
+    return [System.IO.Path]::GetFullPath($path)
+}
+
+function Get-IncludePrefix {
+    <#
+    .SYNOPSIS
+        Returns the entry prefix of a prefixed #include.
+    .DESCRIPTION
+        A directory include is prefixed with the directory name. A map file include is prefixed
+        with the file name without its map suffix (tools/lint.build.map.ps1 and .lint.map.ps1 -> lint);
+        a file named .build.map.ps1 takes its directory name.
+    #>
+    [OutputType([string])]
+    param([string]$Include)
+
+    if (!(Test-IncludeIsMapFile $Include)) {
+        return $Include
     }
 
-    $cacheKey = [System.IO.Path]::GetFullPath($mapFile)
+    $name = (Split-Path $Include -Leaf) -replace '\.ps1$', '' -replace '\.map$', '' -replace '\.(build|configuration)$', '' -replace '^\.', ''
+    if ($name) {
+        return $name
+    }
+
+    $parent = Split-Path $Include -Parent
+    return $parent ? (Split-Path $parent -Leaf) : $Include
+}
+
+function Import-IncludedConfigMap {
+    param(
+        [string]$Include,
+        [string]$BaseDir,
+        [hashtable]$Cache,
+        [hashtable]$Loading
+    )
+
+    $mapFile = Resolve-IncludedMapFile -Include $Include -BaseDir $BaseDir
+    $cacheKey = $mapFile
+    # Checked before Test-Path: map walks hit the same include once per entry, and provider calls dominate their cost.
     if ($Cache.ContainsKey($cacheKey)) {
         return $Cache[$cacheKey]
     }
     if ($Loading.ContainsKey($cacheKey)) {
+        return $null
+    }
+
+    if (!(Test-Path -LiteralPath $mapFile -PathType Leaf)) {
         return $null
     }
 

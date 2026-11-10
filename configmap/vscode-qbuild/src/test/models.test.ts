@@ -37,6 +37,18 @@ test("offers map metadata and suppresses keys already present", () => {
   assert.ok(!suggestions.includes("description"));
 });
 
+test("offers _cacheDependsOn for discovery-cache files", () => {
+  const { text, offset } = marked(`
+@{
+  |
+}
+`);
+  const suggestions = getCompletionSuggestions(parseMap(text), offset);
+  const byLabel = new Map(suggestions.map((s) => [s.label, s]));
+
+  assert.match(byLabel.get("_cacheDependsOn")?.detail ?? "", /cache/);
+});
+
 test("offers settings and include configuration keys contextually", () => {
   const settings = labels(`
 @{
@@ -74,7 +86,7 @@ test("offers known setting values", () => {
   );
   assert.deepEqual(
     labels("@{ _settings = @{\n Process = |\n} }"),
-    ["qbuild", "qrun"],
+    ["exec", "steps", "options", "bun", "npm"],
   );
 });
 

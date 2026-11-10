@@ -214,7 +214,7 @@ Autocompletion works automatically when the configmap module is imported:
 
 ### Discovery cache
 
-Entry discovery for tab completion and `list`/`help` is cached as JSON (for example `discovery.build.cache.json`). Non-canonical maps use `discovery.<name>.<language>.cache.json` so build and conf caches stay separate. The cache stores entry keys plus lightweight metadata (description, parameter names/types). It is invalidated when the root map, any transitively `#include`d map file, or any path listed in `_dependsOn` changes. Safe to delete or gitignore; it is rebuilt on demand.
+Entry discovery for tab completion and `list`/`help` is cached as JSON (for example `discovery.build.cache.json`). Non-canonical maps use `discovery.<name>.<language>.cache.json` so build and conf caches stay separate. The cache stores entry keys plus lightweight metadata (description, parameter names/types). It is invalidated when the root map, any transitively `#include`d map file, or any path listed in `_cacheDependsOn` changes. Safe to delete or gitignore; it is rebuilt on demand.
 
 Lookup probes both cache files from the map path alone (no map settings). A hit is valid when dependency mtimes in the cache still match. `DiscoveryCacheLocation` (default `local`) only chooses where a miss is written:
 
@@ -232,14 +232,16 @@ Lookup probes both cache files from the map path alone (no map settings). A hit 
 $env:QCONF_DiscoveryCacheLocation = 'user'
 ```
 
-Maps that generate entries from other files should declare those files with `_dependsOn` on the map root (or on an individual target). Relative paths resolve against that node's `_baseDir`:
+Maps that generate entries from other files should declare those files with `_cacheDependsOn` on the map root (or on an individual target). Relative paths resolve against that node's `_baseDir`:
 
 ```powershell
 @{
-    _dependsOn = @('install.yaml', 'helpers.ps1')
+    _cacheDependsOn = @('install.yaml', 'helpers.ps1')
     # generated entries...
 }
 ```
+
+> **Breaking change:** this key used to be `_dependsOn`, which is now reserved for task dependencies. Rename existing file lists to `_cacheDependsOn`. While the cache is built, qbuild warns once about any `_dependsOn` item that looks like a file.
 
 Enabled by default. Opt out per map or for the whole process:
 
@@ -292,7 +294,7 @@ ConfigMap automatically discovers parameters from your script blocks:
 
 ## Performance suite
 
-`test/perf` guards the speed of `qbuild list` and tab completion. It compares
+`test/perf` guards the speed of module loading, `qbuild list` and tab completion. It compares
 two revisions on the same machine:
 
 ```powershell
@@ -323,18 +325,53 @@ built at run time from the git-tracked samples.
 The scenarios are `qbuild list` and TAB on an entry, a nested entry, a parameter
 name, a parameter value and a package script. Each one runs warm (loaded session),
 edited (a child map was just touched, so the discovery cache is rebuilt) and
-new-shell (fresh `pwsh`: `Import-Module` plus the first TAB). They only use
-`qbuild`, `qbuild list` and `TabExpansion2`, so the current suite can drive an
-older checkout. To measure a single revision (it runs on a temporary copy of the fixtures):
+new-shell (the first TAB on the fixture in a fresh `pwsh`, read from the disk
+cache; module import and one-time warm-up, done by an untimed TAB on a copy of
+the fixture, are excluded). The `module` row is the module load
+time: `Import-Module` in a fresh `pwsh`, with its allocations, measured once per run
+whatever fixtures are selected (`-ImportIterations`, default 10). They only use
+`Import-Module`, `qbuild`, `qbuild list` and `TabExpansion2`, so the current suite
+can drive an older checkout. To measure a single revision (it runs on a temporary copy of the fixtures):
 
 ```powershell
 .\test\perf\Invoke-PerfSuite.ps1
+.\test\perf\Invoke-PerfSuite.ps1 -Fixture samples   # one fixture
+```
+
+To see where the time goes, add `-ProfileDir` (needs the
+[Profiler](https://github.com/nohwnd/Profiler) module: `Install-PSResource Profiler`).
+After timing each in-process scenario, the suite traces one more run of it and
+writes `<fixture>-<scenario>.speedscope.json` (open in https://speedscope.app) and
+`profile-report.md`, with the top functions and lines by self time
+(`-ProfileTop`, default 10). Timings are not affected. new-shell and module
+import scenarios run in child processes and are not traced.
+
+```powershell
+.\test\perf\Invoke-PerfSuite.ps1 -Fixture samples -ProfileDir ./perf-profile
 ```
 
 On GitHub, add the `perf` label to a PR to run the comparison on `workspace-M` and
 `samples`; run the other fixtures locally. It reruns on every
 push while the label is present and posts the table as a PR comment. To accept a
 regression, add `perf-ok` and re-run the failed job.
+
+### `#include` vs dot-sourced child maps
+
+A map can pull in another map with `#include` (see `samples/include`) or by
+dot-sourcing it and putting the returned hashtable into its own (see
+`samples/include-dotsource`). To compare their speed:
+
+```powershell
+.\test\perf\Compare-IncludeMethods.ps1                                 # workspace-M, 3 rounds (~6 min)
+.\test\perf\Compare-IncludeMethods.ps1 -Rounds 1                       # quick check
+.\test\perf\Compare-IncludeMethods.ps1 -Fixture workspace-XL -Rounds 1 # opt-in, ~20 min
+```
+
+It copies each workspace fixture twice. One copy keeps the `#include` root map. In
+the other, the root map dot-sources every project map instead and lists them in
+`_cacheDependsOn`. The script then runs the same `list`, TAB, run and new-shell
+scenarios on both copies and prints the two side by side. It only reports and
+never fails.
 
 ### Internal benchmark
 
@@ -463,6 +500,7 @@ Creates a `.configuration.map.ps1` file with sample configuration entries.
         _template   = "dotenv:.env"
     }
 
+    # Add exclude = @("SECRET_*", "FLAG") to skip keys (wildcards allowed) when creating those entries; the parent's value hides them too.
     # keys = "auto" (reads .env.example/.sample/.template) or keys = "<file>" also adds one entry
     # per key: `qbuild keyed.API_URL -value https://staging`. A comment line above a key becomes
     # its description. Presets keep working on the parent entry.
@@ -572,6 +610,17 @@ Hierarchical command organization:
 }
 ```
 
+### Included Maps
+`#include` pulls in other build maps. A key is either a directory (which loads `<dir>/.build.map.ps1`) or a path to a map file (ending in `.ps1`). Paths are relative to the including map. Included maps load only when needed, and their entries run in the included map's directory. See `samples/include` (directories) and `samples/include-file` (map files).
+```powershell
+"#include" = @{
+    "child"                    = @{ prefix = $true }   # child/.build.map.ps1 -> child.<entry>
+    "tools/lint.build.map.ps1" = @{ prefix = $true }   # -> lint.<entry>
+    "shared/tasks.ps1"         = @{ prefix = $false }  # entries merged into this map
+}
+```
+A prefixed map file is named after its file name without the `.build.map.ps1`, `.map.ps1` or `.ps1` suffix (`.lint.map.ps1` -> `lint`). A file named `.build.map.ps1` takes its directory's name.
+
 ## Requirements
 
 - PowerShell 7.0 or higher
@@ -597,7 +646,7 @@ Build-map entries can set `_settings.process` to select a runner:
 | `options` | Configuration get/set/show | `qconf` |
 | `bun`, `npm` | Run `package.json` scripts | — |
 
-`bun` / `npm` entries proxy to `<tool> run`: `qbuild web` (or `qbuild web list`) lists the scripts, `qbuild web dev -- --watch` runs `bun run dev --watch` in the entry's directory. `package.json` is read only when you invoke the entry.
+`bun` / `npm` entries proxy to `<tool> run`: `qbuild web` (or `qbuild web list`) lists the scripts, `qbuild web.dev -- --watch` runs `bun run dev --watch` in the entry's directory. Each script is an entry the process generates: `qbuild web.<tab>` completes the script names, and `list` is the only action. `package.json` is read only when you invoke the entry.
 
 Legacy map values `qrun` and `qconf` still normalize to `steps` / `options`.
 Standalone `qrun` / `qconf` CLIs are **deprecated** — prefer unified `qbuild` with the process types above. See [docs/process-cli.md](docs/process-cli.md).
@@ -613,7 +662,9 @@ The following keys have special meaning in map files:
 - `validate` - Validation function (for qconf)
 - `_template` - Built-in entry type: `@{ type; file }` or `"appsettings:{filepath}"` / `"dotenv:{filepath}"`, or `@{ type = "user-secrets"; csproj }` / `"user-secrets:{csproj}"`, that fills get/set when omitted; author get/set override the fill-in and can call `$_context.base`
 - `description` - Command description
+- `#include` - Include other maps by directory or map file path (see [Included Maps](#included-maps))
 - `completions` - Custom tab completion values
+- `_cacheDependsOn` - Files that invalidate the discovery cache (see [Discovery cache](#discovery-cache))
 
 ## Examples
 

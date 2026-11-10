@@ -60,6 +60,61 @@ Describe 'Discovery cache' {
         $params[0].validateSet | Should -Be @('Debug', 'Release')
     }
 
+    It 'records the process each entry declares in its own _settings' {
+        $dir = Join-Path $TestDrive 'declared-process'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value @'
+@{
+    build  = { "ok" }
+    deploy = @{
+        _settings = @{ process = "qrun" }
+        package   = @{ exec = { "package" } }
+    }
+}
+'@
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $cache = & (Get-Module ConfigMap) {
+            param($Map)
+            Get-ConfigMapDiscoveryCache -Map $Map -Language build
+        } $map
+
+        $entries = @($cache.entries.hierarchical)
+        ($entries | Where-Object { $_.key -eq 'deploy' }).process | Should -Be 'steps'
+        ($entries | Where-Object { $_.key -eq 'build' }).process | Should -Be ''
+    }
+
+    It 'list does not look up nested entries that declare no process of their own' {
+        $dir = Join-Path $TestDrive 'list-nested'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value @'
+@{
+    build = { "ok" }
+    tools = @{
+        fmt  = { "fmt" }
+        lint = { "lint" }
+    }
+}
+'@
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        Mock Write-Host -ModuleName ConfigMap { }
+        # Pester 6 throws when only filtered mocks exist and none matches, so mock every call
+        # and apply the filters in the assertions instead.
+        Mock Get-MapEntry -ModuleName ConfigMap { { "ok" } }
+
+        & (Get-Module ConfigMap) {
+            param($Map)
+            Write-MapHelp -map $Map -invocation ([pscustomobject]@{ InvocationName = 'qbuild' })
+        } $map
+
+        Should -Invoke Get-MapEntry -ModuleName ConfigMap -ParameterFilter { "$key" -like '*.*' } -Times 0 -Exactly
+        Should -Invoke Get-MapEntry -ModuleName ConfigMap -ParameterFilter { "$key" -eq 'build' } -Times 1 -Exactly
+        Should -Invoke Write-Host -ModuleName ConfigMap -ParameterFilter { "$Object" -match '^build\b' } -Times 1 -Exactly
+    }
+
     It 'returns the same payload on hit without rewriting when mtime is unchanged' {
         $dir = Join-Path $TestDrive 'hit'
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
@@ -154,6 +209,67 @@ Describe 'Discovery cache' {
         $after = (Get-Item $cachePath).LastWriteTimeUtc
         $after | Should -BeGreaterThan $before
         @($cache.entries.hierarchical).key | Should -Contain 'child.extra'
+    }
+
+    It 'rebuilds when an included map file changes' {
+        $dir = Join-Path $TestDrive 'include-file-mtime'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value @'
+@{
+    "#include" = @{ "lint.build.map.ps1" = @{ prefix = $true } }
+    root = { "root" }
+}
+'@
+        $childMap = Join-Path $dir 'lint.build.map.ps1'
+        Set-Content -Path $childMap -Value '@{ task = { "task" } }'
+        $getCache = {
+            & (Get-Module ConfigMap) { Clear-ConfigMapDiscoveryCacheMemory }
+            $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+            & (Get-Module ConfigMap) { param($Map) Get-ConfigMapDiscoveryCache -Map $Map -Language build } $map
+        }
+
+        $null = & $getCache
+        Set-Content -Path $childMap -Value '@{ task = { "task" }; extra = { "extra" } }'
+        (Get-Item $childMap).LastWriteTimeUtc = [datetime]::UtcNow.AddMinutes(1)
+        $cache = & $getCache
+
+        @($cache.entries.hierarchical).key | Should -Contain 'lint.extra'
+    }
+
+    It 'rebuilds a cache written before map-file includes existed' {
+        # Modules before map-file includes read "lint.build.map.ps1" as a directory include,
+        # recorded lint.build.map.ps1/.build.map.ps1 as a missing dependency, and cached no
+        # included entries. Such a cache still matches its dependencies, so only the version
+        # can reject it.
+        $dir = Join-Path $TestDrive 'include-file-legacy-cache'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value @'
+@{
+    "#include" = @{ "lint.build.map.ps1" = @{ prefix = $true } }
+    root = { "root" }
+}
+'@
+        Set-Content -Path (Join-Path $dir 'lint.build.map.ps1') -Value '@{ task = { "task" } }'
+        $rootEntry = @{ key = 'root'; parameters = @(); isParent = $false; process = ''; description = '' }
+        $legacyCache = @{
+            version      = 4
+            language     = 'build'
+            rootMap      = [System.IO.Path]::GetFullPath($mapFile)
+            dependencies = @(
+                @{ path = [System.IO.Path]::GetFullPath($mapFile); ticks = (Get-Item $mapFile).LastWriteTimeUtc.Ticks }
+                @{ path = (Join-Path $dir 'lint.build.map.ps1\.build.map.ps1'); ticks = $null }
+            )
+            entries      = @{ hierarchical = @($rootEntry); flatten = @($rootEntry) }
+        }
+        New-Item -ItemType Directory -Path (Join-Path $dir '.configmap') -Force | Out-Null
+        $legacyCache | ConvertTo-Json -Depth 8 | Set-Content -Path (Join-Path $dir '.configmap\discovery.build.cache.json')
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $cache = & (Get-Module ConfigMap) { param($Map) Get-ConfigMapDiscoveryCache -Map $Map -Language build } $map
+
+        @($cache.entries.hierarchical).key | Should -Contain 'lint.task'
     }
 
     It 'rebuilds when a previously missing include appears' {
@@ -309,7 +425,39 @@ Describe 'Discovery cache' {
         Test-Path $cachePath | Should -BeTrue
     }
 
-    It 'rebuilds when a root _dependsOn file mtime changes' {
+    It 'reuses the cache for dotfile maps and includes without errors' {
+        # Dotfiles are hidden on Linux/macOS; dependency tracking must still read their mtime.
+        $dir = Join-Path $TestDrive 'dotfile-deps'
+        $child = Join-Path $dir 'child'
+        New-Item -ItemType Directory -Path $child -Force | Out-Null
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value @'
+@{
+    "#include" = @{ child = @{ prefix = $true } }
+    alpha = { "a" }
+}
+'@
+        Set-Content -Path (Join-Path $child '.build.map.ps1') -Value '@{ task = { "task" } }'
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $firstOutput = @(Get-EntryCompletion $map -language build -wordToComplete 'a' 2>&1)
+        @($firstOutput | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] }) | Should -BeNullOrEmpty
+        @($firstOutput | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] }) | Should -Be @('alpha')
+
+        $cachePath = Join-Path $dir '.configmap\discovery.build.cache.json'
+        $before = (Get-Item $cachePath).LastWriteTimeUtc
+
+        Start-Sleep -Milliseconds 50
+        & (Get-Module ConfigMap) { Clear-ConfigMapDiscoveryCacheMemory }
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $secondOutput = @(Get-EntryCompletion $map -language build -wordToComplete 'a' 2>&1)
+        @($secondOutput | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] }) | Should -BeNullOrEmpty
+        @($secondOutput | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] }) | Should -Be @('alpha')
+        (Get-Item $cachePath).LastWriteTimeUtc | Should -Be $before
+    }
+
+    It 'rebuilds when a root _cacheDependsOn file mtime changes' {
         $dir = Join-Path $TestDrive 'depends-on-mtime'
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
         $dataFile = Join-Path $dir 'data.txt'
@@ -318,7 +466,7 @@ Describe 'Discovery cache' {
         Set-Content -Path $mapFile -Value @'
 $data = (Get-Content (Join-Path $PSScriptRoot 'data.txt') -Raw).Trim()
 @{
-    _dependsOn = @('data.txt')
+    _cacheDependsOn = @('data.txt')
     "$data"    = { "ok" }
 }
 '@
@@ -350,13 +498,13 @@ $data = (Get-Content (Join-Path $PSScriptRoot 'data.txt') -Raw).Trim()
         @($second.entries.hierarchical).key | Should -Not -Contain 'alpha'
     }
 
-    It 'rebuilds when a previously missing _dependsOn file appears' {
+    It 'rebuilds when a previously missing _cacheDependsOn file appears' {
         $dir = Join-Path $TestDrive 'depends-on-missing'
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
         $mapFile = Join-Path $dir '.build.map.ps1'
         Set-Content -Path $mapFile -Value @'
 @{
-    _dependsOn = @('sidecar.txt')
+    _cacheDependsOn = @('sidecar.txt')
     root       = { "root" }
 }
 '@
@@ -385,7 +533,7 @@ $data = (Get-Content (Join-Path $PSScriptRoot 'data.txt') -Raw).Trim()
         $found.ticks | Should -Not -BeNullOrEmpty
     }
 
-    It 'records _dependsOn on a leaf target in cache dependencies' {
+    It 'records _cacheDependsOn on a leaf target in cache dependencies' {
         $dir = Join-Path $TestDrive 'depends-on-leaf'
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
         $leafDep = Join-Path $dir 'leaf-dep.txt'
@@ -395,7 +543,7 @@ $data = (Get-Content (Join-Path $PSScriptRoot 'data.txt') -Raw).Trim()
 @{
     build = @{
         exec       = { "ok" }
-        _dependsOn = @('leaf-dep.txt')
+        _cacheDependsOn = @('leaf-dep.txt')
     }
 }
 '@
@@ -410,7 +558,7 @@ $data = (Get-Content (Join-Path $PSScriptRoot 'data.txt') -Raw).Trim()
         @($cache.dependencies).path | Should -Contain $expected
     }
 
-    It 'resolves a relative _dependsOn path against the map directory' {
+    It 'resolves a relative _cacheDependsOn path against the map directory' {
         $dir = Join-Path $TestDrive 'depends-on-relative'
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
         $extra = Join-Path $dir 'extra.txt'
@@ -418,7 +566,7 @@ $data = (Get-Content (Join-Path $PSScriptRoot 'data.txt') -Raw).Trim()
         $mapFile = Join-Path $dir '.build.map.ps1'
         Set-Content -Path $mapFile -Value @'
 @{
-    _dependsOn = 'extra.txt'
+    _cacheDependsOn = 'extra.txt'
     build      = { "ok" }
 }
 '@
@@ -433,13 +581,13 @@ $data = (Get-Content (Join-Path $PSScriptRoot 'data.txt') -Raw).Trim()
         @($cache.dependencies).path | Should -Contain $expected
     }
 
-    It 'does not expose _dependsOn as a completion key' {
+    It 'does not expose _cacheDependsOn as a completion key' {
         $dir = Join-Path $TestDrive 'depends-on-completion'
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
         $mapFile = Join-Path $dir '.build.map.ps1'
         Set-Content -Path $mapFile -Value @'
 @{
-    _dependsOn = @('extra.txt')
+    _cacheDependsOn = @('extra.txt')
     alpha      = { "a" }
 }
 '@
@@ -447,10 +595,35 @@ $data = (Get-Content (Join-Path $PSScriptRoot 'data.txt') -Raw).Trim()
         $map = Import-ConfigMap -Map $mapFile -LookUp:$false
         $completions = @(Get-EntryCompletion $map -language build -wordToComplete '')
         $completions | Should -Contain 'alpha'
-        $completions | Should -Not -Contain '_dependsOn'
+        $completions | Should -Not -Contain '_cacheDependsOn'
 
         $underscore = @(Get-EntryCompletion $map -language build -wordToComplete '_')
-        $underscore | Should -Not -Contain '_dependsOn'
+        $underscore | Should -Not -Contain '_cacheDependsOn'
+    }
+
+    It 'warns that file paths in _dependsOn now belong in _cacheDependsOn' {
+        $dir = Join-Path $TestDrive 'legacy-depends-on'
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        Set-Content -Path (Join-Path $dir 'helpers.ps1') -Value '# helper'
+        $mapFile = Join-Path $dir '.build.map.ps1'
+        Set-Content -Path $mapFile -Value @'
+@{
+    _dependsOn = @('helpers.ps1')
+    alpha      = { "a" }
+}
+'@
+
+        $map = Import-ConfigMap -Map $mapFile -LookUp:$false
+        $output = & (Get-Module ConfigMap) {
+            param($Map)
+            Get-ConfigMapDiscoveryCache -Map $Map -Language build
+        } $map 3>&1
+        $warnings = @($output | Where-Object { $_ -is [System.Management.Automation.WarningRecord] })
+        $cache = @($output | Where-Object { $_ -isnot [System.Management.Automation.WarningRecord] }) | Select-Object -First 1
+
+        $warnings | Should -HaveCount 1
+        "$warnings" | Should -Match "'helpers\.ps1'.*_cacheDependsOn"
+        @($cache.dependencies).path | Should -Not -Contain ([System.IO.Path]::GetFullPath((Join-Path $dir 'helpers.ps1')))
     }
 
     It 'writes discovery.configuration.cache.json for a canonical configuration map' {

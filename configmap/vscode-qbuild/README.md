@@ -4,8 +4,11 @@ VS Code navigation and completion for qbuild `.build.map.ps1` files.
 
 ## Features
 
-- Completes qbuild metadata such as `_settings`, `exec`, `description`, `list`, `#include`, and `_dependsOn`.
-- Completes supported keys inside `_settings` and `prefix` inside include configuration.
+- Completes qbuild metadata such as `_settings`, `exec`, `description`, `list`, `#include`, and `_cacheDependsOn`.
+- Completes keys for the entry's process (`_settings.process`, inherited from parent entries): `options` entries get `_template`, `options`, `get`, `set`, and `validate`; `exec` is offered only where the process runs it.
+- Completes every `_settings` key with its values, including the process types `exec`, `steps`, `options`, `bun`, and `npm`.
+- Completes `_template` short forms (`dotenv:`, `appsettings:`, `user-secrets:`) and then matching files next to the map, and the `type`, `file`/`csproj`, `keys`, and `exclude` keys of the hashtable form.
+- Completes `prefix` inside include configuration.
 - Adds nested map entries to Breadcrumbs, Outline, Go to Symbol in Editor, and Go to Symbol in Workspace (`Ctrl+T`).
 - Parses map text without executing it.
 
@@ -50,6 +53,8 @@ Published VSIX packages are attached to GitHub releases tagged `qbuild-map-tools
 npm install
 npm test
 ```
+
+Map keys, settings, process types, and `_template` types come from `src/mapSchema.json`. `configmap/test/map-schema.tests.ps1` fails when that file and the module disagree, so update it together with any new reserved key, setting, process, or template type.
 
 Open this directory in VS Code and press `F5` to start an Extension Development Host. Open a file named `.build.map.ps1`, keep its language mode set to PowerShell, and use `Ctrl+Space` inside a map hashtable to request completion.
 

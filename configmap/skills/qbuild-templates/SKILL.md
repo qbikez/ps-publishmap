@@ -103,7 +103,7 @@ Long form: `_template = @{ type = "user-secrets"; csproj = "src/App/App.csproj" 
 
 ### Keep / remove
 
-- **Keep:** `description`, `options`, `validate`, `_settings`, `_dependsOn`.
+- **Keep:** `description`, `options`, `validate`, `_settings`, `_cacheDependsOn`.
 - **Remove:** hand-written `get` / `set` when the template fully replaces them.
 - **Keep as override:** a custom `get` / `set` that wraps the template (see Overrides).
 - **Cleanup:** if a dotted `.config-utils.ps1` (or similar) exists only for those helpers and nothing else needs it, remove the unused dot-source after conversion.

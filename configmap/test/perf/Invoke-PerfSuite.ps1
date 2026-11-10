@@ -11,9 +11,21 @@
     Cache states:
       warm      - repeated call in a loaded session (discovery cache memory hit)
       edited    - a child map was just touched, so the discovery cache is rebuilt
-      new-shell - fresh pwsh: module import + first TAB (discovery cache disk hit)
+      new-shell - fresh pwsh: first TAB on the fixture (discovery cache disk hit),
+                  excluding module import and one-time session warm-up
+
+    Module load time ('module' fixture) is Import-Module in a fresh pwsh, measured
+    once per run independent of the fixtures, with its allocations.
+
+    -ProfileDir traces one extra run of every in-process scenario with the Profiler
+    module (Install-PSResource Profiler) after it is timed, so timings are unaffected.
+    It writes <fixture>-<scenario>.speedscope.json (open in https://speedscope.app)
+    and profile-report.md with the slowest functions and lines by self time.
+    new-shell and module import scenarios run in child processes and are not traced.
 .EXAMPLE
     ./Invoke-PerfSuite.ps1
+.EXAMPLE
+    ./Invoke-PerfSuite.ps1 -Fixture samples -ProfileDir ./perf-profile
 .EXAMPLE
     ./Invoke-PerfSuite.ps1 -FixtureRoot $env:TEMP/perf -OutFile result.json
 #>
@@ -22,14 +34,24 @@ param(
     [string]$ModulePath = (Join-Path $PSScriptRoot '..\..\configmap.psm1'),
     # Prepared by New-PerfFixture.ps1. Omitted: a temporary copy of all fixtures.
     [string]$FixtureRoot,
+    # flat-1k also runs the in-memory internal helper scenarios.
+    [ValidateSet('workspace-M', 'workspace-XL', 'flat-1k', 'samples')]
+    [string[]]$Fixture = @('workspace-M', 'workspace-XL', 'flat-1k', 'samples'),
     [ValidateRange(3, 10000)]
-    [int]$Iterations = 30,
+    [int]$Iterations = 10,
     # Slow scenarios stop after this many seconds (but run at least 3 iterations).
-    [double]$ScenarioBudgetSeconds = 10,
+    [double]$ScenarioBudgetSeconds = 8,
     [ValidateRange(1, 1000)]
     [int]$NewShellIterations = 8,
+    [ValidateRange(1, 1000)]
+    [int]$ImportIterations = 10,
     [string]$Label = 'local',
-    [string]$OutFile
+    [string]$OutFile,
+    # Traces each in-process scenario with the Profiler module and writes the results here.
+    [string]$ProfileDir,
+    # Functions and lines listed per scenario in profile-report.md.
+    [ValidateRange(1, 50)]
+    [int]$ProfileTop = 10
 )
 
 $ErrorActionPreference = 'Stop'
@@ -41,134 +63,32 @@ $ModulePath = (Resolve-Path $ModulePath).Path
 $tempFixtures = $null
 if (!$FixtureRoot) {
     $tempFixtures = Join-Path ([System.IO.Path]::GetTempPath()) "configmap-perf-fixtures-$([guid]::NewGuid())"
-    & (Join-Path $PSScriptRoot 'New-PerfFixture.ps1') -Path $tempFixtures
+    & (Join-Path $PSScriptRoot 'New-PerfFixture.ps1') -Path $tempFixtures -Name $Fixture
     $FixtureRoot = $tempFixtures
 }
 $FixtureRoot = (Resolve-Path $FixtureRoot).Path
 Import-Module $ModulePath -Force
-
-function Measure-Scenario {
-    param(
-        [string]$Name,
-        [string]$Fixture,
-        [scriptblock]$Action,
-        [scriptblock]$Setup,
-        [object[]]$ArgumentList = @(),
-        [bool]$Gate = $true
-    )
-
-    $times = [System.Collections.Generic.List[double]]::new()
-    $allocs = [System.Collections.Generic.List[long]]::new()
-    try {
-        if ($Setup) { & $Setup }
-        $null = & $Action @ArgumentList
-
-        $budget = [System.Diagnostics.Stopwatch]::StartNew()
-        while ($times.Count -lt $Iterations -and ($times.Count -lt 3 -or $budget.Elapsed.TotalSeconds -lt $ScenarioBudgetSeconds)) {
-            if ($Setup) { & $Setup }
-            $before = [GC]::GetTotalAllocatedBytes($true)
-            $sw = [System.Diagnostics.Stopwatch]::StartNew()
-            $null = & $Action @ArgumentList
-            $sw.Stop()
-            $allocs.Add([GC]::GetTotalAllocatedBytes($true) - $before)
-            $times.Add($sw.Elapsed.TotalMilliseconds)
-        }
-    }
-    catch {
-        # e.g. a base checkout that does not support a feature used by the fixture
-        Write-Host ("  {0,-14} {1,-34} FAILED: {2}" -f $Fixture, $Name, $_) -ForegroundColor Yellow
-        return [pscustomobject]@{ Scenario = $Name; Fixture = $Fixture; Gate = $Gate; Error = "$_" }
-    }
-
-    $result = New-ScenarioResult -Name $Name -Fixture $Fixture -Gate $Gate -Times $times -Allocs $allocs
-    Write-Host ("  {0,-14} {1,-34} median {2,9:n1} ms  (n={3})" -f $Fixture, $Name, $result.MedianMs, $result.Iterations) -ForegroundColor DarkGray
-    $result
+$profileReport = $null
+if ($ProfileDir) {
+    Import-Module Profiler -ErrorAction Stop
+    $ProfileDir = (New-Item -ItemType Directory -Path $ProfileDir -Force).FullName
+    $profileReport = [System.Text.StringBuilder]::new()
 }
 
-function New-ScenarioResult {
-    param([string]$Name, [string]$Fixture, [bool]$Gate, $Times, $Allocs)
-
-    $t = @($Times | Sort-Object)
-    $a = @($Allocs | Sort-Object)
-    $p95 = [math]::Ceiling($t.Count * 0.95) - 1
-    [pscustomobject]@{
-        Scenario      = $Name
-        Fixture       = $Fixture
-        Gate          = $Gate
-        Iterations    = $t.Count
-        MedianMs      = [math]::Round($t[[int]($t.Count / 2)], 3)
-        P95Ms         = [math]::Round($t[$p95], 3)
-        MinMs         = [math]::Round($t[0], 3)
-        MedianAllocKB = if ($a.Count) { [math]::Round($a[[int]($a.Count / 2)] / 1KB, 1) } else { $null }
-        Error         = $null
-    }
-}
-
-function Measure-Tab {
-    param([string]$Line, [int]$Min = 1)
-
-    $found = (TabExpansion2 $Line $Line.Length).CompletionMatches
-    if ($found.Count -lt $Min) {
-        throw "TabExpansion2 '$Line' returned $($found.Count) matches, expected at least $Min."
-    }
-}
-
-function Measure-NewShell {
-    param([string]$Fixture, [string]$Directory, [string]$Line)
-
-    $probe = {
-        param($ModulePath, $Directory, $Line)
-        Get-ChildItem env: | Where-Object Name -like 'QCONF_*' | ForEach-Object { Remove-Item "env:$($_.Name)" }
-        $sw = [System.Diagnostics.Stopwatch]::StartNew()
-        Import-Module $ModulePath
-        $importMs = $sw.Elapsed.TotalMilliseconds
-        Set-Location $Directory
-        $before = [GC]::GetTotalAllocatedBytes($true)
-        $sw.Restart()
-        $count = (TabExpansion2 $Line $Line.Length).CompletionMatches.Count
-        $tabMs = $sw.Elapsed.TotalMilliseconds
-        $alloc = [GC]::GetTotalAllocatedBytes($true) - $before
-        @{ importMs = $importMs; tabMs = $tabMs; alloc = $alloc; count = $count } | ConvertTo-Json -Compress
-    }
-    $command = "& { $probe } '$ModulePath' '$Directory' '$Line'"
-    $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($command))
-
-    $import = [System.Collections.Generic.List[double]]::new()
-    $tab = [System.Collections.Generic.List[double]]::new()
-    $allocs = [System.Collections.Generic.List[long]]::new()
-    try {
-        # Writes the disk cache so every timed run is a disk hit.
-        $null = pwsh -NoProfile -NonInteractive -EncodedCommand $encoded
-
-        foreach ($i in 1..$NewShellIterations) {
-            $json = pwsh -NoProfile -NonInteractive -EncodedCommand $encoded | Select-Object -Last 1
-            $r = $json | ConvertFrom-Json
-            if ($r.count -lt 1) { throw "new-shell TabExpansion2 '$Line' returned no matches." }
-            $import.Add($r.importMs)
-            $tab.Add($r.tabMs)
-            $allocs.Add($r.alloc)
-        }
-    }
-    catch {
-        Write-Host ("  {0,-14} {1,-34} FAILED: {2}" -f $Fixture, 'new-shell', $_) -ForegroundColor Yellow
-        [pscustomobject]@{ Scenario = "new-shell: TAB '$Line'"; Fixture = $Fixture; Gate = $true; Error = "$_" }
-        return
-    }
-
-    New-ScenarioResult -Name 'new-shell: Import-Module' -Fixture $Fixture -Gate $true -Times $import -Allocs @()
-    New-ScenarioResult -Name "new-shell: TAB '$Line'" -Fixture $Fixture -Gate $true -Times $tab -Allocs $allocs
-}
+. (Join-Path $PSScriptRoot 'perf-measure.ps1')
 
 $results = [System.Collections.Generic.List[object]]::new()
 $startLocation = Get-Location
 
 try {
-    foreach ($fixture in 'workspace-M', 'workspace-XL') {
+    $results.Add((Measure-ModuleImport))
+
+    foreach ($fixture in @('workspace-M', 'workspace-XL') | Where-Object { $_ -in $Fixture }) {
         $dir = Join-Path $FixtureRoot $fixture
         if (!(Test-Path $dir)) { continue }
         Set-Location $dir
         $childMap = Join-Path $dir 'p03\.build.map.ps1'
-        $touch = { (Get-Item $childMap).LastWriteTimeUtc = [datetime]::UtcNow }.GetNewClosure()
+        $touch = { (Get-Item -LiteralPath $childMap -Force).LastWriteTimeUtc = [datetime]::UtcNow }.GetNewClosure()
 
         $list = { qbuild list 6>&1 | Out-String }
         $results.Add((Measure-Scenario -Name 'list (warm)' -Fixture $fixture -Action $list))
@@ -191,10 +111,10 @@ try {
     }
 
     $samplesDir = Join-Path $FixtureRoot 'samples'
-    if (Test-Path $samplesDir) {
+    if ('samples' -in $Fixture -and (Test-Path $samplesDir)) {
         Set-Location $samplesDir
         $rootMap = Join-Path $samplesDir '.build.map.ps1'
-        $touchRoot = { (Get-Item $rootMap).LastWriteTimeUtc = [datetime]::UtcNow }.GetNewClosure()
+        $touchRoot = { (Get-Item -LiteralPath $rootMap -Force).LastWriteTimeUtc = [datetime]::UtcNow }.GetNewClosure()
         $results.Add((Measure-Scenario -Name 'list (warm)' -Fixture 'samples' -Action { qbuild list 6>&1 | Out-String }))
         $results.Add((Measure-Scenario -Name 'TAB entry (warm)' -Fixture 'samples' -Action { Measure-Tab 'qbuild ' }))
         $results.Add((Measure-Scenario -Name 'TAB entry (edited)' -Fixture 'samples' -Action { Measure-Tab 'qbuild ' } -Setup $touchRoot))
@@ -202,14 +122,14 @@ try {
     }
 
     $flatDir = Join-Path $FixtureRoot 'flat-1k'
-    if (Test-Path $flatDir) {
+    if ('flat-1k' -in $Fixture -and (Test-Path $flatDir)) {
         Set-Location $flatDir
         $results.Add((Measure-Scenario -Name 'list (warm)' -Fixture 'flat-1k' -Action { qbuild list 6>&1 | Out-String }))
         $results.Add((Measure-Scenario -Name 'TAB entry (warm)' -Fixture 'flat-1k' -Action { Measure-Tab 'qbuild ' }))
     }
 
     # Internal helpers: report-only, they may legitimately change shape between versions.
-    if ((Get-Command Get-MapEntries, Get-EntryCompletion -Module ConfigMap -ErrorAction Ignore).Count -eq 2) {
+    if ('flat-1k' -in $Fixture -and (Get-Command Get-MapEntries, Get-EntryCompletion -Module ConfigMap -ErrorAction Ignore).Count -eq 2) {
         $map = [ordered]@{}
         foreach ($n in 1..1000) { $map["task$n"] = { } }
         $results.Add((Measure-Scenario -Name 'internal: Get-MapEntries' -Fixture 'in-memory-1k' -Gate $false -Action {
@@ -220,7 +140,7 @@ try {
                 }))
     }
     $xlMap = Join-Path $FixtureRoot 'workspace-XL\.build.map.ps1'
-    if (Test-Path $xlMap) {
+    if ('workspace-XL' -in $Fixture -and (Test-Path $xlMap)) {
         $results.Add((Measure-Scenario -Name 'internal: Import-ConfigMap' -Fixture 'workspace-XL' -Gate $false -Action {
                     Import-ConfigMap -Map $xlMap -LookUp:$false
                 }))
@@ -238,6 +158,13 @@ $report = [ordered]@{
     os         = [System.Runtime.InteropServices.RuntimeInformation]::OSDescription
     iterations = $Iterations
     results    = $results
+}
+
+if ($profileReport) {
+    $header = "# qbuild profile`n`n$ModulePath, pwsh $($PSVersionTable.PSVersion). One traced run per scenario after timing; sorted by self time.`n`n"
+    $profilePath = Join-Path $ProfileDir 'profile-report.md'
+    ($header + $profileReport.ToString()) | Set-Content $profilePath
+    Write-Host "profile: $profilePath" -ForegroundColor DarkGray
 }
 
 if ($OutFile) {

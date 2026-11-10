@@ -49,7 +49,7 @@ function Get-MapEntryList {
     }
 
     if ($map -is [System.Collections.IDictionary]) {
-        Add-ConfigMapDependsOnDependencies -Node $map -Map $map -OperationContext $OperationContext
+        Add-ConfigMapCacheDependency -Node $map -Map $map -OperationContext $OperationContext
     }
 
     $list = $map.$listKey ? $map.$listKey : $map
@@ -85,7 +85,7 @@ function Get-MapEntryList {
 
                 if (!(Test-IsParentEntry $entry -reservedKeys $reservedKeys)) {
                     if ($entry -is [System.Collections.IDictionary]) {
-                        Add-ConfigMapDependsOnDependencies -Node $entry -Map $map -OperationContext $OperationContext
+                        Add-ConfigMapCacheDependency -Node $entry -Map $map -OperationContext $OperationContext
                     }
                     $result["$($kvp.key)"] = $entry
                     continue
@@ -199,7 +199,7 @@ function Merge-IncludeDirectives {
     .SYNOPSIS
         Processes #include directives and merges included map entries
     .PARAMETER includes
-        Hashtable with include configuration (directory names as keys with prefix option)
+        Hashtable with include configuration (directory names or map file paths as keys, with prefix option)
     .PARAMETER baseDir
         Base directory for resolving include paths. Defaults to $PWD if not specified.
     #>
@@ -221,22 +221,20 @@ function Merge-IncludeDirectives {
     }
 
     foreach ($kvp in $includes.GetEnumerator()) {
-        $dirName = $kvp.Key
+        $include = "$($kvp.Key)"
         $includeConfig = $kvp.Value
 
-        $includePath = Join-Path $baseDir $dirName
-        $mapFile = Join-Path $includePath '.build.map.ps1'
-        $fullMapPath = [System.IO.Path]::GetFullPath($mapFile)
+        $fullMapPath = Resolve-IncludedMapFile -Include $include -BaseDir $baseDir
 
-        if (Test-Path -LiteralPath $mapFile -PathType Leaf) {
-            $OperationContext.Dependencies[$fullMapPath] = (Get-Item -LiteralPath $mapFile).LastWriteTimeUtc.Ticks
+        if (Test-Path -LiteralPath $fullMapPath -PathType Leaf) {
+            $OperationContext.Dependencies[$fullMapPath] = (Get-Item -LiteralPath $fullMapPath -Force).LastWriteTimeUtc.Ticks
         }
         else {
             $OperationContext.Dependencies[$fullMapPath] = $null
         }
 
         $includedMap = Import-IncludedConfigMap `
-            -DirectoryName $dirName `
+            -Include $include `
             -BaseDir $baseDir `
             -Cache $OperationContext.IncludeCache `
             -Loading $OperationContext.LoadingIncludes
@@ -258,9 +256,10 @@ function Merge-IncludeDirectives {
             $usePrefix = $includeConfig.prefix -eq $true
         }
 
+        $prefix = Get-IncludePrefix $include
         foreach ($entry in $includedEntries.GetEnumerator()) {
             if ($usePrefix) {
-                $key = "$dirName$separator$($entry.Key)"
+                $key = "$prefix$separator$($entry.Key)"
             }
             else {
                 $key = $entry.Key
@@ -316,7 +315,7 @@ function Get-EntryCompletion(
     $commandAst,
     $fakeBoundParameters
 ) {
-    return (Get-EntryCompletionKeys $map $language) | Sort-Object | ? { $_.startswith($wordToComplete) }
+    return (Get-EntryCompletionKeys $map $language) | Sort-Object | ? { $_.StartsWith($wordToComplete, [System.StringComparison]::OrdinalIgnoreCase) }
 }
 
 function Get-EntryDynamicParam(
@@ -368,10 +367,6 @@ function Get-ScriptArgs {
             if ($attr -is [System.Management.Automation.Language.TypeConstraintAst]) {
                 if ($attr.TypeName.ToString() -eq "switch") {
                     $paramType = [switch]
-                }
-                else {
-                    # $newAttr = New-Object -type System.Management.Automation.PSTypeNameAttribute($attr.TypeName.Name)
-                    # $paramAttributesCollect.Add($newAttr)
                 }
             }
             elseif ($attr -is [System.Management.Automation.Language.AttributeAst]) {

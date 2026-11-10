@@ -1,26 +1,30 @@
-. $PSScriptRoot\includes.ps1 -internal
+BeforeAll {
+    . $PSScriptRoot/includes.ps1 -internal
+}
 
 
 Describe "internal: adding properties" {
     Context "when adding hashtable to existing hashtable" {
-        $toadd = @{ 
-            profiles = @{ 
-                dev = @{ title = "dev" }
-                qa  = @{ title = "qa" }
+        BeforeAll {
+            $toadd = @{ 
+                profiles = @{ 
+                    dev = @{ title = "dev" }
+                    qa  = @{ title = "qa" }
+                }
             }
-        }
-        $existing = @{
-            profiles = @{
-                prod = @{ name = "prod" }
-            }
-        } 
+            $existing = @{
+                profiles = @{
+                    prod = @{ name = "prod" }
+                }
+            } 
 
-        $added = $existing | add-properties -props $toadd -merge
+            $added = $existing | add-properties -props $toadd -merge
+        }
 
         It "should merge hashtables" {
-            $added.profiles.dev | should not benullorempty
-            $added.profiles.qa | should not benullorempty
-            $added.profiles.prod | should not benullorempty
+            $added.profiles.dev | Should -Not -BeNullOrEmpty
+            $added.profiles.qa | Should -Not -BeNullOrEmpty
+            $added.profiles.prod | Should -Not -BeNullOrEmpty
                 
         }
     }

@@ -278,6 +278,31 @@ Describe 'qbuild _settings.process=steps forwarding' {
         } -Parameters @{ MapFile = $script:mapFile }
     }
 
+    It 'adds external process !complete words to qbuild entry completion when imported as a module' {
+        $externalFile = Join-Path $script:workDir 'external.build.map.ps1'
+        @'
+[ordered]@{
+    deploy = [ordered]@{
+        _settings = @{ process = 'cmtest-external' }
+        exec      = { }
+    }
+}
+'@ | Set-Content -LiteralPath $externalFile -Encoding utf8
+
+        function global:cmtest-external {
+            param([Parameter(ValueFromRemainingArguments = $true)]$Arguments)
+            $global:LASTEXITCODE = 0
+            'from-external'
+        }
+        try {
+            $line = "qbuild -map '$externalFile' "
+            (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText | Should -Contain 'from-external'
+        }
+        finally {
+            Remove-Item function:global:cmtest-external -ErrorAction SilentlyContinue
+        }
+    }
+
     It 'accepts legacy process=qrun as an alias for steps' {
         $legacyFile = Join-Path $script:workDir 'legacy.build.map.ps1'
         @'

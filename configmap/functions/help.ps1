@@ -154,6 +154,26 @@ function Get-ConfigMapListTypes {
     return @($types)
 }
 
+function Get-ConfigMapListGroupNames {
+    <#
+    .SYNOPSIS
+        Root names of dotted entries that have no entry of their own (prefixed #include groups).
+    .DESCRIPTION
+        'list' hides dotted sub-entries because their parent row stands for them. A prefixed
+        include ("lint.check", "lint.fix") has no parent entry, so without a row for the prefix
+        the whole include would disappear from the list.
+    #>
+    param([string[]]$Names)
+
+    $known = [System.Collections.Generic.HashSet[string]]::new([string[]]@($Names), [System.StringComparer]::OrdinalIgnoreCase)
+    $groups = [ordered]@{}
+    foreach ($name in @($Names)) {
+        $root = ($name -split '\.', 2)[0]
+        if ($root -ne $name -and -not $known.Contains($root)) { $groups[$root] = $true }
+    }
+    return @($groups.Keys)
+}
+
 function Write-MapHelp {
     param([System.Collections.IDictionary]$map, $invocation, [ValidateSet("build", "conf")]$language = "build", [string]$Type)
     $commandName = $invocation.InvocationName
@@ -233,6 +253,9 @@ function Write-MapHelp {
     $cache = Get-ConfigMapDiscoveryCache -Map $map -Language $language
     if ($cache) {
         $scriptItems = @($cache.entries.hierarchical)
+        foreach ($group in Get-ConfigMapListGroupNames @($scriptItems | ForEach-Object { [string]$_.key })) {
+            $scriptItems += [pscustomobject]@{ key = $group; description = ''; parameters = @(); process = ''; isGroup = $true }
+        }
         if ($map -isnot [System.Collections.Specialized.OrderedDictionary]) {
             $scriptItems = @($scriptItems | Sort-Object { [string]$_.key })
         }
@@ -245,9 +268,16 @@ function Write-MapHelp {
 
         foreach ($item in $scriptItems) {
             $name = [string]$item.key
-            $entryValue = Get-MapEntry $map $name -language $language -OperationContext $operationContext
-            if (& $tryWriteProcessListEntry $name $entryValue) {
+            # Same rule as $tryWriteProcessListEntry, decided from the cache so hidden sub-paths cost no map lookup.
+            if ($language -eq 'build' -and $name -match '\.' -and -not $item.process) {
                 continue
+            }
+            # A prefix group has no entry of its own to look up.
+            if (-not $item.PSObject.Properties['isGroup']) {
+                $entryValue = Get-MapEntry $map $name -language $language -OperationContext $operationContext
+                if (& $tryWriteProcessListEntry $name $entryValue) {
+                    continue
+                }
             }
 
             $description = [string]$item.description
@@ -259,6 +289,7 @@ function Write-MapHelp {
     }
 
     $scripts = Get-CompletionList $map -language $language
+    foreach ($group in Get-ConfigMapListGroupNames @($scripts.Keys)) { $scripts[$group] = $null }
     if ($Type) {
         $allowed = @(& $filterEntries @($scripts.Keys) { param($i) [string]$i })
         $filtered = [ordered]@{}
@@ -284,7 +315,7 @@ function Write-MapHelp {
         $name = $item.Name
         $script = $item.Value
 
-        if (& $tryWriteProcessListEntry $name $script) {
+        if ($null -ne $script -and (& $tryWriteProcessListEntry $name $script)) {
             continue
         }
 

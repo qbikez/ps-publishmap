@@ -153,25 +153,6 @@ function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}
     }
 }
 
-# function Invoke-Entry(
-#     [ValidateScript({
-#             $_ -is [string] -or $_ -is [System.Collections.IDictionary]
-#         })]
-#     $map,
-#     $entry,
-#     $bound
-# ) {
-#     $map = Import-ConfigMap $map
-
-#     $targets = Get-MapEntries $map $entry
-#     Write-Verbose "running targets: $($targets.Key)"
-
-#     @($targets) | % {
-#         Write-Verbose "running entry '$($_.key)'"
-#         Invoke-EntryCommand -entry $_.value -key "exec" -bound $bound
-#     }
-# }
-
 function Invoke-Set($entry, $bound = @{}, $extra = @(), [hashtable]$RunContext) {
     # use ordered parameters, just in case the handler has different parameter names
     # Nameless leftovers after the option key (e.g. `set local tenant_1`) bind by name to

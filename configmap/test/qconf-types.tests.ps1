@@ -880,6 +880,31 @@ Describe 'qconf user-secrets _template' {
         $secrets['Other:Key'] | Should -Be 'keep-me'
     }
 
+    It 'keeps non-ASCII values when dotnet reads stdin in a non-UTF-8 encoding' {
+        # dotnet decodes piped stdin with the console code page (Windows) or the locale
+        # charset (Unix); a Latin-1 locale stands in for a legacy Windows code page.
+        $localeBackup = $env:LC_ALL
+        $env:LC_ALL = 'en_US.ISO-8859-1'
+        try {
+            Write-ConfigMapFile $script:mapFile @'
+@{
+    text = @{
+        _template = 'user-secrets:App.csproj'
+        options = @{
+            polish = @{ 'Greeting' = 'zażółć "gęślą" jaźń' }
+        }
+    }
+}
+'@
+            qconf -map $script:mapFile text -value polish -ErrorAction Stop
+        }
+        finally {
+            $env:LC_ALL = $localeBackup
+        }
+
+        (Read-UserSecrets $script:csproj)['Greeting'] | Should -Be 'zażółć "gęślą" jaźń'
+    }
+
     It 'stores an empty option value and reports it as active' {
         Write-ConfigMapFile $script:mapFile @'
 @{
@@ -1116,6 +1141,40 @@ Describe 'qbuild dotenv _template per-key entries' {
 
         @($result.Keys) | Should -Contain 'api.ONLY_KEY'
         @($result.Keys) | Should -Not -Contain 'api.API_URL'
+    }
+
+    It 'skips keys listed in exclude, including wildcard patterns' {
+        Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options' }
+        _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto'; exclude = @('FLAG', 'API_K*') }
+    }
+}
+'@
+
+        $buildMap = $script:buildMap
+        $result = InModuleScope configmap -Parameters @{ map = $buildMap } { Get-MapEntryList (Import-ConfigMap -Map $map) -language build }
+
+        @($result.Keys) | Should -Contain 'api.API_URL'
+        @($result.Keys) | Should -Not -Contain 'api.FLAG'
+        @($result.Keys) | Should -Not -Contain 'api.API_KEY'
+    }
+
+    It 'leaves excluded keys out of the parent entry value' {
+        Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options' }
+        _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto'; exclude = @('API_K*') }
+    }
+}
+'@
+
+        $result = qbuild -map $script:buildMap api -porcelain -ErrorAction Stop
+
+        @($result.Value.Keys) | Should -Contain 'API_URL'
+        @($result.Value.Keys) | Should -Not -Contain 'API_KEY'
     }
 
     It 'works against the dotenv sample' {

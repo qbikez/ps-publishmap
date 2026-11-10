@@ -94,11 +94,11 @@ function Resolve-MapEntrySegments {
 
             foreach ($include in $kvp.Value.GetEnumerator()) {
                 $usePrefix = $include.Value -is [System.Collections.IDictionary] -and $include.Value.prefix -eq $true
-                if ($usePrefix -and $include.Key -ne $segment) {
+                if ($usePrefix -and (Get-IncludePrefix "$($include.Key)") -ne $segment) {
                     continue
                 }
 
-                $includedMap = Import-IncludedConfigMap -DirectoryName "$($include.Key)" -BaseDir $Node._baseDir -Cache $IncludeCache -Loading $LoadingIncludes
+                $includedMap = Import-IncludedConfigMap -Include "$($include.Key)" -BaseDir $Node._baseDir -Cache $IncludeCache -Loading $LoadingIncludes
                 if (!$includedMap) {
                     continue
                 }

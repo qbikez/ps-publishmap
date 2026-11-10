@@ -33,36 +33,41 @@ function Get-PackageScripts {
 }
 
 function Write-PackageScriptList {
-    param([string]$Manager, [System.Collections.IDictionary]$Scripts)
+    param([string]$Manager, [string]$Entry, [System.Collections.IDictionary]$Scripts)
 
     Write-Host ""
     Write-Host "$Manager scripts (package.json)" -ForegroundColor Gray
     Write-Host ""
     Write-Host "COMMANDS:" -ForegroundColor Yellow
-    $width = ($Scripts.Keys | Measure-Object -Property Length -Maximum).Maximum
+    $width = ($Scripts.Keys | ForEach-Object { "$Entry.$_" } | Measure-Object -Property Length -Maximum).Maximum
     foreach ($item in $Scripts.GetEnumerator()) {
-        Write-CommandHelpLine ([string]$item.Key) $item.Value '' $width
+        Write-CommandHelpLine "$Entry.$($item.Key)" $item.Value '' $width
     }
 }
 
 function Invoke-PackageScriptProcess {
     param([Parameter(Mandatory = $true)][string]$Manager, [Parameter(Mandatory = $true)]$Context)
 
-    $directory = Get-PackageScriptEntryDirectory -Map $Context.Map -Entry $Context.Entry
+    $entry = $Context.Entry
+    $directory = Get-PackageScriptEntryDirectory -Map $Context.Map -Entry $entry
     $scripts = Get-PackageScripts -Directory $directory
-    # ProcessAction is not positional, so a bare script name arrives in RemainingArguments.
+    # ProcessAction is not positional, so a bare action arrives in RemainingArguments.
     $passthrough = @(Get-ConfigMapProcessPassthrough -ProcessAction $Context.ProcessAction -ProcessValue $Context.ProcessValue -RemainingArguments $Context.RemainingArguments)
-    $action = if ($passthrough.Count -gt 0) { $passthrough[0] }
+    $scriptName = $Context.GeneratedEntry
 
-    if (!$action -or $action -eq 'list') {
-        Write-PackageScriptList -Manager $Manager -Scripts $scripts
+    if (!$scriptName) {
+        $action = if ($passthrough.Count -gt 0) { $passthrough[0] }
+        if ($action -and $action -ne 'list') {
+            throw "Unknown $Manager action '$action'. Scripts run as entries, e.g. 'qbuild $entry.$action'."
+        }
+        Write-PackageScriptList -Manager $Manager -Entry $entry -Scripts $scripts
         return
     }
-    if (!$scripts.Contains($action)) {
-        throw "Unknown $Manager script '$action'. Available: $($scripts.Keys -join ', ')"
+    if (!$scripts.Contains($scriptName)) {
+        throw "Unknown $Manager script entry '$entry.$scriptName'. Available: $(@($scripts.Keys | ForEach-Object { "$entry.$_" }) -join ', ')"
     }
 
-    $scriptArgs = @($passthrough | Select-Object -Skip 1)
+    $scriptArgs = $passthrough
     # npm forwards only what follows '--'; bun passes trailing arguments to the script as-is.
     if ($Manager -eq 'npm' -and $scriptArgs.Count -gt 0) {
         $scriptArgs = @('--') + $scriptArgs
@@ -70,7 +75,7 @@ function Invoke-PackageScriptProcess {
 
     Push-Location -LiteralPath $directory
     try {
-        & $Manager run $action @scriptArgs
+        & $Manager run $scriptName @scriptArgs
     }
     finally {
         Pop-Location
@@ -93,6 +98,10 @@ foreach ($packageManager in 'bun', 'npm') {
         -InitCondition $packageInitConditions[$manager] `
         -Invoke { param($Context) Invoke-PackageScriptProcess -Manager (Get-ConfigMapSettingsForPath -Map $Context.Map -Path $Context.Entry).Process -Context $Context } `
         -GetDynamicParam { param($Context) $null } `
+        -GetEntries {
+        param($Context)
+        Get-PackageScripts -Directory (Get-PackageScriptEntryDirectory -Map $Context.Map -Entry $Context.Entry)
+    } `
         -WriteListEntry {
         param($ListContext)
         $name = (Get-ConfigMapSettingsForPath -Map $ListContext.Map -Path $ListContext.Name).Process
@@ -102,9 +111,7 @@ foreach ($packageManager in 'bun', 'npm') {
         -Complete {
         param($CompleteContext)
         if ($CompleteContext.Position -ne 'Action') { return @() }
-        $directory = Get-PackageScriptEntryDirectory -Map $CompleteContext.Map -Entry $CompleteContext.Entry
-        try { $names = @((Get-PackageScripts -Directory $directory).Keys) } catch { $names = @() }
-        @('list') + $names | Where-Object { $_ -like "$($CompleteContext.Word)*" }
+        @('list') | Where-Object { $_ -like "$($CompleteContext.Word)*" }
     }
 }
 Remove-Variable packageManager, manager, packageInitConditions
