@@ -126,11 +126,18 @@ function Invoke-QBuild {
                 -RemainingArguments $RemainingArguments
         }
         catch {
-            return "ERROR [dynamic]: $($_.Exception.Message) $($_.ScriptStackTrace)"
+            # Output of dynamicparam that is not a parameter dictionary is ignored, so hand
+            # the failure to the process block (same scope); tab completion never runs it.
+            $dynamicParamError = "$($_.Exception.Message) $($_.ScriptStackTrace)"
+            return
         }
     }
 
     process {
+        if ($dynamicParamError) {
+            Write-Warning "Could not generate parameters for entry '$entry'; entry switches may be ignored: $dynamicParamError"
+        }
+
         if ($entry -is [array]) {
             foreach ($e in $entry) {
                 $params = @{}
