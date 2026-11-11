@@ -1405,3 +1405,56 @@ Describe "qbuild called from module scope" {
         $result | Should -Be 'flag-bound'
     }
 }
+
+Describe "qbuild when dynamic parameter generation fails" {
+    BeforeAll {
+        $script:dpFailDir = Join-Path $TestDrive "dynparam-failure"
+        New-Item -ItemType Directory -Path $script:dpFailDir -Force | Out-Null
+        "@{ chk = { param([switch]`$flag) 'ran' } }" | Out-File (Join-Path $script:dpFailDir ".build.map.ps1")
+    }
+
+    It "warns about the failure and still runs the entry" {
+        Mock -ModuleName configmap Get-EntryDynamicParam { throw 'dynamic boom' }
+        Push-Location $script:dpFailDir
+        try {
+            $result = qbuild chk -WarningVariable warnings 3>$null
+        }
+        finally {
+            Pop-Location
+        }
+        $result | Should -Be 'ran'
+        "$warnings" | Should -Match 'dynamic boom'
+    }
+
+    It "does not warn for an entry whose exec is a list of sibling entries" {
+        $map = @{ all = @{ exec = @('a', 'b'); a = { 'a' }; b = { 'b' } } }
+        $null = qbuild -map $map all -WarningVariable warnings 3>$null
+        $warnings | Should -BeNullOrEmpty
+    }
+}
+
+Describe "qbuild switch no entry parameter can receive" {
+    BeforeAll {
+        $script:map = @{
+            plain    = { param([switch]$flag) 'ran' }
+            passthru = { param([switch]$flag, $_context) @($_context.additionalArgs) -join ',' }
+        }
+    }
+
+    It "warns about an unknown switch the entry cannot receive" {
+        $result = qbuild -map $script:map plain -typo -WarningVariable warnings 3>$null
+        $result | Should -Be 'ran'
+        "$warnings" | Should -Match '-typo'
+    }
+
+    It "does not warn when the entry takes _context for passthrough" {
+        $result = qbuild -map $script:map passthru -typo -WarningVariable warnings 3>$null
+        $result | Should -Be '-typo'
+        $warnings | Should -BeNullOrEmpty
+    }
+
+    It "does not warn for a declared switch" {
+        $null = qbuild -map $script:map plain -flag -WarningVariable warnings 3>$null
+        $warnings | Should -BeNullOrEmpty
+    }
+}

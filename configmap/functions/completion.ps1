@@ -335,6 +335,8 @@ function Get-EntryDynamicParam(
     $commandKey = $command ? $command : "exec"
     $entryCommand = Get-EntryCommand $selectedEntry $commandKey
     if (!$entryCommand) { return @() }
+    # A list of sibling entry names has no parameters of its own.
+    if ($entryCommand -isnot [scriptblock]) { return @() }
     $entryContext = if ($selectedEntry -is [System.Collections.IDictionary]) { $selectedEntry } else { $null }
     $p = Get-ScriptArgs $entryCommand -skip $skip -entry $entryContext
 

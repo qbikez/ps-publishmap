@@ -2,6 +2,7 @@
 
 # A steps check that calls qbuild with an entry switch.
 # Try:
+#   qbuild chk -typo      # warns that -typo is ignored: chk declares no such parameter
 #   qbuild p.s -check     # expected: "[1/1] OK  s"; before the fix: "human mode" and MISSING
 
 [ordered]@{
