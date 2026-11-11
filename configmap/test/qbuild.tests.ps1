@@ -1373,3 +1373,35 @@ Describe "Test-ConfigMapFeatureEnabled TmuxAutoWindow" {
         }
     }
 }
+Describe "qbuild called from module scope" {
+    BeforeAll {
+        $script:dpDir = Join-Path $TestDrive "dynparam-shadow"
+        New-Item -ItemType Directory -Path $script:dpDir -Force | Out-Null
+        @'
+@{
+    chk = { param([switch]$flag) if ($flag) { 'flag-bound' } else { 'flag-missing' } }
+}
+'@ | Out-File (Join-Path $script:dpDir ".build.map.ps1")
+    }
+
+    # Invoke-EntryCommand runs entry scriptblocks with its own local $command.
+    # Inside the module that variable is visible to qbuild's dynamicparam block,
+    # where qbuild's own parameter defaults are not applied yet.
+    It "binds entry switches when the caller has its own shadowing <name> variable" -ForEach @(
+        @{ name = 'command'; value = { 'caller-scriptblock' } }
+        @{ name = 'map'; value = @{ other = { 'caller-map' } } }
+    ) {
+        Push-Location $script:dpDir
+        try {
+            $result = & (Get-Module configmap) {
+                param($name, $value)
+                Set-Variable -Name $name -Value $value
+                qbuild chk -flag
+            } $name $value
+        }
+        finally {
+            Pop-Location
+        }
+        $result | Should -Be 'flag-bound'
+    }
+}
