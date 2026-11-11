@@ -39,6 +39,11 @@ function Invoke-QBuild {
         [string[]]$RemainingArguments
     )
     dynamicparam {
+        # Parameter defaults are not applied yet here, so an unbound name would
+        # resolve through the caller's scope (e.g. Invoke-EntryCommand's $command).
+        $command = if ($PSBoundParameters.ContainsKey('command')) { $PSBoundParameters['command'] } else { 'exec' }
+        $map = if ($PSBoundParameters.ContainsKey('map')) { $PSBoundParameters['map'] } else { './.build.map.ps1' }
+
         if ($entry -is [array]) { return }
         if (-not $entry) {
             # Host-only switch so entry scriptblocks may still declare their own -Version.
