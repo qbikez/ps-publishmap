@@ -169,7 +169,38 @@
         }
         description = "Install the PowerShell module locally"
     }
-    
+
+    "link"    = @{
+        exec        = {
+            # A module in the user module path autoloads on first use of its exported aliases,
+            # so `pwsh -NoProfile -Command qbuild` works without Import-Module.
+            $modulesDir = if ($IsWindows) {
+                Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PowerShell/Modules"
+            }
+            else {
+                Join-Path $HOME ".local/share/powershell/Modules"
+            }
+            $link = Join-Path $modulesDir "configmap"
+            $target = Join-Path $PSScriptRoot "configmap"
+
+            $existing = Get-Item $link -Force -ErrorAction SilentlyContinue
+            if ($existing -and -not $existing.LinkType) {
+                throw "$link is a regular directory (an installed configmap?). Remove it first: Uninstall-Module configmap"
+            }
+            if ($existing) {
+                # Deletes only the link, not the checkout it points to
+                $existing.Delete()
+            }
+
+            $null = New-Item -ItemType Directory -Force $modulesDir
+            # Junctions need no admin rights or Developer Mode on Windows
+            $linkType = $IsWindows ? "Junction" : "SymbolicLink"
+            $null = New-Item -ItemType $linkType -Path $link -Target $target
+            Write-Host "Linked $link -> $target"
+        }
+        description = "Link this checkout's configmap into the user module path, so qbuild autoloads"
+    }
+
     "clean"   = @{
         exec        = {
             Write-Host "Cleaning build artifacts..."
