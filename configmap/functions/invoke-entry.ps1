@@ -92,6 +92,13 @@ function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}
 
     if (!$bound) { $bound = @{} }
     if (!$bound._context) { $bound._context = @{} }
+    # Passthrough arguments only reach an entry through its _context parameter.
+    if ('_context' -notin $scriptArgs.Keys) {
+        $dropped = @($bound._context.additionalArgs | Where-Object { "$_" -match '^-\w' })
+        if ($dropped.Count -gt 0) {
+            Write-Warning "Ignoring unknown parameter(s): $($dropped -join ', '). The command declares no such parameter."
+        }
+    }
     if (!$bound._context.self) { $bound._context.self = $entry }
     if (
         -not $bound._context.base `

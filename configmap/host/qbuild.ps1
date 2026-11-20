@@ -39,6 +39,11 @@ function Invoke-QBuild {
         [string[]]$RemainingArguments
     )
     dynamicparam {
+        # Parameter defaults are not applied yet here, so an unbound name would
+        # resolve through the caller's scope (e.g. Invoke-EntryCommand's $command).
+        $command = if ($PSBoundParameters.ContainsKey('command')) { $PSBoundParameters['command'] } else { 'exec' }
+        $map = if ($PSBoundParameters.ContainsKey('map')) { $PSBoundParameters['map'] } else { './.build.map.ps1' }
+
         if ($entry -is [array]) { return }
         if (-not $entry) {
             # Host-only switch so entry scriptblocks may still declare their own -Version.
@@ -121,11 +126,18 @@ function Invoke-QBuild {
                 -RemainingArguments $RemainingArguments
         }
         catch {
-            return "ERROR [dynamic]: $($_.Exception.Message) $($_.ScriptStackTrace)"
+            # Output of dynamicparam that is not a parameter dictionary is ignored, so hand
+            # the failure to the process block (same scope); tab completion never runs it.
+            $dynamicParamError = "$($_.Exception.Message) $($_.ScriptStackTrace)"
+            return
         }
     }
 
     process {
+        if ($dynamicParamError) {
+            Write-Warning "Could not generate parameters for entry '$entry'; entry switches may be ignored: $dynamicParamError"
+        }
+
         if ($entry -is [array]) {
             foreach ($e in $entry) {
                 $params = @{}
