@@ -556,6 +556,21 @@ Describe "hierarchical completion" {
         $completions | Should -Contain "another.nested:cmd"
     }
 
+    It "should not offer a nested child under its bare name for '<word>'" -ForEach @(
+        @{ word = 'i' }
+        @{ word = '' }
+    ) {
+        $map = @{
+            build = @{
+                installer = { }
+            }
+        }
+
+        $completions = @(Get-EntryCompletion -map $map -language build -wordToComplete $word @{})
+
+        $completions | Should -Not -Contain 'installer'
+    }
+
     It "should generate completion candidates from the canonical entry list" {
         InModuleScope ConfigMap {
             Mock Get-MapEntryList {
@@ -586,7 +601,7 @@ Describe "hierarchical completion" {
             $completions | Should -Contain 'parent'
             $completions | Should -Contain 'parent*'
             $completions | Should -Contain 'parent.child'
-            $completions | Should -Contain 'child'
+            $completions | Should -Not -Contain 'child'
             $completions | Should -Contain 'parent.all'
             Should -Invoke Get-MapEntryList -Times 2 -Exactly
         }
