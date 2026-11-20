@@ -141,7 +141,13 @@ function Invoke-EntryCommand($entry, $key = "exec", $ordered = @(), $bound = @{}
     # attribute would reject every real value when the block runs.
     $siblingValidateSet = '\[\s*ValidateSet\(\s*[''"]@\w+[''"]\s*\)\s*\]'
     if ($command.ToString() -match $siblingValidateSet) {
-        $command = [scriptblock]::Create(($command.ToString() -replace $siblingValidateSet, ''))
+        # [scriptblock]::Create has no source file, which would leave $PSScriptRoot empty; parsing with
+        # the original file name keeps it.
+        $tokens = $null; $parseErrors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput(
+            ($command.ToString() -replace $siblingValidateSet, ''), $command.Ast.Extent.File, [ref]$tokens, [ref]$parseErrors)
+        if ($parseErrors) { throw $parseErrors[0].Message }
+        $command = $ast.GetScriptBlock()
     }
 
     try {
