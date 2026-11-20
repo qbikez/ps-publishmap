@@ -284,22 +284,33 @@ function Get-EntryCompletionKeys {
     $cache = Get-ConfigMapDiscoveryCache -Map $map -Language $language
     $pair = if ($cache) { $cache.entries } else { Get-MapEntryListPair -map $map -language $language }
 
-    foreach ($entryList in @($pair.hierarchical, $pair.flatten)) {
-        if ($entryList -is [System.Collections.IDictionary]) {
-            foreach ($key in $entryList.Keys) {
-                $allKeys.Add($key) | Out-Null
-            }
-            continue
-        }
+    foreach ($key in (Get-EntryListKey $pair.hierarchical)) {
+        $allKeys.Add($key) | Out-Null
+    }
 
-        foreach ($entry in @($entryList)) {
-            if ($null -ne $entry -and $entry.key) {
-                $allKeys.Add([string]$entry.key) | Out-Null
-            }
+    # Flatten keys strip parent prefixes, so a nested child appears under its bare
+    # name, which does not resolve. Only keep group markers of real entries (parent*).
+    foreach ($key in (Get-EntryListKey $pair.flatten)) {
+        if ($key.EndsWith('*') -and $allKeys.Contains($key.TrimEnd('*'))) {
+            $allKeys.Add($key) | Out-Null
         }
     }
 
     return $allKeys
+}
+
+function Get-EntryListKey {
+    <#
+    .SYNOPSIS
+        Returns the keys of an entry list, either a dictionary or cached entry descriptors.
+    #>
+    param($EntryList)
+
+    if ($EntryList -is [System.Collections.IDictionary]) {
+        return @($EntryList.Keys | ForEach-Object { [string]$_ })
+    }
+
+    return @($EntryList | Where-Object { $null -ne $_ -and $_.key } | ForEach-Object { [string]$_.key })
 }
 
 function Get-EntryCompletion(
