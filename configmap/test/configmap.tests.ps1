@@ -1539,6 +1539,51 @@ Describe "ImportConfigMap" {
         }
     }
 
+    It "resolves `$PSScriptRoot in an entry scriptblock to the map file's directory" {
+        $dir = Join-Path $TestDrive "import-configmap-psscriptroot"
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        Set-Content -Path (Join-Path $dir ".build.map.ps1") -Value @'
+@{
+    "run" = {
+#     [ValidateSet("@roles")]
+        $PSScriptRoot
+    }
+}
+'@
+        $elsewhere = Join-Path $TestDrive "import-configmap-psscriptroot-cwd"
+        New-Item -ItemType Directory -Path $elsewhere -Force | Out-Null
+        Push-Location $elsewhere
+        try {
+            qbuild -map (Join-Path $dir ".build.map.ps1") "run" | Should -Be $dir
+        }
+        finally {
+            Pop-Location
+        }
+    }
+
+    It "resolves `$PSScriptRoot in an entry whose parameter uses ValidateSet('@key')" {
+        $dir = Join-Path $TestDrive "import-configmap-psscriptroot-validateset"
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        Set-Content -Path (Join-Path $dir ".build.map.ps1") -Value @'
+@{
+    "run" = @{
+        "roles" = @("admin", "user")
+        "exec"  = {
+            param([ValidateSet("@roles")][string]$role)
+            "$role|$PSScriptRoot"
+        }
+    }
+}
+'@
+        Push-Location $dir
+        try {
+            qbuild -map "./.build.map.ps1" "run" -role admin | Should -Be "admin|$dir"
+        }
+        finally {
+            Pop-Location
+        }
+    }
+
     It "returns an object map without loading a file" {
         $map = @{
             "run" = { "from-object" }
