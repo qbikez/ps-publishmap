@@ -64,7 +64,7 @@ Open this directory in VS Code and press `F5` to start an Extension Development 
 npm run package
 ```
 
-The packaged extension is written to `.publish/`. Install that `.vsix` with **Extensions: Install from VSIX...**, or run `qbuild install` from this directory.
+The packaged extension is written to `.publish/`. Install that `.vsix` with **Extensions: Install from VSIX...**, or run `qbuild install` from this directory. `qbuild install` uses the first CLI it finds among `code-insiders`, `code`, and `cursor`. To pick one, pass `-Editor`, for example `qbuild install -Editor cursor`.
 
 `package` and `install` do not change the version.
 
