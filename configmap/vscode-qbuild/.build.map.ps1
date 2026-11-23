@@ -2,10 +2,10 @@
 
 @{
     "install" = @{
-        description = "Package the extension and install it into the local VS Code instance"
+        description = "Package the extension and install it into the local VS Code or Cursor instance"
         exec        = {
             param(
-                [ValidateSet('code-insiders', 'code')]
+                [ValidateSet('code-insiders', 'code', 'cursor')]
                 [string]$Editor
             )
 
@@ -22,12 +22,12 @@
             }
 
             if (-not $Editor) {
-                $Editor = @('code-insiders', 'code') |
+                $Editor = @('code-insiders', 'code', 'cursor') |
                     Where-Object { Get-Command $_ -ErrorAction SilentlyContinue } |
                     Select-Object -First 1
             }
             if (-not $Editor -or -not (Get-Command $Editor -ErrorAction SilentlyContinue)) {
-                throw "VS Code CLI '$Editor' was not found. Install the 'code' or 'code-insiders' command from the Command Palette."
+                throw "Editor CLI '$Editor' was not found. Install the 'code', 'code-insiders', or 'cursor' command from the Command Palette."
             }
 
             & $Editor --install-extension $vsix.FullName --force
