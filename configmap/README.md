@@ -525,7 +525,7 @@ Creates a `.configuration.map.ps1` file with sample configuration entries.
 }
 ```
 
-Option values in `appsettings`, `dotenv` and `user-secrets` entries can also pull from Bitwarden with `bw:{item}` (the item's password) or `bw:{item}/{field}`. `field` is `username`, `password`, `totp`, `uri`, `notes`, or the name of a custom field. It needs the `bw` CLI on PATH and an unlocked vault (`bw unlock`, then set `BW_SESSION`). If the lookup fails, a warning is shown and the literal `bw:...` stays; a `user-secrets` entry then refuses to write. Lookups are cached per process, and `list` / reading an entry never calls `bw`.
+Option values in `appsettings`, `dotenv` and `user-secrets` entries can also pull from Bitwarden with `bw:{item}` (the item's password) or `bw:{item}/{field}`. `field` is `username`, `password`, `totp`, `uri`, `notes`, or the name of a custom field. It needs the `bw` CLI on PATH and an unlocked vault (`bw unlock`, then set `BW_SESSION`). If the lookup fails, a warning is shown and the literal `bw:...` stays; a `user-secrets` entry then refuses to write. Lookups are cached per process, and `list` / reading an entry never calls `bw`. The status output masks keys filled from `bw:` as `********`; `-porcelain` still returns the real value.
 
 ```powershell
 options = @{ prod = @{ API_KEY = "bw:my-api/apikey"; DB_USER = "bw:my-db/username" } }

@@ -1222,7 +1222,7 @@ Describe 'qconf dotenv bw: option values' {
     api = @{
         _template = 'dotenv:.env'
         options = @{
-            prod = @{ API_KEY = 'bw:bw-e2e-item' }
+            prod = @{ API_URL = 'http://api.example'; API_KEY = 'bw:bw-e2e-item' }
         }
     }
 }
@@ -1237,5 +1237,30 @@ Describe 'qconf dotenv bw: option values' {
         qconf -map $script:mapFile api -value prod -ErrorAction Stop
 
         (Read-DotEnvFile $script:envFile)['API_KEY'] | Should -Be 'from-bitwarden'
+    }
+
+    It 'masks resolved bw: values in the status output but keeps other keys' {
+        $output = qconf -map $script:mapFile api -value prod -ErrorAction Stop 6>&1 | Out-String
+
+        $output | Should -Not -Match 'from-bitwarden'
+        $output | Should -Match 'API_URL'
+        $output | Should -Match 'http://api.example'
+        $output | Should -Match '\*\*\*'
+    }
+
+    It 'masks bw: values when showing the entry' {
+        qconf -map $script:mapFile api -value prod -ErrorAction Stop 6>$null
+
+        $output = qconf -map $script:mapFile api -ErrorAction Stop 6>&1 | Out-String
+
+        $output | Should -Not -Match 'from-bitwarden'
+    }
+
+    It 'still returns the real value in porcelain output' {
+        qconf -map $script:mapFile api -value prod -ErrorAction Stop 6>$null
+
+        $result = qconf -map $script:mapFile api -porcelain -ErrorAction Stop
+
+        $result.Value['API_KEY'] | Should -Be 'from-bitwarden'
     }
 }

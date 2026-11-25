@@ -109,7 +109,7 @@ Any option value in an `appsettings`, `dotenv` or `user-secrets` entry can be `b
 options = @{ prod = @{ API_KEY = "bw:my-api/apikey"; DB_USER = "bw:my-db/username" } }
 ```
 
-Needs the `bw` CLI on PATH and an unlocked vault (`bw unlock`, then `BW_SESSION`). A failed lookup warns and leaves the literal `bw:...`; a `user-secrets` entry throws instead of writing it. Option matching ignores `bw:` values, so `get` never calls `bw`.
+Needs the `bw` CLI on PATH and an unlocked vault (`bw unlock`, then `BW_SESSION`). A failed lookup warns and leaves the literal `bw:...`; a `user-secrets` entry throws instead of writing it. Option matching ignores `bw:` values, so `get` never calls `bw`. Status output masks keys filled from `bw:` as `********`; `-porcelain` still returns the real value.
 
 ### Keep / remove
 
