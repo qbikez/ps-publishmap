@@ -1,5 +1,10 @@
 BeforeAll {
+    . "$PSScriptRoot\..\functions\plugins.ps1"
     . "$PSScriptRoot\..\handlers\qconf\config-helpers.ps1"
+    . "$PSScriptRoot\..\functions\plugins-init.ps1" -PluginsPath "$PSScriptRoot\..\plugins"
+    # Standalone dot-sourcing has no module scope to lazy-load into: load the implementation directly.
+    . "$PSScriptRoot\..\plugins\plugin-bw\bw.ps1"
+    (Get-ConfigMapValuePrefix 'bw:').plugin.implementationLoaded = $true
 }
 
 Describe "bw: value prefix" {
