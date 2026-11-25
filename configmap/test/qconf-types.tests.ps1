@@ -1190,3 +1190,77 @@ Describe 'qbuild dotenv _template per-key entries' {
         (Read-DotEnvFile (Join-Path $script:workDir '.env'))['API_URL'] | Should -Be 'https://staging.example.com'
     }
 }
+
+Describe 'qconf dotenv bw: option values' {
+    BeforeAll {
+        # Global so the module-scope resolver sees it; shadows any real bw on PATH.
+        function global:bw {
+            $global:LASTEXITCODE = $global:BwTestExit
+            $global:BwTestOutput
+        }
+    }
+
+    AfterAll {
+        Remove-Item Function:\global:bw -ErrorAction SilentlyContinue
+        Remove-Variable BwTestExit, BwTestOutput -Scope Global -ErrorAction SilentlyContinue
+    }
+
+    BeforeEach {
+        $global:BwTestExit = 0
+        $global:BwTestOutput = 'from-bitwarden'
+
+        $script:workDir = Join-Path $TestDrive ("bw-" + [guid]::NewGuid().ToString('n'))
+        New-Item -ItemType Directory -Path $script:workDir -Force | Out-Null
+        Push-Location $script:workDir
+
+        $script:envFile = Join-Path $script:workDir '.env'
+        Write-DotEnvFile $script:envFile @{ API_KEY = 'old' }
+
+        $script:mapFile = Join-Path $script:workDir '.configuration.map.ps1'
+        Write-ConfigMapFile $script:mapFile @'
+@{
+    api = @{
+        _template = 'dotenv:.env'
+        options = @{
+            prod = @{ API_URL = 'http://api.example'; API_KEY = 'bw:bw-e2e-item' }
+        }
+    }
+}
+'@
+    }
+
+    AfterEach {
+        Pop-Location
+    }
+
+    It 'writes the Bitwarden secret into the .env file' {
+        qconf -map $script:mapFile api -value prod -ErrorAction Stop
+
+        (Read-DotEnvFile $script:envFile)['API_KEY'] | Should -Be 'from-bitwarden'
+    }
+
+    It 'masks resolved bw: values in the status output but keeps other keys' {
+        $output = qconf -map $script:mapFile api -value prod -ErrorAction Stop 6>&1 | Out-String
+
+        $output | Should -Not -Match 'from-bitwarden'
+        $output | Should -Match 'API_URL'
+        $output | Should -Match 'http://api.example'
+        $output | Should -Match '\*\*\*'
+    }
+
+    It 'masks bw: values when showing the entry' {
+        qconf -map $script:mapFile api -value prod -ErrorAction Stop 6>$null
+
+        $output = qconf -map $script:mapFile api -ErrorAction Stop 6>&1 | Out-String
+
+        $output | Should -Not -Match 'from-bitwarden'
+    }
+
+    It 'still returns the real value in porcelain output' {
+        qconf -map $script:mapFile api -value prod -ErrorAction Stop 6>$null
+
+        $result = qconf -map $script:mapFile api -porcelain -ErrorAction Stop
+
+        $result.Value['API_KEY'] | Should -Be 'from-bitwarden'
+    }
+}

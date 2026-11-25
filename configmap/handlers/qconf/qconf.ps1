@@ -356,7 +356,8 @@ function Invoke-QConf {
                     -EntryName $entryName `
                     -Result $result `
                     -Description $subEntry.description `
-                    -HasValidation ([bool]$subEntry.validate)
+                    -HasValidation ([bool]$subEntry.validate) `
+                    -SecretKey (Get-QConfSecretKey $options)
             }
             return
         }
@@ -447,7 +448,8 @@ function Invoke-QConf {
                                     -EntryName $entryName `
                                     -Result $result `
                                     -Description $subEntry.description `
-                                    -HasValidation ([bool]$subEntry.validate)
+                                    -HasValidation ([bool]$subEntry.validate) `
+                                    -SecretKey (Get-QConfSecretKey $options)
                             }
                         }
                         catch {
@@ -490,7 +492,24 @@ function Write-QConfEntryStatus {
         -EntryName $EntryName `
         -Result (ConvertTo-MapResult $current $EntryName $Entry $options) `
         -Description $Entry.description `
-        -HasValidation ([bool]$Entry.validate)
+        -HasValidation ([bool]$Entry.validate) `
+        -SecretKey (Get-QConfSecretKey $options)
+}
+
+function Get-QConfSecretKey {
+    <#
+    .SYNOPSIS
+        Keys that any option fills from a `bw:` reference, so their resolved values are not printed.
+    #>
+    param($Options)
+
+    $keys = foreach ($optionSet in $Options.Values) {
+        if ($optionSet -isnot [System.Collections.IDictionary]) { continue }
+        foreach ($key in $optionSet.Keys) {
+            if ("$($optionSet[$key])".StartsWith('bw:')) { $key }
+        }
+    }
+    return @($keys | Select-Object -Unique)
 }
 
 function Write-QConfStatus {
@@ -501,7 +520,8 @@ function Write-QConfStatus {
         $Result,
         [string]$Description,
         [bool]$HasValidation,
-        [switch]$NotRead
+        [switch]$NotRead,
+        [string[]]$SecretKey
     )
 
     Write-Host ""
@@ -517,14 +537,22 @@ function Write-QConfStatus {
     $active = @($Result.Active) -join ', '
     if (-not $active) { $active = if ($NotRead) { '<not read>' } else { '<none>' } }
 
-    $value = if ($Result.Value -is [System.Collections.IDictionary] -or $Result.Value -is [array]) {
-        $Result.Value | ConvertTo-Json -Compress -Depth 4
+    $displayValue = $Result.Value
+    if ($SecretKey -and $displayValue -is [System.Collections.IDictionary]) {
+        $displayValue = [ordered]@{}
+        foreach ($key in $Result.Value.Keys) {
+            $displayValue[$key] = if ($key -in $SecretKey) { '********' } else { $Result.Value[$key] }
+        }
     }
-    elseif ($null -eq $Result.Value) {
+
+    $value = if ($displayValue -is [System.Collections.IDictionary] -or $displayValue -is [array]) {
+        $displayValue | ConvertTo-Json -Compress -Depth 4
+    }
+    elseif ($null -eq $displayValue) {
         '<none>'
     }
     else {
-        [string]$Result.Value
+        [string]$displayValue
     }
 
     $rows = [System.Collections.Generic.List[object]]::new()

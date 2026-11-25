@@ -83,7 +83,7 @@ function set-appsettings(
 function test-isSpecialValue($v) {
     if (!$v) { return $false }
     if ($v -is [string]) {
-        return $v.StartsWith("user-secrets:") -or $v.StartsWith("keyvault:")
+        return $v.StartsWith("user-secrets:") -or $v.StartsWith("keyvault:") -or $v.StartsWith("bw:")
     }
     return $false
 }
@@ -174,6 +174,14 @@ function resolve-value($v, [switch]$recurse, [string]$dir, [hashtable]$secrets) 
 
             return $v
         }
+
+        if ($v.StartsWith("bw:")) {
+            $splits = $v.Substring("bw:".Length) -split '/', 2
+            $secret = get-bwSecret $splits[0] $splits[1]
+            if ($null -eq $secret) { return $v }
+
+            return $secret
+        }
     }
     elseif ($v -is [hashtable]) {
         if ($recurse) {
@@ -226,6 +234,54 @@ function get-keyvaultSecret($vaultName, $secretName) {
         Write-Warning "Error accessing Key Vault: $($_.Exception.Message)"
         return $null
     }
+}
+
+# Per-process cache: `bw` takes about a second per call and maps often repeat an item.
+$script:bwSecretCache = @{}
+
+function get-bwSecret($item, $field) {
+    $cacheKey = "$item/$field"
+    if ($script:bwSecretCache.ContainsKey($cacheKey)) { return $script:bwSecretCache[$cacheKey] }
+
+    if (!(Get-Command bw -ErrorAction SilentlyContinue)) {
+        Write-Warning "Cannot read '$item' from Bitwarden: the 'bw' CLI was not found on PATH."
+        return $null
+    }
+
+    $builtIn = @{ '' = 'password'; 'password' = 'password'; 'username' = 'username'; 'totp' = 'totp'; 'uri' = 'uri'; 'notes' = 'notes' }
+    $builtInName = $builtIn["$field"]
+
+    try {
+        # Output is captured, never forwarded, so the secret cannot leak into warnings.
+        if ($builtInName) {
+            $secret = bw get $builtInName $item --nointeraction 2>$null
+        }
+        else {
+            $json = bw get item $item --nointeraction 2>$null
+        }
+        $failed = $LASTEXITCODE -ne 0
+    }
+    catch {
+        Write-Warning "Error accessing Bitwarden: $($_.Exception.Message)"
+        return $null
+    }
+
+    if ($failed) {
+        Write-Warning "Failed to read '$item' from Bitwarden. The item may not exist or the vault is locked: run 'bw unlock' and set BW_SESSION."
+        return $null
+    }
+
+    if (!$builtInName) {
+        $match = @(($json | ConvertFrom-Json).fields | Where-Object { $_.name -eq $field })
+        if ($match.Count -eq 0) {
+            Write-Warning "Bitwarden item '$item' has no custom field '$field'."
+            return $null
+        }
+        $secret = $match[0].value
+    }
+
+    $script:bwSecretCache[$cacheKey] = $secret
+    return $secret
 }
 
 function get-envsetting($key, $envFile = ".env") {
