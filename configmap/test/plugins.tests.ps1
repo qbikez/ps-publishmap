@@ -142,3 +142,57 @@ function script:get-fakeValue($ref) { if ($ref -eq 'missing') { return $null }; 
         }
     }
 }
+
+Describe "plugin value prefix resolve context" {
+    It "passes the caller's context to resolve" {
+        InModuleScope ConfigMap {
+            $saved = $script:ConfigMapValuePrefixes
+            try {
+                $script:ConfigMapValuePrefixes = @{
+                    'ctx:' = @{ plugin = @{ name = 'ctx' }; resolve = { param($Reference, $Context) "$Reference@$($Context.Directory)" } }
+                }
+                resolve-value 'ctx:a' -dir 'some/dir' | Should -Be 'a@some/dir'
+            }
+            finally { $script:ConfigMapValuePrefixes = $saved }
+        }
+    }
+}
+
+Describe "Import-ConfigMapPlugin" {
+    BeforeEach {
+        # Other test files swap the plugin list; start from the real plugins.
+        InModuleScope ConfigMap {
+            $script:savedPlugins = $script:ConfigMapPlugins
+            $script:savedPrefixes = $script:ConfigMapValuePrefixes
+            . "$PSScriptRoot\..\functions\plugins-init.ps1" -PluginsPath "$PSScriptRoot\..\plugins"
+        }
+    }
+
+    AfterEach {
+        InModuleScope ConfigMap {
+            $script:ConfigMapPlugins = $script:savedPlugins
+            $script:ConfigMapValuePrefixes = $script:savedPrefixes
+        }
+    }
+
+    It "loads a plugin implementation by name" {
+        InModuleScope ConfigMap {
+            Import-ConfigMapPlugin 'user-secrets'
+            Get-Command get-user-secrets -ErrorAction SilentlyContinue | Should -Not -BeNullOrEmpty
+        }
+    }
+
+    It "throws for an unknown plugin" {
+        InModuleScope ConfigMap {
+            { Import-ConfigMapPlugin 'nope' } | Should -Throw "*not found*"
+        }
+    }
+
+    It "registers user-secrets: as a prefix that is not masked" {
+        InModuleScope ConfigMap {
+            $prefix = Get-ConfigMapValuePrefix 'user-secrets:'
+            $prefix | Should -Not -BeNullOrEmpty
+            $prefix.secret | Should -BeFalse
+        }
+    }
+}
