@@ -729,3 +729,22 @@ Run the test suite:
 ```powershell
 Invoke-Pester .\configmap.tests.ps1
 ```
+
+## Plugins: value prefixes
+
+A plugin (`plugins/<name>/_plugin.ps1`, returning a hashtable) can claim option value prefixes such as `bw:` (see `plugins/plugin-bw`):
+
+```powershell
+@{
+    name           = 'bw'
+    implementation = 'bw.ps1'   # loaded lazily, on the first value that uses a claimed prefix
+    valuePrefixes  = @{
+        'bw:' = @{
+            secret  = $true     # mask keys filled from this prefix in qconf status output
+            resolve = { param($Reference) ... }   # return the value, or $null to keep the literal
+        }
+    }
+}
+```
+
+The manifest is read at import, so prefixes are recognised (and never resolved) by `list` and entry reads without loading the implementation. The implementation file is dot-sourced in a child scope of the module: declare what it exposes as `function script:name` and keep state in `$script:`. If two plugins claim a prefix, the lower `priority` wins and a warning is shown.

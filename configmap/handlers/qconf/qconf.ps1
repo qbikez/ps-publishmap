@@ -499,14 +499,16 @@ function Write-QConfEntryStatus {
 function Get-QConfSecretKey {
     <#
     .SYNOPSIS
-        Keys that any option fills from a `bw:` reference, so their resolved values are not printed.
+        Keys that any option fills from a secret-bearing plugin prefix (e.g. `bw:`), so their resolved values are not printed.
     #>
     param($Options)
 
+    $secretPrefixes = Get-ConfigMapSecretValuePrefix
     $keys = foreach ($optionSet in $Options.Values) {
         if ($optionSet -isnot [System.Collections.IDictionary]) { continue }
         foreach ($key in $optionSet.Keys) {
-            if ("$($optionSet[$key])".StartsWith('bw:')) { $key }
+            $value = "$($optionSet[$key])"
+            if ($secretPrefixes | Where-Object { $value.StartsWith($_) }) { $key }
         }
     }
     return @($keys | Select-Object -Unique)
