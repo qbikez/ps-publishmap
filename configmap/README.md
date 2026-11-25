@@ -747,6 +747,8 @@ A plugin (`plugins/<name>/_plugin.ps1`, returning a hashtable) can claim option 
 }
 ```
 
+The shipped prefixes are `bw:` (`plugin-bw`), `user-secrets:` (`plugin-user-secrets`) and `keyvault:{vault}/{secret}` (`plugin-keyvault`, reads Azure Key Vault with `az`; masked like `bw:`).
+
 `$Context` carries what the caller knows: `Directory` and an already-listed `Secrets` table (used by `plugin-user-secrets`). Core code that calls a plugin's functions directly loads it first with `Import-ConfigMapPlugin <name>`.
 
 The manifest is read at import, so prefixes are recognised (and never resolved) by `list` and entry reads without loading the implementation. The implementation file is dot-sourced in a child scope of the module: declare what it exposes as `function script:name` and keep state in `$script:`. If two plugins claim a prefix, the lower `priority` wins and a warning is shown.
