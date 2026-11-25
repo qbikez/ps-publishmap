@@ -101,6 +101,16 @@ Long form: `_template = @{ type = "user-secrets"; csproj = "src/App/App.csproj" 
 
 `qbuild list` does not read these entries: it shows `<not read>` and the option names. Query the entry (`qbuild <entry>`) to see the active option and its value.
 
+### Bitwarden values → `bw:`
+
+Any option value in an `appsettings`, `dotenv` or `user-secrets` entry can be `bw:{item}` (the item's password) or `bw:{item}/{field}`, where `field` is `username`, `password`, `totp`, `uri`, `notes` or a custom field name:
+
+```powershell
+options = @{ prod = @{ API_KEY = "bw:my-api/apikey"; DB_USER = "bw:my-db/username" } }
+```
+
+Needs the `bw` CLI on PATH and an unlocked vault (`bw unlock`, then `BW_SESSION`). A failed lookup warns and leaves the literal `bw:...`; a `user-secrets` entry throws instead of writing it. Option matching ignores `bw:` values, so `get` never calls `bw`.
+
 ### Keep / remove
 
 - **Keep:** `description`, `options`, `validate`, `_settings`, `_cacheDependsOn`.

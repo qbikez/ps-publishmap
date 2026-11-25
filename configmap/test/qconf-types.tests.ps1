@@ -1190,3 +1190,52 @@ Describe 'qbuild dotenv _template per-key entries' {
         (Read-DotEnvFile (Join-Path $script:workDir '.env'))['API_URL'] | Should -Be 'https://staging.example.com'
     }
 }
+
+Describe 'qconf dotenv bw: option values' {
+    BeforeAll {
+        # Global so the module-scope resolver sees it; shadows any real bw on PATH.
+        function global:bw {
+            $global:LASTEXITCODE = $global:BwTestExit
+            $global:BwTestOutput
+        }
+    }
+
+    AfterAll {
+        Remove-Item Function:\global:bw -ErrorAction SilentlyContinue
+        Remove-Variable BwTestExit, BwTestOutput -Scope Global -ErrorAction SilentlyContinue
+    }
+
+    BeforeEach {
+        $global:BwTestExit = 0
+        $global:BwTestOutput = 'from-bitwarden'
+
+        $script:workDir = Join-Path $TestDrive ("bw-" + [guid]::NewGuid().ToString('n'))
+        New-Item -ItemType Directory -Path $script:workDir -Force | Out-Null
+        Push-Location $script:workDir
+
+        $script:envFile = Join-Path $script:workDir '.env'
+        Write-DotEnvFile $script:envFile @{ API_KEY = 'old' }
+
+        $script:mapFile = Join-Path $script:workDir '.configuration.map.ps1'
+        Write-ConfigMapFile $script:mapFile @'
+@{
+    api = @{
+        _template = 'dotenv:.env'
+        options = @{
+            prod = @{ API_KEY = 'bw:bw-e2e-item' }
+        }
+    }
+}
+'@
+    }
+
+    AfterEach {
+        Pop-Location
+    }
+
+    It 'writes the Bitwarden secret into the .env file' {
+        qconf -map $script:mapFile api -value prod -ErrorAction Stop
+
+        (Read-DotEnvFile $script:envFile)['API_KEY'] | Should -Be 'from-bitwarden'
+    }
+}
