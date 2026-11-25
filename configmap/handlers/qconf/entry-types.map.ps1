@@ -1,24 +1,29 @@
 # Built-in get/set implementations for Entry._template types.
+# appconfig and dotenv take an optional `userSecretsId` in the template: `user-secrets:{name}`
+# option values are then read with `dotnet user-secrets --id`, so no project file is needed.
 return [ordered]@{
     appconfig      = @{
         get = {
             param($ctx, $options, $_context)
             $file = Get-ConfigEntryTemplateFile -Entry $_context.self -TypeName 'appconfig'
-            Find-ActiveOption -file $file -options $options
+            $id = (Get-ConfigEntryTemplate -Entry $_context.self).userSecretsId
+            Find-ActiveAppConfigOption -File $file -Options $options -UserSecretsId $id
         }
         set = {
             param($ctx, $key, $value, $_context)
             $file = Get-ConfigEntryTemplateFile -Entry $_context.self -TypeName 'appconfig'
-            Set-AppConfigOption -File $file -Values $value
+            $id = (Get-ConfigEntryTemplate -Entry $_context.self).userSecretsId
+            Set-AppConfigOption -File $file -Values $value -UserSecretsId $id
         }
     }
     dotenv         = @{
         get = {
             param($ctx, $options, $_context)
+            $template = Get-ConfigEntryTemplate -Entry $_context.self
             $file = Get-ConfigEntryTemplateFile -Entry $_context.self -TypeName 'dotenv'
-            $result = Find-ActiveEnvOption -File $file -Options $options
+            $result = Find-ActiveEnvOption -File $file -Options $options -UserSecretsId $template.userSecretsId
             # Excluded keys still decide the active preset, but their values are never shown.
-            $excluded = @((Get-ConfigEntryTemplate -Entry $_context.self).exclude | Where-Object { $_ })
+            $excluded = @($template.exclude | Where-Object { $_ })
             foreach ($key in @($result.Value.Keys)) {
                 if ($excluded | Where-Object { $key -like $_ }) { $result.Value.Remove($key) }
             }
@@ -27,7 +32,8 @@ return [ordered]@{
         set = {
             param($ctx, $key, $value, $_context)
             $file = Get-ConfigEntryTemplateFile -Entry $_context.self -TypeName 'dotenv'
-            Set-DotEnvOption -File $file -Values $value
+            $id = (Get-ConfigEntryTemplate -Entry $_context.self).userSecretsId
+            Set-DotEnvOption -File $file -Values $value -UserSecretsId $id
         }
     }
     'user-secrets' = @{
