@@ -83,7 +83,7 @@ function set-appsettings(
 function test-isSpecialValue($v) {
     if (!$v) { return $false }
     if ($v -is [string]) {
-        if ($v.StartsWith("user-secrets:") -or $v.StartsWith("keyvault:")) { return $true }
+        if ($v.StartsWith("keyvault:")) { return $true }
 
         foreach ($prefix in Get-ConfigMapValuePrefix) {
             if ($v.StartsWith($prefix)) { return $true }
@@ -153,25 +153,6 @@ function resolve-value($v, [switch]$recurse, [string]$dir, [hashtable]$secrets) 
     if ($v -is [string]) {
         if (!(test-isSpecialValue $v)) { return $v }
 
-        if ($v.StartsWith("user-secrets:")) {
-            $secretName = $v.Substring("user-secrets:".Length)
-
-            if ($null -eq $secrets) {
-                $secrets = get-user-secrets $dir
-                if ($LASTEXITCODE -ne 0) {
-                    write-warning "cannot set '$secretName': failed to list user secrets for project in '$dir'. Do you have 'dotnet user-secrets' installed?"
-                    return $v
-                }
-            }
-            if (!$secrets.ContainsKey($secretName)) {
-                write-warning "secret '$secretName' not found in user secrets. Please run 'dotnet user-secrets -p $dir set $secretName <value>' to set the secret."
-                return $v
-            }
-            $v = $secrets[$secretName]
-
-            return $v
-        }
-
         if ($v.StartsWith("keyvault:")) {
             $splits = $v.Substring("keyvault:".Length).Split("/")
             $v = get-keyvaultSecret $splits[0] $splits[1]
@@ -182,7 +163,7 @@ function resolve-value($v, [switch]$recurse, [string]$dir, [hashtable]$secrets) 
         foreach ($prefix in Get-ConfigMapValuePrefix) {
             if (-not $v.StartsWith($prefix)) { continue }
 
-            $resolved = Resolve-ConfigMapPluginValue $v
+            $resolved = Resolve-ConfigMapPluginValue $v -Context @{ Directory = $dir; Secrets = $secrets }
             if ($null -eq $resolved) { return $v }
 
             return $resolved
@@ -200,28 +181,6 @@ function resolve-value($v, [switch]$recurse, [string]$dir, [hashtable]$secrets) 
     }
 
     return $v
-}
-
-function get-user-secrets($dir) {
-    $secrets = @{}
-    
-    try {
-        $output = dotnet user-secrets list --project $dir 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            return $secrets
-        }
-        
-        foreach ($line in $output) {
-            if ($line -match "^(.+?)\s*=\s*(.*)$") {
-                $secrets[$matches[1]] = $matches[2]
-            }
-        }
-    }
-    catch {
-        Write-Warning "Failed to retrieve user secrets: $($_.Exception.Message)"
-    }
-    
-    return $secrets
 }
 
 function get-keyvaultSecret($vaultName, $secretName) {
