@@ -741,10 +741,12 @@ A plugin (`plugins/<name>/_plugin.ps1`, returning a hashtable) can claim option 
     valuePrefixes  = @{
         'bw:' = @{
             secret  = $true     # mask keys filled from this prefix in qconf status output
-            resolve = { param($Reference) ... }   # return the value, or $null to keep the literal
+            resolve = { param($Reference, $Context) ... }   # return the value, or $null to keep the literal
         }
     }
 }
 ```
+
+`$Context` carries what the caller knows: `Directory` and an already-listed `Secrets` table (used by `plugin-user-secrets`). Core code that calls a plugin's functions directly loads it first with `Import-ConfigMapPlugin <name>`.
 
 The manifest is read at import, so prefixes are recognised (and never resolved) by `list` and entry reads without loading the implementation. The implementation file is dot-sourced in a child scope of the module: declare what it exposes as `function script:name` and keep state in `$script:`. If two plugins claim a prefix, the lower `priority` wins and a warning is shown.

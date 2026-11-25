@@ -66,19 +66,31 @@ function Import-ConfigMapPluginImplementation {
     $Plugin.implementationLoaded = $true
 }
 
+function Import-ConfigMapPlugin {
+    <#
+    .SYNOPSIS
+        Loads a plugin's implementation by name, for core code that calls its functions directly.
+    #>
+    param([Parameter(Mandatory = $true)][string]$Name)
+
+    $plugin = $script:ConfigMapPlugins | Where-Object { $_.name -eq $Name } | Select-Object -First 1
+    if (-not $plugin) { throw "Plugin '$Name' not found." }
+    Import-ConfigMapPluginImplementation $plugin
+}
+
 function Resolve-ConfigMapPluginValue {
     <#
     .SYNOPSIS
         Resolves a value starting with a registered plugin prefix; $null when it is not one or cannot be resolved.
     #>
-    param([string]$Value)
+    param([string]$Value, [hashtable]$Context = @{})
 
     foreach ($prefix in $script:ConfigMapValuePrefixes.Keys) {
         if (-not $Value.StartsWith($prefix)) { continue }
 
         $entry = $script:ConfigMapValuePrefixes[$prefix]
         Import-ConfigMapPluginImplementation $entry.plugin
-        return & $entry.resolve $Value.Substring($prefix.Length)
+        return & $entry.resolve $Value.Substring($prefix.Length) $Context
     }
     return $null
 }

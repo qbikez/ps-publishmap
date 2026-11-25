@@ -168,6 +168,7 @@ function Get-ProjectUserSecret {
         [string]$Csproj
     )
 
+    Import-ConfigMapPlugin 'user-secrets'
     $secrets = get-user-secrets $Csproj
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to list user secrets for '$Csproj'. Does it define a UserSecretsId, and is 'dotnet user-secrets' available?"
