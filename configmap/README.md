@@ -543,6 +543,8 @@ Option values in `appsettings`, `dotenv` and `user-secrets` entries can also pul
 options = @{ prod = @{ API_KEY = "bw:my-api/apikey"; DB_USER = "bw:my-db/username" } }
 ```
 
+`user-secrets:{name}` values are listed with `dotnet user-secrets list --json` (values may contain `=` or newlines) and cached per process until the store's `secrets.json` changes.
+
 Author-supplied `get` / `set` always win over the template fill-in. Template implementations stay on `$_context.base` (`$_context.base.get` / `$_context.base.set`) so overrides can wrap them. See `samples/process-mixed` (`endpoint_override`) and `qbuild !agent.skills qbuild-templates`.
 
 ### Configuration Usage
@@ -598,6 +600,16 @@ Returns structured command metadata for agents and automation:
 Get-ConfigMapCommandCatalog -Map $buildMap -Language build
 Get-ConfigMapCommandCatalog -Map $buildMap -Path build -Language build
 ```
+
+### Resolve-ConfigMapValue
+Resolves value references (`keyvault:` and every [plugin prefix](#plugins-value-prefixes), such as `bw:` and `user-secrets:`) outside qconf, e.g. in a build-map `exec`:
+```powershell
+Resolve-ConfigMapValue [-Value] <string|IDictionary> [-Directory <dir>] [-UserSecretsId <id>] [-Required]
+
+$env:API_KEY = Resolve-ConfigMapValue "bw:my-api/apikey" -Required
+$db = Resolve-ConfigMapValue @{ user = "user-secrets:Db:User"; conn = @{ main = "user-secrets:Db:Conn" } } -UserSecretsId my-app
+```
+A plain string comes back unchanged. A dictionary is resolved recursively and returned as the same kind (hashtable or ordered) with the same keys. An unresolved reference warns and stays as the original string. `-Directory` is the .NET project for `user-secrets:` (default: the current directory); `-UserSecretsId` reads them by id instead. `-Required` throws when any value is still null or a reference; the message names the keys and references (`conn.main: user-secrets:Db:Conn`), never a value.
 
 ## Entry Types
 
@@ -759,6 +771,6 @@ A plugin (`plugins/<name>/_plugin.ps1`, returning a hashtable) can claim option 
 }
 ```
 
-`$Context` carries what the caller knows: `Directory`, the template's `UserSecretsId` and an already-listed `Secrets` table (used by `plugin-user-secrets`). Core code that calls a plugin's functions directly loads it first with `Import-ConfigMapPlugin <name>`.
+`$Context` carries what the caller knows: `Directory`, the template's `UserSecretsId` (or `Resolve-ConfigMapValue -UserSecretsId`) and an already-listed `Secrets` table (used by `plugin-user-secrets`). Every prefix is resolved by qconf templates and by the exported `Resolve-ConfigMapValue`. Core code that calls a plugin's functions directly loads it first with `Import-ConfigMapPlugin <name>`.
 
 The manifest is read at import, so prefixes are recognised (and never resolved) by `list` and entry reads without loading the implementation. The implementation file is dot-sourced in a child scope of the module: declare what it exposes as `function script:name` and keep state in `$script:`. If two plugins claim a prefix, the lower `priority` wins and a warning is shown.

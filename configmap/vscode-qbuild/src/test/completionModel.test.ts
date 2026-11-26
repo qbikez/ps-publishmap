@@ -119,7 +119,7 @@ test("offers _template table keys for the declared type", () => {
   ]);
   assert.deepEqual(
     labels("@{ api = @{\n _template = @{\n  type = 'dotenv'\n  |\n }\n} }"),
-    ["file", "keys", "exclude"],
+    ["file", "keys", "exclude", "userSecretsId"],
   );
   assert.deepEqual(
     labels("@{ api = @{\n _template = @{ type = 'user-secrets'; | }\n} }"),
