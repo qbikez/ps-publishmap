@@ -195,11 +195,11 @@ Describe "Import-ConfigMapPlugin" {
         }
     }
 
-    It "registers user-secrets: as a prefix that is not masked" {
+    It "registers user-secrets: as a masked prefix" {
         InModuleScope ConfigMap {
             $prefix = Get-ConfigMapValuePrefix 'user-secrets:'
             $prefix | Should -Not -BeNullOrEmpty
-            $prefix.secret | Should -BeFalse
+            $prefix.secret | Should -BeTrue
         }
     }
 }
