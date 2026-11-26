@@ -968,6 +968,91 @@ Describe 'qconf user-secrets _template' {
     }
 }
 
+Describe 'qconf user-secrets: values in dotenv and appsettings templates' {
+    BeforeEach {
+        $script:workDir = Join-Path $TestDrive ("secrets-id-" + [guid]::NewGuid().ToString('n'))
+        New-Item -ItemType Directory -Path $script:workDir -Force | Out-Null
+        Push-Location $script:workDir
+
+        # No project file: the store is named by userSecretsId alone.
+        $script:secretsId = "configmap-test-" + [guid]::NewGuid().ToString('n')
+        dotnet user-secrets set 'db_remote' 'postgres://remote' --id $script:secretsId | Out-Null
+
+        $script:envFile = Join-Path $script:workDir '.env'
+        Write-DotEnvFile $script:envFile @{ DATABASE_URL = 'postgres://local' }
+        '{ "Db": { "Conn": "postgres://local" } }' | Set-Content -LiteralPath (Join-Path $script:workDir 'appsettings.json')
+
+        $script:mapFile = Join-Path $script:workDir '.configuration.map.ps1'
+        Write-ConfigMapFile $script:mapFile (@'
+@{
+    db = @{
+        _template = @{ type = 'dotenv'; file = '.env'; userSecretsId = '__ID__' }
+        options = [ordered]@{
+            local  = @{ DATABASE_URL = 'postgres://local' }
+            remote = @{ DATABASE_URL = 'user-secrets:db_remote' }
+            gone   = @{ DATABASE_URL = 'user-secrets:db_missing' }
+        }
+    }
+    app = @{
+        _template = @{ type = 'appconfig'; file = 'appsettings.json'; userSecretsId = '__ID__' }
+        options = [ordered]@{
+            local  = @{ 'Db:Conn' = 'postgres://local' }
+            remote = @{ 'Db:Conn' = 'user-secrets:db_remote' }
+        }
+    }
+    noid = @{
+        _template = 'dotenv:.env'
+        options = @{ remote = @{ DATABASE_URL = 'user-secrets:db_remote' } }
+    }
+}
+'@ -replace '__ID__', $script:secretsId)
+    }
+
+    AfterEach {
+        dotnet user-secrets clear --id $script:secretsId 2>&1 | Out-Null
+        Pop-Location
+    }
+
+    It 'writes the secret named by userSecretsId into the .env file' {
+        qconf -map $script:mapFile db -value remote -ErrorAction Stop
+
+        (Read-DotEnvFile $script:envFile)['DATABASE_URL'] | Should -Be 'postgres://remote'
+    }
+
+    It 'matches a user-secrets: option by its resolved value' {
+        $result = qconf -map $script:mapFile db -porcelain -ErrorAction Stop
+        @($result.Active) | Should -Contain 'local'
+
+        Write-DotEnvFile $script:envFile @{ DATABASE_URL = 'postgres://elsewhere' }
+        $result = qconf -map $script:mapFile db -porcelain -ErrorAction Stop
+        $result.Active | Should -BeNullOrEmpty
+
+        qconf -map $script:mapFile db -value remote -ErrorAction Stop
+        $result = qconf -map $script:mapFile db -porcelain -ErrorAction Stop
+        @($result.Active) | Should -Contain 'remote'
+    }
+
+    It 'throws and keeps the file when a referenced secret is missing' {
+        { qconf -map $script:mapFile db -value gone -ErrorAction Stop } | Should -Throw '*db_missing*'
+
+        (Read-DotEnvFile $script:envFile)['DATABASE_URL'] | Should -Be 'postgres://local'
+    }
+
+    It 'throws instead of writing the reference when no store can be listed' {
+        { qconf -map $script:mapFile noid -value remote -ErrorAction Stop } | Should -Throw '*user secrets*'
+
+        (Read-DotEnvFile $script:envFile)['DATABASE_URL'] | Should -Be 'postgres://local'
+    }
+
+    It 'resolves user-secrets: values in an appsettings template' {
+        qconf -map $script:mapFile app -value remote -ErrorAction Stop
+
+        (Get-Content -Raw (Join-Path $script:workDir 'appsettings.json') | ConvertFrom-Json).Db.Conn | Should -Be 'postgres://remote'
+        $result = qconf -map $script:mapFile app -porcelain -ErrorAction Stop
+        @($result.Active) | Should -Contain 'remote'
+    }
+}
+
 Describe 'qconf dotenv _template option discovery' {
     BeforeEach {
         $script:workDir = Join-Path $TestDrive ("dotenv-auto-" + [guid]::NewGuid().ToString('n'))

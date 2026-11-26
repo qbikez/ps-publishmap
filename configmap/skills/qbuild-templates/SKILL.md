@@ -101,6 +101,22 @@ Long form: `_template = @{ type = "user-secrets"; csproj = "src/App/App.csproj" 
 
 `qbuild list` does not read these entries: it shows `<not read>` and the option names. Query the entry (`qbuild <entry>`) to see the active option and its value.
 
+### User-secret values in `dotenv` / `appsettings` → `userSecretsId`
+
+A `user-secrets:{name}` value in a `dotenv` or `appsettings` entry is copied from `dotnet user-secrets` into the file. Name the store with `userSecretsId` (read with `--id`, no project needed); without it the project in the file's directory is used:
+
+```powershell
+"db" = @{
+    _template = @{ type = "dotenv"; file = ".env.local"; userSecretsId = "my-app" }
+    options   = @{
+        local  = @{ DATABASE_URL = "postgres://localhost/app" }
+        shared = @{ DATABASE_URL = "user-secrets:DATABASE_URL_shared" }
+    }
+}
+```
+
+`set` throws and writes nothing if a secret is missing or the store can't be listed. `get` lists the store once and matches `user-secrets:` options by their value (a missing secret never matches); if listing fails they match any value.
+
 ### Bitwarden values → `bw:`
 
 Any option value in an `appsettings`, `dotenv` or `user-secrets` entry can be `bw:{item}` (the item's password) or `bw:{item}/{field}`, where `field` is `username`, `password`, `totp`, `uri`, `notes` or a custom field name:

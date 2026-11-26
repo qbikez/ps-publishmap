@@ -103,7 +103,9 @@ function Get-AppsettingsObject(
 function Find-ActiveOption(
     [Parameter(Mandatory = $true, ParameterSetName = "file")][string]$file,
     [Parameter(Mandatory = $true, ParameterSetName = "settings")][object]$appSettings,
-    [Parameter(Mandatory = $true)]$options
+    [Parameter(Mandatory = $true)]$options,
+    # Listed user secrets: `user-secrets:` option values then match by their resolved value.
+    [hashtable]$secrets
 ) {
     if (!$appSettings) {
         $appSettings = get-content $file | convertfrom-json -AsHashtable
@@ -129,6 +131,10 @@ function Find-ActiveOption(
             }
 
             $optionValue = $option.$key
+            if ($null -ne $secrets -and "$optionValue".StartsWith('user-secrets:')) {
+                $optionValue = Resolve-UserSecretReference $optionValue $secrets
+                if ($null -eq $optionValue) { $isMatch = $false }
+            }
 
             Write-Verbose "checking key $key=$currentValue"
 
@@ -147,7 +153,7 @@ function Find-ActiveOption(
     return @{ Value = $valueObject; Active = $active }
 }
 
-function resolve-value($v, [switch]$recurse, [string]$dir, [hashtable]$secrets) {
+function resolve-value($v, [switch]$recurse, [string]$dir, [hashtable]$secrets, [string]$userSecretsId) {
     if (!$v) { return $v }
 
     if ($v -is [string]) {
@@ -163,7 +169,7 @@ function resolve-value($v, [switch]$recurse, [string]$dir, [hashtable]$secrets) 
         foreach ($prefix in Get-ConfigMapValuePrefix) {
             if (-not $v.StartsWith($prefix)) { continue }
 
-            $resolved = Resolve-ConfigMapPluginValue $v -Context @{ Directory = $dir; Secrets = $secrets }
+            $resolved = Resolve-ConfigMapPluginValue $v -Context @{ Directory = $dir; Secrets = $secrets; UserSecretsId = $userSecretsId }
             if ($null -eq $resolved) { return $v }
 
             return $resolved
@@ -173,7 +179,7 @@ function resolve-value($v, [switch]$recurse, [string]$dir, [hashtable]$secrets) 
         if ($recurse) {
             $result = [ordered]@{}
             foreach ($key in $v.keys) {
-                $result[$key] = resolve-value $v[$key] -recurse:$recurse -dir $dir -secrets $secrets
+                $result[$key] = resolve-value $v[$key] -recurse:$recurse -dir $dir -secrets $secrets -userSecretsId $userSecretsId
             }
             return $result
         }

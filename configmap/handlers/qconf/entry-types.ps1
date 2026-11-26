@@ -190,14 +190,89 @@ function Find-ActiveSecretOption {
 
     return Find-MatchingOption -Options $Options -GetValue { param($key) $secrets[$key] } -GetExpected {
         param($optionValue)
-
-        if (-not "$optionValue".StartsWith('user-secrets:')) { return $optionValue }
-
-        $resolved = resolve-value $optionValue -secrets $secrets 3>$null
-        # Still a reference means the secret is missing, so this option cannot be active.
-        if (test-isSpecialValue $resolved) { return $null }
-        return $resolved
+        Resolve-UserSecretReference $optionValue $secrets
     }
+}
+
+function Resolve-UserSecretReference {
+    <#
+    .SYNOPSIS
+        The value a `user-secrets:` option value stands for, looked up in already-listed secrets;
+        $null when the secret is missing. Any other value is returned as is.
+    #>
+    param($OptionValue, [hashtable]$Secrets)
+
+    if (-not "$OptionValue".StartsWith('user-secrets:')) { return $OptionValue }
+
+    $resolved = resolve-value $OptionValue -secrets $Secrets 3>$null
+    # Still a reference means the secret is missing, so this option cannot be active.
+    if (test-isSpecialValue $resolved) { return $null }
+    return $resolved
+}
+
+function Get-ReferencedUserSecret {
+    <#
+    .SYNOPSIS
+        Lists the user secrets once when any of $Values is a `user-secrets:` reference; $null when
+        none is, or when listing fails. `-UserSecretsId` reads that store, else the project in `-Directory`.
+    #>
+    param(
+        [object[]]$Values,
+        [string]$Directory,
+        [string]$UserSecretsId
+    )
+
+    if (-not @($Values | Where-Object { "$_".StartsWith('user-secrets:') })) { return $null }
+
+    Import-ConfigMapPlugin 'user-secrets'
+    $secrets = get-user-secrets $Directory -Id $UserSecretsId
+    if ($LASTEXITCODE -ne 0) {
+        Write-Verbose "Failed to list user secrets ($(format-user-secrets-target $Directory -Id $UserSecretsId))."
+        return $null
+    }
+    return $secrets
+}
+
+function Get-OptionValueList {
+    # Every value of every option, for spotting `user-secrets:` references.
+    param($Options)
+
+    foreach ($option in @($Options.Values)) {
+        if ($option -is [System.Collections.IDictionary]) { $option.Values }
+    }
+}
+
+function Resolve-FileOptionValues {
+    <#
+    .SYNOPSIS
+        Resolve every value of an option before a file is written, so a missing
+        `user-secrets:` reference throws and writes nothing.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Collections.IDictionary]$Values,
+        [string]$Directory,
+        [string]$UserSecretsId
+    )
+
+    $references = @($Values.Values | Where-Object { "$_".StartsWith('user-secrets:') })
+    $secrets = Get-ReferencedUserSecret -Values $references -Directory $Directory -UserSecretsId $UserSecretsId
+    if ($references -and $null -eq $secrets) {
+        Import-ConfigMapPlugin 'user-secrets'
+        throw "Failed to list user secrets ($(format-user-secrets-target $Directory -Id $UserSecretsId)). Set the template's userSecretsId, or check that the project defines a UserSecretsId and 'dotnet user-secrets' is available."
+    }
+
+    $resolved = [ordered]@{}
+    foreach ($key in @($Values.Keys)) {
+        if ("$key".StartsWith('__')) { continue }
+
+        $value = resolve-value $Values[$key] -dir $Directory -secrets $secrets -userSecretsId $UserSecretsId
+        if ("$value".StartsWith('user-secrets:')) {
+            throw "Cannot set '$key': user secret '$("$value".Substring('user-secrets:'.Length))' not found ($(format-user-secrets-target $Directory -Id $UserSecretsId))."
+        }
+        $resolved[$key] = $value
+    }
+    return $resolved
 }
 
 function Set-UserSecretOption {
@@ -242,20 +317,31 @@ function Set-AppConfigOption {
     param(
         [Parameter(Mandatory = $true)]
         [string]$File,
-        $Values
+        $Values,
+        [string]$UserSecretsId
     )
 
     if ($Values -isnot [System.Collections.IDictionary]) {
         throw "appconfig option value must be a hashtable of setting keys."
     }
 
-    $directory = Split-Path -Parent $File
-    foreach ($key in @($Values.Keys)) {
-        if ("$key".StartsWith('__')) { continue }
-
-        $settingValue = resolve-value $Values[$key] -dir $directory
-        set-appsettings -file $File -path $key -value $settingValue
+    $resolved = Resolve-FileOptionValues -Values $Values -Directory (Split-Path -Parent $File) -UserSecretsId $UserSecretsId
+    foreach ($key in @($resolved.Keys)) {
+        set-appsettings -file $File -path $key -value $resolved[$key]
     }
+}
+
+function Find-ActiveAppConfigOption {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$File,
+        [Parameter(Mandatory = $true)]
+        $Options,
+        [string]$UserSecretsId
+    )
+
+    $secrets = Get-ReferencedUserSecret -Values (Get-OptionValueList $Options) -Directory (Split-Path -Parent $File) -UserSecretsId $UserSecretsId
+    return Find-ActiveOption -file $File -options $Options -secrets $secrets
 }
 
 function Find-ActiveEnvOption {
@@ -263,29 +349,33 @@ function Find-ActiveEnvOption {
         [Parameter(Mandatory = $true)]
         [string]$File,
         [Parameter(Mandatory = $true)]
-        $Options
+        $Options,
+        [string]$UserSecretsId
     )
 
-    return Find-MatchingOption -Options $Options -GetValue { param($key) get-envsetting $key $File }
+    # With the secrets listed, `user-secrets:` values match by their value; without, they match anything.
+    $secrets = Get-ReferencedUserSecret -Values (Get-OptionValueList $Options) -Directory (Split-Path -Parent $File) -UserSecretsId $UserSecretsId
+    $getExpected = if ($null -eq $secrets) { { param($optionValue) $optionValue } } else {
+        { param($optionValue) Resolve-UserSecretReference $optionValue $secrets }
+    }
+    return Find-MatchingOption -Options $Options -GetValue { param($key) get-envsetting $key $File } -GetExpected $getExpected
 }
 
 function Set-DotEnvOption {
     param(
         [Parameter(Mandatory = $true)]
         [string]$File,
-        $Values
+        $Values,
+        [string]$UserSecretsId
     )
 
     if ($Values -isnot [System.Collections.IDictionary]) {
         throw "dotenv option value must be a hashtable of environment variable keys."
     }
 
-    $directory = Split-Path -Parent $File
-    foreach ($key in @($Values.Keys)) {
-        if ("$key".StartsWith('__')) { continue }
-
-        $settingValue = resolve-value $Values[$key] -dir $directory
-        set-envsetting $key $settingValue $File
+    $resolved = Resolve-FileOptionValues -Values $Values -Directory (Split-Path -Parent $File) -UserSecretsId $UserSecretsId
+    foreach ($key in @($resolved.Keys)) {
+        set-envsetting $key $resolved[$key] $File
     }
 }
 

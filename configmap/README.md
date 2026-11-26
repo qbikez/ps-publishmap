@@ -509,6 +509,18 @@ Creates a `.configuration.map.ps1` file with sample configuration entries.
         _template   = @{ type = "dotenv"; file = ".env"; keys = "auto" }
     }
 
+    # A "user-secrets:{name}" value in a dotenv or appsettings entry is copied from dotnet
+    # user-secrets. userSecretsId names the store (`--id`, no project needed); without it the
+    # project in the file's directory is used. A missing secret makes set throw, and get
+    # matches the option by the secret's value.
+    "db" = @{
+        _template = @{ type = "dotenv"; file = ".env.local"; userSecretsId = "my-app" }
+        options   = @{
+            local  = @{ DATABASE_URL = "postgres://localhost/app" }
+            shared = @{ DATABASE_URL = "user-secrets:DATABASE_URL_shared" }
+        }
+    }
+
     # Built-in user-secrets template backed by `dotnet user-secrets`
     # Short form below; long form is _template = @{ type = "user-secrets"; csproj = "..." }
     # csproj is a project file or its directory; a "user-secrets:{name}" value copies
@@ -666,7 +678,7 @@ The following keys have special meaning in map files:
 - `get` - Get configuration value (for qconf)
 - `set` - Set configuration value (for qconf)
 - `validate` - Validation function (for qconf)
-- `_template` - Built-in entry type: `@{ type; file }` or `"appsettings:{filepath}"` / `"dotenv:{filepath}"`, or `@{ type = "user-secrets"; csproj }` / `"user-secrets:{csproj}"`, that fills get/set when omitted; author get/set override the fill-in and can call `$_context.base`
+- `_template` - Built-in entry type: `@{ type; file }` or `"appsettings:{filepath}"` / `"dotenv:{filepath}"`, or `@{ type = "user-secrets"; csproj }` / `"user-secrets:{csproj}"`, that fills get/set when omitted (`appconfig` and `dotenv` also take `userSecretsId` for `user-secrets:{name}` values); author get/set override the fill-in and can call `$_context.base`
 - `description` - Command description
 - `#include` - Include other maps by directory or map file path (see [Included Maps](#included-maps))
 - `completions` - Custom tab completion values
@@ -747,6 +759,6 @@ A plugin (`plugins/<name>/_plugin.ps1`, returning a hashtable) can claim option 
 }
 ```
 
-`$Context` carries what the caller knows: `Directory` and an already-listed `Secrets` table (used by `plugin-user-secrets`). Core code that calls a plugin's functions directly loads it first with `Import-ConfigMapPlugin <name>`.
+`$Context` carries what the caller knows: `Directory`, the template's `UserSecretsId` and an already-listed `Secrets` table (used by `plugin-user-secrets`). Core code that calls a plugin's functions directly loads it first with `Import-ConfigMapPlugin <name>`.
 
 The manifest is read at import, so prefixes are recognised (and never resolved) by `list` and entry reads without loading the implementation. The implementation file is dot-sourced in a child scope of the module: declare what it exposes as `function script:name` and keep state in `$script:`. If two plugins claim a prefix, the lower `priority` wins and a warning is shown.
