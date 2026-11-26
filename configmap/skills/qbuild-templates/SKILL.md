@@ -127,6 +127,17 @@ options = @{ prod = @{ API_KEY = "bw:my-api/apikey"; DB_USER = "bw:my-db/usernam
 
 Needs the `bw` CLI on PATH and an unlocked vault (`bw unlock`, then `BW_SESSION`). A failed lookup warns and leaves the literal `bw:...`; a `user-secrets` entry throws instead of writing it. Option matching ignores `bw:` values, so `get` never calls `bw`. Status output masks keys filled from `bw:` as `********`; `-porcelain` still returns the real value.
 
+### Secrets in scripts → `Resolve-ConfigMapValue`
+
+A build-map `exec` (or any script) resolves the same references with the exported `Resolve-ConfigMapValue`; a hashtable is resolved recursively. `-Required` throws, naming the failed keys and references but never a value:
+
+```powershell
+exec = {
+    $env:API_KEY = Resolve-ConfigMapValue "bw:my-api/apikey" -Required
+    $db = Resolve-ConfigMapValue @{ user = "user-secrets:Db:User"; pass = "user-secrets:Db:Pass" } -UserSecretsId my-app -Required
+}
+```
+
 ### Keep / remove
 
 - **Keep:** `description`, `options`, `validate`, `_settings`, `_cacheDependsOn`.

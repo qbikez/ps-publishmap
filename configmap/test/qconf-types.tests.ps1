@@ -1349,3 +1349,50 @@ Describe 'qconf dotenv bw: option values' {
         $result.Value['API_KEY'] | Should -Be 'from-bitwarden'
     }
 }
+
+Describe 'qconf user-secrets: listing and cache' {
+    BeforeEach {
+        $script:workDir = Join-Path $TestDrive ("secrets-cache-" + [guid]::NewGuid().ToString('n'))
+        New-Item -ItemType Directory -Path $script:workDir -Force | Out-Null
+        Push-Location $script:workDir
+
+        $script:secretsId = "configmap-test-" + [guid]::NewGuid().ToString('n')
+        dotnet user-secrets set 'Api:Key' 'key=with=equals' --id $script:secretsId | Out-Null
+
+        $script:settingsFile = Join-Path $script:workDir 'appsettings.json'
+        '{ "Api": { "Key": "old" } }' | Set-Content -LiteralPath $script:settingsFile -Encoding utf8
+
+        $script:mapFile = Join-Path $script:workDir '.configuration.map.ps1'
+        Write-ConfigMapFile $script:mapFile (@'
+@{
+    app = @{
+        _template = @{ type = 'appconfig'; file = 'appsettings.json'; userSecretsId = '__ID__' }
+        options = @{ dev = @{ 'Api:Key' = 'user-secrets:Api:Key' } }
+    }
+}
+'@ -replace '__ID__', $script:secretsId)
+    }
+
+    AfterEach {
+        dotnet user-secrets clear --id $script:secretsId 2>&1 | Out-Null
+        Pop-Location
+    }
+
+    It 'keeps = and newlines in a secret value' {
+        dotnet user-secrets set 'Api:Key' "a=b`nsecond line" --id $script:secretsId | Out-Null
+
+        qconf -map $script:mapFile app -value dev -ErrorAction Stop 6>$null
+
+        (Read-AppSettings $script:settingsFile).Api.Key | Should -Be "a=b`nsecond line"
+    }
+
+    It 'sees a secret changed after an earlier read in the same session' {
+        qconf -map $script:mapFile app -value dev -ErrorAction Stop 6>$null
+        (Read-AppSettings $script:settingsFile).Api.Key | Should -Be 'key=with=equals'
+
+        dotnet user-secrets set 'Api:Key' 'rotated' --id $script:secretsId | Out-Null
+        qconf -map $script:mapFile app -value dev -ErrorAction Stop 6>$null
+
+        (Read-AppSettings $script:settingsFile).Api.Key | Should -Be 'rotated'
+    }
+}

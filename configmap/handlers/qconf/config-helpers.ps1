@@ -3,6 +3,7 @@
 # Helpers used by the qconf entry types (appsettings, dotenv and user-secrets templates).
 # Map scriptblocks run in module scope, so these names are also part of the documented
 # map contract (skills/qbuild-templates/SKILL.md, samples/dotenv). Keep the names.
+# Resolve-ConfigMapValue is the exported, public way to resolve value references.
 
 function get-appsettings(
     [Parameter(Mandatory = $true, ParameterSetName = "file")][string]$file,
@@ -175,10 +176,11 @@ function resolve-value($v, [switch]$recurse, [string]$dir, [hashtable]$secrets, 
             return $resolved
         }
     }
-    elseif ($v -is [hashtable]) {
+    elseif ($v -is [System.Collections.IDictionary]) {
         if ($recurse) {
-            $result = [ordered]@{}
-            foreach ($key in $v.keys) {
+            # Same kind of dictionary back: a hashtable stays a hashtable, anything else keeps its order.
+            $result = if ($v -is [hashtable]) { @{} } else { [ordered]@{} }
+            foreach ($key in @($v.Keys)) {
                 $result[$key] = resolve-value $v[$key] -recurse:$recurse -dir $dir -secrets $secrets -userSecretsId $userSecretsId
             }
             return $result
@@ -187,6 +189,87 @@ function resolve-value($v, [switch]$recurse, [string]$dir, [hashtable]$secrets, 
     }
 
     return $v
+}
+
+function Get-UnresolvedConfigMapValue {
+    <#
+    .SYNOPSIS
+        Name every value of Resolved that is still null or still a reference, as `key: reference`.
+        Only key paths and the original references are named, never a resolved value.
+    #>
+    param($Original, $Resolved, [string]$Path)
+
+    if ($Original -is [System.Collections.IDictionary]) {
+        foreach ($key in @($Original.Keys)) {
+            $keyPath = if ($Path) { "$Path.$key" } else { "$key" }
+            Get-UnresolvedConfigMapValue -Original $Original[$key] -Resolved $Resolved[$key] -Path $keyPath
+        }
+        return
+    }
+
+    $reference = if (test-isSpecialValue $Original) { "$Original" } else { $null }
+    if ($null -ne $Resolved -and -not ($reference -and (test-isSpecialValue $Resolved))) { return }
+
+    $name = if ($Path) { $Path } else { 'value' }
+    if ($reference) { "${name}: $reference" } else { "${name}: null" }
+}
+
+function Resolve-ConfigMapValue {
+    <#
+    .SYNOPSIS
+        Resolve value references (keyvault: and every plugin prefix, such as bw: and user-secrets:).
+
+    .DESCRIPTION
+        A string is resolved when it starts with a registered prefix and returned as is otherwise.
+        A hashtable or other dictionary is resolved recursively and returned as the same kind of
+        dictionary with the same keys. A reference that cannot be resolved warns and stays as
+        the original string (a keyvault: one becomes $null).
+
+        Exported for map scriptblocks, e.g. a build map `exec` that needs a secret:
+            $env:API_KEY = Resolve-ConfigMapValue 'bw:my-api/apikey' -Required
+
+    .PARAMETER Value
+        A string, or a dictionary of strings / nested dictionaries.
+
+    .PARAMETER Directory
+        The .NET project (file or directory) for `user-secrets:` references; also passed to
+        plugins as Context.Directory. Defaults to none (dotnet then uses the current directory).
+
+    .PARAMETER UserSecretsId
+        Read `user-secrets:` references from this UserSecretsId (`dotnet user-secrets --id`)
+        instead of a project; works in repositories without a .NET project.
+
+    .PARAMETER Required
+        Throw when any value is still unresolved: null, or still a reference. The error names
+        the keys and references that failed, never a secret value.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        $Value,
+        [string]$Directory,
+        [string]$UserSecretsId,
+        [switch]$Required
+    )
+
+    process {
+        if ($null -ne $Value -and $Value -isnot [string] -and $Value -isnot [System.Collections.IDictionary]) {
+            throw [System.ArgumentException]::new("Resolve-ConfigMapValue expects a string or a dictionary, not [$($Value.GetType().Name)].", 'Value')
+        }
+
+        $resolved = resolve-value $Value -recurse -dir $Directory -userSecretsId $UserSecretsId
+
+        if ($Required) {
+            $failed = @(Get-UnresolvedConfigMapValue -Original $Value -Resolved $resolved)
+            if ($failed.Count -gt 0) {
+                throw "Resolve-ConfigMapValue: $($failed.Count) value(s) could not be resolved: $($failed -join '; ')"
+            }
+        }
+
+        return $resolved
+    }
 }
 
 function get-keyvaultSecret($vaultName, $secretName) {

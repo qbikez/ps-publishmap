@@ -98,7 +98,13 @@
       "pathKey": "file",
       "fileMatch": "^appsettings.*\\.json$",
       "detail": "Options stored in an appsettings JSON file",
-      "keys": []
+      "keys": [
+        {
+          "key": "userSecretsId",
+          "detail": "Store for user-secrets: option values (dotnet user-secrets --id), for repos without a .NET project",
+          "insertText": "userSecretsId = '${1:my-app}'"
+        }
+      ]
     },
     {
       "type": "dotenv",
@@ -116,6 +122,11 @@
           "key": "exclude",
           "detail": "Keys (wildcards allowed) kept out of per-key entries",
           "insertText": "exclude = @('${1:SECRET_*}')"
+        },
+        {
+          "key": "userSecretsId",
+          "detail": "Store for user-secrets: option values (dotnet user-secrets --id), for repos without a .NET project",
+          "insertText": "userSecretsId = '${1:my-app}'"
         }
       ]
     },

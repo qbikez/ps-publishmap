@@ -141,6 +141,13 @@ function script:get-fakeValue($ref) { if ($ref -eq 'missing') { return $null }; 
             Get-QConfSecretKey $options | Should -Be @('A')
         }
     }
+
+    It "masks keys filled from keyvault: values" {
+        InModuleScope ConfigMap {
+            $options = @{ prod = @{ KV = 'keyvault:vault/name'; B = 'plain' } }
+            Get-QConfSecretKey $options | Should -Be @('KV')
+        }
+    }
 }
 
 Describe "plugin value prefix resolve context" {
@@ -188,11 +195,11 @@ Describe "Import-ConfigMapPlugin" {
         }
     }
 
-    It "registers user-secrets: as a prefix that is not masked" {
+    It "registers user-secrets: as a masked prefix" {
         InModuleScope ConfigMap {
             $prefix = Get-ConfigMapValuePrefix 'user-secrets:'
             $prefix | Should -Not -BeNullOrEmpty
-            $prefix.secret | Should -BeFalse
+            $prefix.secret | Should -BeTrue
         }
     }
 }

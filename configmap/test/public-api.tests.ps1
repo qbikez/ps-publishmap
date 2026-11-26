@@ -15,7 +15,7 @@ Describe 'ConfigMap public API' {
             'Initialize-ProcessMap', 'Initialize-QBuildAgent',
             'Invoke-EntryCommand', 'Invoke-Get', 'Invoke-QBuild',
             'Invoke-QConf', 'Invoke-QRun', 'Invoke-Set', 'Merge-IncludeDirectives',
-            'Resolve-ConfigMap', 'Test-IsParentEntry'
+            'Resolve-ConfigMap', 'Resolve-ConfigMapValue', 'Test-IsParentEntry'
         ) | Sort-Object
 
         (Get-Command -Module ConfigMap -CommandType Function).Name | Sort-Object |
