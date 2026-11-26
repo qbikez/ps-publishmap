@@ -39,6 +39,11 @@ Describe 'user-secrets plugin' {
         Mock Get-UserSecretsStorePath { Join-Path $script:storeRoot "$Id.json" }
     }
 
+    It 'registers user-secrets: as a secret prefix, so qconf masks its values' {
+        (Get-ConfigMapValuePrefix 'user-secrets:').secret | Should -BeTrue
+        Get-ConfigMapSecretValuePrefix | Should -Contain 'user-secrets:'
+    }
+
     Context 'get-user-secrets -Id' {
         It 'lists the store with --id and --json' {
             get-user-secrets -Id 'my-app' | Out-Null

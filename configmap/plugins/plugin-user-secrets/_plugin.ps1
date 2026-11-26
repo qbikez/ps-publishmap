@@ -9,6 +9,8 @@
 
     valuePrefixes  = @{
         'user-secrets:' = @{
+            # Secrets: qconf masks the keys these fill when it prints a value.
+            secret  = $true
             resolve = {
                 param($Reference, $Context)
 
