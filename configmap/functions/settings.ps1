@@ -21,9 +21,12 @@ function New-ConfigMapSettings {
         Process                = $script:ConfigMapDefaultProcessName
         ForceCheck             = $false
         UseWorkDir             = $false
+        # 'options': an options entry gets one child entry per key found in its option presets.
+        Keys                   = $null
     }
 
-    foreach ($propertyName in @($settings.Keys)) {
+    # get_Keys(): with a 'Keys' setting, $settings.Keys returns that setting instead of the key names.
+    foreach ($propertyName in @($settings.get_Keys())) {
         $envPath = "env:QCONF_$propertyName"
         if (Test-Path -Path $envPath) {
             $settings[$propertyName] = (Get-Item -Path $envPath).Value
@@ -31,7 +34,7 @@ function New-ConfigMapSettings {
     }
 
     if ($BaseSettings) {
-        foreach ($propertyName in @($settings.Keys)) {
+        foreach ($propertyName in @($settings.get_Keys())) {
             $settings[$propertyName] = $BaseSettings.PSObject.Properties[$propertyName].Value
         }
     }

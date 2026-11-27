@@ -80,7 +80,14 @@
     },
     { "key": "Process", "detail": "Select how the entry runs", "valuesFrom": "processes" },
     { "key": "ForceCheck", "detail": "steps: run each step's check before deciding to run it", "type": "boolean", "default": "$false" },
-    { "key": "UseWorkDir", "detail": "Run entry scripts in the caller's directory instead of the map's", "type": "boolean", "default": "$false" }
+    { "key": "UseWorkDir", "detail": "Run entry scripts in the caller's directory instead of the map's", "type": "boolean", "default": "$false" },
+    {
+      "key": "Keys",
+      "detail": "options: generate one child entry per key in the option presets",
+      "values": [
+        { "value": "options", "detail": "Merge keys from all option presets" }
+      ]
+    }
   ],
   "processes": [
     { "name": "exec", "detail": "Run the entry exec scriptblock (default)" },

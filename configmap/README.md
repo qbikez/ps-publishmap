@@ -547,6 +547,24 @@ options = @{ prod = @{ API_KEY = "bw:my-api/apikey"; DB_USER = "bw:my-db/usernam
 
 Author-supplied `get` / `set` always win over the template fill-in. Template implementations stay on `$_context.base` (`$_context.base.get` / `$_context.base.set`) so overrides can wrap them. See `samples/process-mixed` (`endpoint_override`) and `qbuild !agent.skills qbuild-templates`.
 
+#### Per-key entries from option presets
+
+`_settings.keys = 'options'` gives an options entry one child entry per key found in any of its presets (keys from all presets are merged; keys starting with `__` are skipped). It works with any `_template` type and with hand-written get/set:
+
+```powershell
+storage = @{
+    _settings = @{ process = 'options'; keys = 'options' }
+    _template = 'appsettings:appsettings.json'
+    options   = @{
+        local = @{ 'Storage:BaseUrl' = 'https://127.0.0.1:10000'; 'Storage:Account' = 'devstore' }
+        prod  = @{ 'Storage:BaseUrl' = 'https://storage.example' }
+    }
+}
+# qbuild storage.Storage:Account -value other
+```
+
+Generated children (these and dotenv `keys = 'auto'` ones) read and write through the parent's `get` / `set`, overrides included. The parent's `set` gets `$key = $null` and a one-key `$value` such as `@{ 'Storage:Account' = 'other' }`; its `get` gets the parent's presets. `$_context.optionKey` names the key in both, and is `$null` for a preset switch. A key the map already defines as a child is not generated, nor is a reserved key or one containing `.`. A dotenv template's `exclude` applies, and children of a `user-secrets` entry are not read by `list`.
+
 ### Configuration Usage
 ```powershell
 # Prefer qbuild when the entry lives in a build map with process = "options"
