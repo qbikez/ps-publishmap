@@ -650,4 +650,9 @@ Set-Alias -Name "qconf" -Value "Invoke-QConf" -Force
 # Canonical process type for qbuild maps; CLI alias remains qconf.
 Register-ConfigMapCliProcess -Name 'options' -CliName 'qconf' -InitTemplate "$PSScriptRoot/init.map.ps1"
 
-Register-ConfigMapLoadHook -Name 'dotenv-entries' -Hook { param($Map) Expand-DotEnvKeyEntries -Map $Map }
+# Option keys run second: they read the presets the dotenv expansion attaches.
+Register-ConfigMapLoadHook -Name 'dotenv-entries' -Hook {
+    param($Map)
+    Expand-DotEnvKeyEntries -Map $Map
+    Expand-OptionKeyEntries -Map $Map
+}

@@ -511,11 +511,11 @@ function Resolve-DotEnvKeysFile {
     return $candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
 }
 
-function New-DotEnvParentContext {
+function New-OptionKeyParentContext {
     <#
     .SYNOPSIS
         The $_context a generated key entry passes to its parent's get/set: self and base are the
-        parent's, and envKey names the key so a parent override can tell it from a preset switch.
+        parent's, and optionKey names the key so a parent override can tell it from a preset switch.
     #>
     param(
         [Parameter(Mandatory = $true)]
@@ -529,11 +529,13 @@ function New-DotEnvParentContext {
     $context = if ($ChildContext) { $ChildContext.Clone() } else { @{} }
     $context.self = $parent
     $context.base = $parent._internal.base
-    $context.envKey = $ChildEntry._internal.envKey
+    $context.optionKey = $ChildEntry._internal.optionKey
+    # Earlier name of optionKey; kept for overrides written against it.
+    $context.envKey = $context.optionKey
     return $context
 }
 
-function Get-DotEnvKeyFromParent {
+function Get-OptionKeyFromParent {
     <#
     .SYNOPSIS
         Read one key through the parent entry's get (template or author override).
@@ -545,25 +547,25 @@ function Get-DotEnvKeyFromParent {
         [System.Collections.IDictionary]$ChildContext
     )
 
-    $context = New-DotEnvParentContext -ChildEntry $ChildEntry -ChildContext $ChildContext
+    $context = New-OptionKeyParentContext -ChildEntry $ChildEntry -ChildContext $ChildContext
     $parent = $context.self
-    $envKey = $context.envKey
+    $optionKey = $context.optionKey
 
     # The parent's own presets, plus one that never matches but makes the built-in get read this
     # key even when no preset contains it.
     $options = [ordered]@{}
     $parentOptions = Get-CompletionList $parent -listKey 'options' -language 'conf' -maxDepth 1
     foreach ($name in @($parentOptions.Keys)) { $options[$name] = $parentOptions[$name] }
-    $options['__key'] = @{ $envKey = $null }
+    $options['__key'] = @{ $optionKey = $null }
 
     $result = & $parent.get $Ctx $options $context
     if ($result -isnot [System.Collections.IDictionary] -or $result.Value -isnot [System.Collections.IDictionary]) {
-        throw "Entry '$($ChildEntry._internal.parentName)' get must return @{ Value = @{ ... }; Active = ... } for its per-key entry '$envKey'."
+        throw "Entry '$($ChildEntry._internal.parentName)' get must return @{ Value = @{ ... }; Active = ... } for its per-key entry '$optionKey'."
     }
-    return $result.Value[$envKey]
+    return $result.Value[$optionKey]
 }
 
-function Set-DotEnvKeyThroughParent {
+function Set-OptionKeyThroughParent {
     <#
     .SYNOPSIS
         Write one key through the parent entry's set (template or author override), passing
@@ -577,16 +579,21 @@ function Set-DotEnvKeyThroughParent {
         [System.Collections.IDictionary]$ChildContext
     )
 
-    $context = New-DotEnvParentContext -ChildEntry $ChildEntry -ChildContext $ChildContext
-    $null = & $context.self.set $Ctx $null ([ordered]@{ $context.envKey = $NewValue }) $context
+    $context = New-OptionKeyParentContext -ChildEntry $ChildEntry -ChildContext $ChildContext
+    $null = & $context.self.set $Ctx $null ([ordered]@{ $context.optionKey = $NewValue }) $context
 }
 
-function New-DotEnvKeyEntry {
+function New-OptionKeyEntry {
+    <#
+    .SYNOPSIS
+        A child entry for one key of an options entry; its get/set go through the parent's get/set,
+        so the parent's template or overrides also apply to single keys.
+    #>
     param(
         [Parameter(Mandatory = $true)]
         [string]$Key,
         [Parameter(Mandatory = $true)]
-        $Info,
+        [string]$Description,
         [Parameter(Mandatory = $true)]
         [System.Collections.IDictionary]$Parent,
         [Parameter(Mandatory = $true)]
@@ -594,23 +601,84 @@ function New-DotEnvKeyEntry {
         [string]$BaseDir
     )
 
-    # No _template here: it would make the child discover the parent's .env.<name> presets as options.
-    # get/set go through the parent so its overrides also apply to single keys.
-    $description = $Info.Description ? $Info.Description : "$Key"
+    # No _template here: a dotenv one would make the child discover the parent's .env.<name> presets as options.
     $entry = [ordered]@{
-        description = "$description (example: $($Info.Value))"
-        _internal   = @{ envKey = $Key; parent = $Parent; parentName = $ParentName }
+        description = $Description
+        _internal   = @{ optionKey = $Key; parent = $Parent; parentName = $ParentName }
         get         = {
             param($ctx, $options, $_context)
-            Get-DotEnvKeyFromParent -ChildEntry $_context.self -Ctx $ctx -ChildContext $_context
+            Get-OptionKeyFromParent -ChildEntry $_context.self -Ctx $ctx -ChildContext $_context
         }
         set         = {
             param($ctx, $key, $value, $_context)
-            Set-DotEnvKeyThroughParent -ChildEntry $_context.self -Ctx $ctx -NewValue $key -ChildContext $_context
+            Set-OptionKeyThroughParent -ChildEntry $_context.self -Ctx $ctx -NewValue $key -ChildContext $_context
         }
     }
     if ($BaseDir) { $entry._baseDir = $BaseDir }
     return $entry
+}
+
+function Get-OptionPresetKey {
+    <#
+    .SYNOPSIS
+        Every key used by an entry's option presets, in first-seen order. Presets that are not
+        hashtables and keys starting with '__' are skipped.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Collections.IDictionary]$Entry
+    )
+
+    $options = Get-CompletionList $Entry -listKey 'options' -language 'conf' -maxDepth 1
+    $keys = [System.Collections.Generic.List[string]]::new()
+    foreach ($preset in @($options.Values)) {
+        if ($preset -isnot [System.Collections.IDictionary]) { continue }
+        foreach ($key in @($preset.Keys)) {
+            if ("$key".StartsWith('__') -or $keys.Contains("$key")) { continue }
+            $keys.Add("$key")
+        }
+    }
+    return , $keys
+}
+
+function Expand-OptionKeyEntries {
+    <#
+    .SYNOPSIS
+        For entries with `_settings.keys = 'options'`, add one child entry per key found in their
+        option presets when a map loads.
+
+    .DESCRIPTION
+        Keys from all presets are merged. A key never replaces an entry the map already defines (or
+        one `keys = 'auto'` generated), a reserved key, or a key containing the path separator '.'.
+        A dotenv template's `exclude` also applies. Runs after Expand-DotEnvKeyEntries, so a dotenv
+        entry's discovered presets are already attached.
+    #>
+    param(
+        [System.Collections.IDictionary]$Map
+    )
+
+    $reservedKeys = (Get-MapLanguage 'conf').reservedKeys
+    foreach ($name in @($Map.Keys)) {
+        $entry = $Map[$name]
+        if ($entry -isnot [System.Collections.IDictionary] -or "$name".StartsWith('_') -or $name -eq 'options') { continue }
+
+        if ($entry._settings -is [System.Collections.IDictionary] -and $entry._settings.keys -eq 'options') {
+            $template = $null
+            try { $template = Get-ConfigEntryTemplate -Entry $entry } catch { Write-Verbose "option key discovery: $($_.Exception.Message)" }
+            $excluded = if ($template -and $template.type -eq 'dotenv') { @($template.exclude | Where-Object { $_ }) } else { @() }
+
+            foreach ($key in (Get-OptionPresetKey -Entry $entry)) {
+                if ($entry.Contains($key) -or $key -in $reservedKeys -or $key.Contains('.')) {
+                    Write-Verbose "Entry '$name': no child entry for option key '$key'."
+                    continue
+                }
+                if ($excluded | Where-Object { $key -like $_ }) { continue }
+                $entry[$key] = New-OptionKeyEntry -Key $key -Description $key -Parent $entry -ParentName $name -BaseDir $entry._baseDir
+            }
+        }
+
+        Expand-OptionKeyEntries -Map $entry
+    }
 }
 
 function Expand-DotEnvKeyEntries {
@@ -652,7 +720,9 @@ function Expand-DotEnvKeyEntries {
                 foreach ($key in $info.Keys) {
                     if ($entry.Contains($key)) { continue }
                     if ($excluded | Where-Object { $key -like $_ }) { continue }
-                    $entry[$key] = New-DotEnvKeyEntry -Key $key -Info $info[$key] -Parent $entry -ParentName $name -BaseDir $entry._baseDir
+                    $keyInfo = $info[$key]
+                    $description = $keyInfo.Description ? $keyInfo.Description : "$key"
+                    $entry[$key] = New-OptionKeyEntry -Key $key -Description "$description (example: $($keyInfo.Value))" -Parent $entry -ParentName $name -BaseDir $entry._baseDir
                 }
             }
         }
@@ -672,11 +742,16 @@ function Get-ConfigEntryTypeCommands {
 function Test-ConfigEntrySensitive {
     <#
     .SYNOPSIS
-        True when the entry's _template type keeps values that `list` must not read.
+        True when the entry's _template type keeps values that `list` must not read. A generated
+        per-key entry is as sensitive as its parent.
     #>
     param(
         $Entry
     )
+
+    if ($Entry -is [System.Collections.IDictionary] -and $Entry._internal -is [System.Collections.IDictionary] -and $Entry._internal.parent) {
+        return Test-ConfigEntrySensitive -Entry $Entry._internal.parent
+    }
 
     $template = Get-ConfigEntryTemplate -Entry $Entry
     if ($null -eq $template -or -not $template.type) { return $false }

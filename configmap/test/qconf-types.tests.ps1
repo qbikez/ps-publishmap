@@ -1294,7 +1294,7 @@ Describe 'qbuild dotenv _template per-key entries' {
         _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto' }
         set = {
             param($ctx, $key, $value, $_context)
-            $global:DotEnvHookCalls.Add(@{ key = $key; value = $value; envKey = $_context.envKey; self = $_context.self })
+            $global:DotEnvHookCalls.Add(@{ key = $key; value = $value; optionKey = $_context.optionKey; self = $_context.self })
             & $_context.base.set $ctx $key $value $_context
         }
     }
@@ -1308,14 +1308,14 @@ Describe 'qbuild dotenv _template per-key entries' {
             $call.key | Should -BeNullOrEmpty
             @($call.value.Keys) | Should -Be @('API_URL')
             $call.value['API_URL'] | Should -Be 'https://hooked.example.com'
-            $call.envKey | Should -Be 'API_URL'
+            $call.optionKey | Should -Be 'API_URL'
             $call.self.Contains('API_URL') | Should -BeTrue
             $envValues = Read-DotEnvFile $script:envFile
             $envValues['API_URL'] | Should -Be 'https://hooked.example.com'
             $envValues['API_KEY'] | Should -Be 'k'
         }
 
-        It 'passes no envKey to the parent set override when switching presets' {
+        It 'still passes the key as $_context.envKey for existing overrides' {
             Write-ConfigMapFile $script:buildMap @'
 [ordered]@{
     api = [ordered]@{
@@ -1323,7 +1323,27 @@ Describe 'qbuild dotenv _template per-key entries' {
         _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto' }
         set = {
             param($ctx, $key, $value, $_context)
-            $global:DotEnvHookCalls.Add(@{ key = $key; envKey = $_context.envKey })
+            $global:DotEnvHookCalls.Add($_context.envKey)
+            & $_context.base.set $ctx $key $value $_context
+        }
+    }
+}
+'@
+
+            qbuild -map $script:buildMap api.API_URL -value 'https://x.example.com' -ErrorAction Stop
+
+            @($global:DotEnvHookCalls) | Should -Be @('API_URL')
+        }
+
+        It 'passes no optionKey to the parent set override when switching presets' {
+            Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options' }
+        _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto' }
+        set = {
+            param($ctx, $key, $value, $_context)
+            $global:DotEnvHookCalls.Add(@{ key = $key; optionKey = $_context.optionKey })
             & $_context.base.set $ctx $key $value $_context
         }
     }
@@ -1333,7 +1353,7 @@ Describe 'qbuild dotenv _template per-key entries' {
             qbuild -map $script:buildMap api -value prod -ErrorAction Stop
 
             $global:DotEnvHookCalls[0].key | Should -Be 'prod'
-            $global:DotEnvHookCalls[0].envKey | Should -BeNullOrEmpty
+            $global:DotEnvHookCalls[0].optionKey | Should -BeNullOrEmpty
         }
 
         It 'reads one key through the parent get override' {
@@ -1344,9 +1364,9 @@ Describe 'qbuild dotenv _template per-key entries' {
         _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto' }
         get = {
             param($ctx, $options, $_context)
-            $global:DotEnvHookCalls.Add(@{ envKey = $_context.envKey; options = $options })
+            $global:DotEnvHookCalls.Add(@{ optionKey = $_context.optionKey; options = $options })
             $result = & $_context.base.get $ctx $options $_context
-            if ($_context.envKey -eq 'API_KEY') { $result.Value['API_KEY'] = '***' }
+            if ($_context.optionKey -eq 'API_KEY') { $result.Value['API_KEY'] = '***' }
             $result
         }
     }
@@ -1356,7 +1376,7 @@ Describe 'qbuild dotenv _template per-key entries' {
             $result = qbuild -map $script:buildMap api.API_KEY -porcelain -ErrorAction Stop
 
             $result.Value | Should -Be '***'
-            $global:DotEnvHookCalls[0].envKey | Should -Be 'API_KEY'
+            $global:DotEnvHookCalls[0].optionKey | Should -Be 'API_KEY'
             @($global:DotEnvHookCalls[0].options.Keys) | Should -Contain 'prod'
         }
 
@@ -1432,6 +1452,158 @@ Describe 'qbuild dotenv _template per-key entries' {
 
         qbuild -map $sampleMap api.API_URL -value 'https://staging.example.com' -ErrorAction Stop
         (Read-DotEnvFile (Join-Path $script:workDir '.env'))['API_URL'] | Should -Be 'https://staging.example.com'
+    }
+}
+
+Describe 'qbuild options per-key entries from option presets' {
+    BeforeEach {
+        $script:workDir = Join-Path $TestDrive ("option-keys-" + [guid]::NewGuid().ToString('n'))
+        New-Item -ItemType Directory -Path $script:workDir -Force | Out-Null
+        Push-Location $script:workDir
+
+        $global:OptionKeyCalls = [System.Collections.Generic.List[object]]::new()
+        $script:stateFile = Join-Path $script:workDir 'state.json'
+        '{ "A": "1", "B": "2" }' | Set-Content -LiteralPath $script:stateFile
+
+        # A hand-written options entry: get/set keep a flat JSON object in state.json.
+        $script:buildMap = Join-Path $script:workDir '.build.map.ps1'
+        $script:customEntry = @'
+        _settings = @{ process = 'options'; keys = 'options' }
+        options   = [ordered]@{
+            local = [ordered]@{ A = '1'; B = '2'; __note = 'skipped' }
+            prod  = [ordered]@{ B = '3'; C = '4' }
+            flat  = 'not a preset hashtable'
+        }
+        get = {
+            param($ctx, $options, $_context)
+            $global:OptionKeyCalls.Add(@{ op = 'get'; optionKey = $_context.optionKey; options = $options })
+            $state = Get-Content -LiteralPath (Join-Path $_context.self._baseDir 'state.json') -Raw | ConvertFrom-Json -AsHashtable
+            @{ Value = $state; Active = $null }
+        }
+        set = {
+            param($ctx, $key, $value, $_context)
+            $global:OptionKeyCalls.Add(@{ op = 'set'; key = $key; value = $value; optionKey = $_context.optionKey })
+            $file = Join-Path $_context.self._baseDir 'state.json'
+            $state = Get-Content -LiteralPath $file -Raw | ConvertFrom-Json -AsHashtable
+            foreach ($k in $value.Keys) { $state[$k] = $value[$k] }
+            $state | ConvertTo-Json | Set-Content -LiteralPath $file
+        }
+'@
+        Write-ConfigMapFile $script:buildMap "[ordered]@{ app = [ordered]@{`n$script:customEntry`n} }"
+    }
+
+    AfterEach {
+        Remove-Variable -Name OptionKeyCalls -Scope Global -ErrorAction SilentlyContinue
+        Pop-Location
+    }
+
+    It 'creates one child per key merged from all presets' {
+        $buildMap = $script:buildMap
+        $result = InModuleScope configmap -Parameters @{ map = $buildMap } { Get-MapEntryList (Import-ConfigMap -Map $map) -language build }
+
+        @($result.Keys) | Should -Contain 'app.A'
+        @($result.Keys) | Should -Contain 'app.B'
+        @($result.Keys) | Should -Contain 'app.C'
+        @($result.Keys) | Should -Not -Contain 'app.__note'
+        $result['app.C'].description | Should -Be 'C'
+    }
+
+    It 'creates no children without the keys setting' {
+        Write-ConfigMapFile $script:buildMap ("[ordered]@{ app = [ordered]@{`n$script:customEntry`n} }" -replace "; keys = 'options'", '')
+
+        $buildMap = $script:buildMap
+        $result = InModuleScope configmap -Parameters @{ map = $buildMap } { Get-MapEntryList (Import-ConfigMap -Map $map) -language build }
+
+        @($result.Keys) | Should -Not -Contain 'app.A'
+    }
+
+    It 'reads one key through the parent get' {
+        $result = qbuild -map $script:buildMap app.B -porcelain -ErrorAction Stop
+
+        $result.Value | Should -Be '2'
+        $global:OptionKeyCalls[0].optionKey | Should -Be 'B'
+    }
+
+    It 'writes one key through the parent set with a one-key value' {
+        qbuild -map $script:buildMap app.C -value '9' -ErrorAction Stop
+
+        $call = @($global:OptionKeyCalls | Where-Object { $_.op -eq 'set' })[0]
+        $call.key | Should -BeNullOrEmpty
+        @($call.value.Keys) | Should -Be @('C')
+        $call.optionKey | Should -Be 'C'
+        $state = Get-Content -LiteralPath $script:stateFile -Raw | ConvertFrom-Json -AsHashtable
+        $state['C'] | Should -Be '9'
+        $state['A'] | Should -Be '1'
+    }
+
+    It 'keeps an explicit child entry instead of generating one' {
+        $explicit = @'
+        B = [ordered]@{
+            description = 'hand-written B'
+            get = { param($ctx, $options, $_context) 'explicit' }
+        }
+'@
+        Write-ConfigMapFile $script:buildMap "[ordered]@{ app = [ordered]@{`n$script:customEntry`n$explicit`n} }"
+
+        $result = qbuild -map $script:buildMap app.B -porcelain -ErrorAction Stop
+
+        $result.Value | Should -Be 'explicit'
+    }
+
+    It 'generates children from discovered dotenv presets' {
+        Write-DotEnvFile (Join-Path $script:workDir '.env') @{ API_URL = 'http://localhost' }
+        Write-DotEnvFile (Join-Path $script:workDir '.env.prod') @{ API_URL = 'https://prod'; API_KEY = 'prod-key' }
+        Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options'; keys = 'options' }
+        _template = 'dotenv:.env'
+    }
+}
+'@
+
+        qbuild -map $script:buildMap api.API_KEY -value 'k2' -ErrorAction Stop
+
+        (Read-DotEnvFile (Join-Path $script:workDir '.env'))['API_KEY'] | Should -Be 'k2'
+    }
+
+    It 'skips keys the dotenv template excludes' {
+        Write-DotEnvFile (Join-Path $script:workDir '.env') @{ API_URL = 'http://localhost' }
+        Write-DotEnvFile (Join-Path $script:workDir '.env.prod') @{ API_URL = 'https://prod'; API_KEY = 'prod-key' }
+        Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options'; keys = 'options' }
+        _template = @{ type = 'dotenv'; file = '.env'; exclude = 'API_KEY' }
+    }
+}
+'@
+
+        $buildMap = $script:buildMap
+        $result = InModuleScope configmap -Parameters @{ map = $buildMap } { Get-MapEntryList (Import-ConfigMap -Map $map) -language build }
+
+        @($result.Keys) | Should -Contain 'api.API_URL'
+        @($result.Keys) | Should -Not -Contain 'api.API_KEY'
+    }
+
+    It 'marks children of a user-secrets entry as sensitive' {
+        Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    secrets = [ordered]@{
+        _settings = @{ process = 'options'; keys = 'options' }
+        _template = 'user-secrets:app.csproj'
+        options   = @{ dev = @{ ApiKey = 'x' } }
+    }
+}
+'@
+
+        $buildMap = $script:buildMap
+        $sensitive = InModuleScope configmap -Parameters @{ map = $buildMap } {
+            $loaded = Import-ConfigMap -Map $map
+            Test-ConfigEntrySensitive -Entry $loaded.secrets.ApiKey
+        }
+
+        $sensitive | Should -BeTrue
     }
 }
 
