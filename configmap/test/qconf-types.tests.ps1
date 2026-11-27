@@ -1019,6 +1019,21 @@ Describe 'qconf user-secrets: values in dotenv and appsettings templates' {
         (Read-DotEnvFile $script:envFile)['DATABASE_URL'] | Should -Be 'postgres://remote'
     }
 
+    It 'resolves a user-secrets: value set on a per-key entry' {
+        Set-Content -LiteralPath (Join-Path $script:workDir '.env.example') -Value 'DATABASE_URL=postgres://example'
+        Write-ConfigMapFile $script:mapFile (@'
+@{
+    db = @{
+        _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto'; userSecretsId = '__ID__' }
+    }
+}
+'@ -replace '__ID__', $script:secretsId)
+
+        qconf -map $script:mapFile db.DATABASE_URL -value 'user-secrets:db_remote' -ErrorAction Stop
+
+        (Read-DotEnvFile $script:envFile)['DATABASE_URL'] | Should -Be 'postgres://remote'
+    }
+
     It 'matches a user-secrets: option by its resolved value' {
         $result = qconf -map $script:mapFile db -porcelain -ErrorAction Stop
         @($result.Active) | Should -Contain 'local'
@@ -1260,6 +1275,150 @@ Describe 'qbuild dotenv _template per-key entries' {
 
         @($result.Value.Keys) | Should -Contain 'API_URL'
         @($result.Value.Keys) | Should -Not -Contain 'API_KEY'
+    }
+
+    Context 'delegating to the parent entry' {
+        BeforeEach {
+            $global:DotEnvHookCalls = [System.Collections.Generic.List[object]]::new()
+        }
+
+        AfterEach {
+            Remove-Variable -Name DotEnvHookCalls -Scope Global -ErrorAction SilentlyContinue
+        }
+
+        It 'writes one key through the parent set override with a one-key value' {
+            Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options' }
+        _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto' }
+        set = {
+            param($ctx, $key, $value, $_context)
+            $global:DotEnvHookCalls.Add(@{ key = $key; value = $value; envKey = $_context.envKey; self = $_context.self })
+            & $_context.base.set $ctx $key $value $_context
+        }
+    }
+}
+'@
+
+            qbuild -map $script:buildMap api.API_URL -value 'https://hooked.example.com' -ErrorAction Stop
+
+            $global:DotEnvHookCalls.Count | Should -Be 1
+            $call = $global:DotEnvHookCalls[0]
+            $call.key | Should -BeNullOrEmpty
+            @($call.value.Keys) | Should -Be @('API_URL')
+            $call.value['API_URL'] | Should -Be 'https://hooked.example.com'
+            $call.envKey | Should -Be 'API_URL'
+            $call.self.Contains('API_URL') | Should -BeTrue
+            $envValues = Read-DotEnvFile $script:envFile
+            $envValues['API_URL'] | Should -Be 'https://hooked.example.com'
+            $envValues['API_KEY'] | Should -Be 'k'
+        }
+
+        It 'passes no envKey to the parent set override when switching presets' {
+            Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options' }
+        _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto' }
+        set = {
+            param($ctx, $key, $value, $_context)
+            $global:DotEnvHookCalls.Add(@{ key = $key; envKey = $_context.envKey })
+            & $_context.base.set $ctx $key $value $_context
+        }
+    }
+}
+'@
+
+            qbuild -map $script:buildMap api -value prod -ErrorAction Stop
+
+            $global:DotEnvHookCalls[0].key | Should -Be 'prod'
+            $global:DotEnvHookCalls[0].envKey | Should -BeNullOrEmpty
+        }
+
+        It 'reads one key through the parent get override' {
+            Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options' }
+        _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto' }
+        get = {
+            param($ctx, $options, $_context)
+            $global:DotEnvHookCalls.Add(@{ envKey = $_context.envKey; options = $options })
+            $result = & $_context.base.get $ctx $options $_context
+            if ($_context.envKey -eq 'API_KEY') { $result.Value['API_KEY'] = '***' }
+            $result
+        }
+    }
+}
+'@
+
+            $result = qbuild -map $script:buildMap api.API_KEY -porcelain -ErrorAction Stop
+
+            $result.Value | Should -Be '***'
+            $global:DotEnvHookCalls[0].envKey | Should -Be 'API_KEY'
+            @($global:DotEnvHookCalls[0].options.Keys) | Should -Contain 'prod'
+        }
+
+        It 'reads a key that no parent option contains' {
+            Write-DotEnvFile $script:envFile @{ API_URL = 'http://localhost:5000'; API_KEY = 'k'; FLAG = 'off' }
+            Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options' }
+        _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto' }
+        options   = @{ prod = @{ API_URL = 'https://prod' } }
+    }
+}
+'@
+
+            $result = qbuild -map $script:buildMap api.FLAG -porcelain -ErrorAction Stop
+
+            $result.Value | Should -Be 'off'
+        }
+
+        It 'throws when the parent get override returns no Value' {
+            Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options' }
+        _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto' }
+        get = {
+            param($ctx, $options, $_context)
+            'not a result'
+        }
+    }
+}
+'@
+
+            { qbuild -map $script:buildMap api.API_URL -porcelain -ErrorAction Stop } | Should -Throw "*'api'*Value*"
+        }
+
+        It 'keeps hand-written children on their own get and set' {
+            Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options' }
+        _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto' }
+        set = {
+            param($ctx, $key, $value, $_context)
+            $global:DotEnvHookCalls.Add('parent')
+        }
+        API_URL = [ordered]@{
+            get = { param($ctx, $options, $_context) 'child-value' }
+            set = {
+                param($ctx, $key, $value, $_context)
+                $global:DotEnvHookCalls.Add('child')
+            }
+        }
+    }
+}
+'@
+
+            qbuild -map $script:buildMap api.API_URL -value 'x' -ErrorAction Stop
+
+            @($global:DotEnvHookCalls) | Should -Be @('child')
+        }
     }
 
     It 'works against the dotenv sample' {

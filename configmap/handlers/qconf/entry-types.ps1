@@ -511,6 +511,76 @@ function Resolve-DotEnvKeysFile {
     return $candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
 }
 
+function New-DotEnvParentContext {
+    <#
+    .SYNOPSIS
+        The $_context a generated key entry passes to its parent's get/set: self and base are the
+        parent's, and envKey names the key so a parent override can tell it from a preset switch.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Collections.IDictionary]$ChildEntry,
+        [System.Collections.IDictionary]$ChildContext
+    )
+
+    $parent = $ChildEntry._internal.parent
+    Add-ConfigEntryTypeCommands -Entry $parent
+
+    $context = if ($ChildContext) { $ChildContext.Clone() } else { @{} }
+    $context.self = $parent
+    $context.base = $parent._internal.base
+    $context.envKey = $ChildEntry._internal.envKey
+    return $context
+}
+
+function Get-DotEnvKeyFromParent {
+    <#
+    .SYNOPSIS
+        Read one key through the parent entry's get (template or author override).
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Collections.IDictionary]$ChildEntry,
+        $Ctx,
+        [System.Collections.IDictionary]$ChildContext
+    )
+
+    $context = New-DotEnvParentContext -ChildEntry $ChildEntry -ChildContext $ChildContext
+    $parent = $context.self
+    $envKey = $context.envKey
+
+    # The parent's own presets, plus one that never matches but makes the built-in get read this
+    # key even when no preset contains it.
+    $options = [ordered]@{}
+    $parentOptions = Get-CompletionList $parent -listKey 'options' -language 'conf' -maxDepth 1
+    foreach ($name in @($parentOptions.Keys)) { $options[$name] = $parentOptions[$name] }
+    $options['__key'] = @{ $envKey = $null }
+
+    $result = & $parent.get $Ctx $options $context
+    if ($result -isnot [System.Collections.IDictionary] -or $result.Value -isnot [System.Collections.IDictionary]) {
+        throw "Entry '$($ChildEntry._internal.parentName)' get must return @{ Value = @{ ... }; Active = ... } for its per-key entry '$envKey'."
+    }
+    return $result.Value[$envKey]
+}
+
+function Set-DotEnvKeyThroughParent {
+    <#
+    .SYNOPSIS
+        Write one key through the parent entry's set (template or author override), passing
+        $key = $null and a one-key $value.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Collections.IDictionary]$ChildEntry,
+        $Ctx,
+        $NewValue,
+        [System.Collections.IDictionary]$ChildContext
+    )
+
+    $context = New-DotEnvParentContext -ChildEntry $ChildEntry -ChildContext $ChildContext
+    $null = & $context.self.set $Ctx $null ([ordered]@{ $context.envKey = $NewValue }) $context
+}
+
 function New-DotEnvKeyEntry {
     param(
         [Parameter(Mandatory = $true)]
@@ -518,22 +588,25 @@ function New-DotEnvKeyEntry {
         [Parameter(Mandatory = $true)]
         $Info,
         [Parameter(Mandatory = $true)]
-        [string]$File,
+        [System.Collections.IDictionary]$Parent,
+        [Parameter(Mandatory = $true)]
+        [string]$ParentName,
         [string]$BaseDir
     )
 
     # No _template here: it would make the child discover the parent's .env.<name> presets as options.
+    # get/set go through the parent so its overrides also apply to single keys.
     $description = $Info.Description ? $Info.Description : "$Key"
     $entry = [ordered]@{
         description = "$description (example: $($Info.Value))"
-        _internal   = @{ envKey = $Key; envFile = $File }
+        _internal   = @{ envKey = $Key; parent = $Parent; parentName = $ParentName }
         get         = {
             param($ctx, $options, $_context)
-            get-envsetting $_context.self._internal.envKey $_context.self._internal.envFile
+            Get-DotEnvKeyFromParent -ChildEntry $_context.self -Ctx $ctx -ChildContext $_context
         }
         set         = {
             param($ctx, $key, $value, $_context)
-            set-envsetting $_context.self._internal.envKey $key $_context.self._internal.envFile
+            Set-DotEnvKeyThroughParent -ChildEntry $_context.self -Ctx $ctx -NewValue $key -ChildContext $_context
         }
     }
     if ($BaseDir) { $entry._baseDir = $BaseDir }
@@ -550,7 +623,7 @@ function Expand-DotEnvKeyEntries {
         `keys = 'auto'` reads `<file>.example` (or `.sample` / `.template`); any other string
         names the file to read keys from. `exclude` (string or array, `-like` wildcards allowed)
         lists keys that get no child entry and are left out of the parent value. Children are named after the key (`api.API_URL`),
-        read and write just that key, and never replace an entry the map already defines.
+        read and write just that key through the parent's get/set, and never replace an entry the map already defines.
         Explicit `options` are left alone; otherwise `options` becomes a scriptblock that
         reads the sibling `.env.*` files when asked, so completion sees file changes.
     #>
@@ -579,7 +652,7 @@ function Expand-DotEnvKeyEntries {
                 foreach ($key in $info.Keys) {
                     if ($entry.Contains($key)) { continue }
                     if ($excluded | Where-Object { $key -like $_ }) { continue }
-                    $entry[$key] = New-DotEnvKeyEntry -Key $key -Info $info[$key] -File $target -BaseDir $entry._baseDir
+                    $entry[$key] = New-DotEnvKeyEntry -Key $key -Info $info[$key] -Parent $entry -ParentName $name -BaseDir $entry._baseDir
                 }
             }
         }
