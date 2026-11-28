@@ -141,13 +141,6 @@ function script:get-fakeValue($ref) { if ($ref -eq 'missing') { return $null }; 
             Get-QConfSecretKey $options | Should -Be @('A')
         }
     }
-
-    It "masks keys filled from keyvault: values" {
-        InModuleScope ConfigMap {
-            $options = @{ prod = @{ KV = 'keyvault:vault/name'; B = 'plain' } }
-            Get-QConfSecretKey $options | Should -Be @('KV')
-        }
-    }
 }
 
 Describe "plugin value prefix resolve context" {

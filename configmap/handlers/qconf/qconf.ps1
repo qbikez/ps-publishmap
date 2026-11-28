@@ -499,12 +499,11 @@ function Write-QConfEntryStatus {
 function Get-QConfSecretKey {
     <#
     .SYNOPSIS
-        Keys that any option fills from a secret-bearing plugin prefix (e.g. `bw:`, `user-secrets:`) or from `keyvault:`, so their resolved values are not printed.
+        Keys that any option fills from a secret-bearing plugin prefix (e.g. `bw:`, `user-secrets:`, `keyvault:`), so their resolved values are not printed.
     #>
     param($Options)
 
-    # keyvault: is resolved inline, not by a plugin, so it isn't in the plugin registry.
-    $secretPrefixes = @(Get-ConfigMapSecretValuePrefix) + 'keyvault:'
+    $secretPrefixes = Get-ConfigMapSecretValuePrefix
     $keys = foreach ($optionSet in $Options.Values) {
         if ($optionSet -isnot [System.Collections.IDictionary]) { continue }
         foreach ($key in $optionSet.Keys) {

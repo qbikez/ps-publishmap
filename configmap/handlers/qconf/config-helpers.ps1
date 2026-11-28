@@ -84,8 +84,6 @@ function set-appsettings(
 function test-isSpecialValue($v) {
     if (!$v) { return $false }
     if ($v -is [string]) {
-        if ($v.StartsWith("keyvault:")) { return $true }
-
         foreach ($prefix in Get-ConfigMapValuePrefix) {
             if ($v.StartsWith($prefix)) { return $true }
         }
@@ -160,13 +158,6 @@ function resolve-value($v, [switch]$recurse, [string]$dir, [hashtable]$secrets, 
     if ($v -is [string]) {
         if (!(test-isSpecialValue $v)) { return $v }
 
-        if ($v.StartsWith("keyvault:")) {
-            $splits = $v.Substring("keyvault:".Length).Split("/")
-            $v = get-keyvaultSecret $splits[0] $splits[1]
-
-            return $v
-        }
-
         foreach ($prefix in Get-ConfigMapValuePrefix) {
             if (-not $v.StartsWith($prefix)) { continue }
 
@@ -217,13 +208,13 @@ function Get-UnresolvedConfigMapValue {
 function Resolve-ConfigMapValue {
     <#
     .SYNOPSIS
-        Resolve value references (keyvault: and every plugin prefix, such as bw: and user-secrets:).
+        Resolve value references (every plugin prefix, such as bw:, user-secrets: and keyvault:).
 
     .DESCRIPTION
         A string is resolved when it starts with a registered prefix and returned as is otherwise.
         A hashtable or other dictionary is resolved recursively and returned as the same kind of
         dictionary with the same keys. A reference that cannot be resolved warns and stays as
-        the original string (a keyvault: one becomes $null).
+        the original string.
 
         Exported for map scriptblocks, e.g. a build map `exec` that needs a secret:
             $env:API_KEY = Resolve-ConfigMapValue 'bw:my-api/apikey' -Required
@@ -269,23 +260,6 @@ function Resolve-ConfigMapValue {
         }
 
         return $resolved
-    }
-}
-
-function get-keyvaultSecret($vaultName, $secretName) {
-    try {
-        $secret = az keyvault secret show --vault-name $vaultName --name $secretName --query value -o tsv 2>$null
-        if ($LASTEXITCODE -eq 0) {
-            return $secret
-        }
-        else {
-            Write-Warning "Failed to retrieve secret '$secretName' from vault '$vaultName'"
-            return $null
-        }
-    }
-    catch {
-        Write-Warning "Error accessing Key Vault: $($_.Exception.Message)"
-        return $null
     }
 }
 

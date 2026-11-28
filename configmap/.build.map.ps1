@@ -1,6 +1,6 @@
 $targets = @{
     "test"      = {
-        invoke-pester .
+        invoke-pester ./test
     }
     "test.perf" = @{
         description = "A/B performance comparison against a base revision (test/perf/Compare-Perf.ps1)"

@@ -131,12 +131,6 @@ Describe 'Resolve-ConfigMapValue' {
             $message | Should -Not -Match 'OK'
         }
 
-        It 'throws when a value resolves to null' {
-            Mock get-keyvaultSecret -ModuleName ConfigMap { $null }
-
-            { Resolve-ConfigMapValue @{ Conn = 'keyvault:vault/conn' } -Required 3>$null } |
-                Should -Throw '*Conn: keyvault:vault/conn*'
-        }
     }
 
     It 'resolves values from a map scriptblock' {
