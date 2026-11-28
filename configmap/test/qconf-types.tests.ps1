@@ -968,6 +968,106 @@ Describe 'qconf user-secrets _template' {
     }
 }
 
+Describe 'qconf user-secrets: values in dotenv and appsettings templates' {
+    BeforeEach {
+        $script:workDir = Join-Path $TestDrive ("secrets-id-" + [guid]::NewGuid().ToString('n'))
+        New-Item -ItemType Directory -Path $script:workDir -Force | Out-Null
+        Push-Location $script:workDir
+
+        # No project file: the store is named by userSecretsId alone.
+        $script:secretsId = "configmap-test-" + [guid]::NewGuid().ToString('n')
+        dotnet user-secrets set 'db_remote' 'postgres://remote' --id $script:secretsId | Out-Null
+
+        $script:envFile = Join-Path $script:workDir '.env'
+        Write-DotEnvFile $script:envFile @{ DATABASE_URL = 'postgres://local' }
+        '{ "Db": { "Conn": "postgres://local" } }' | Set-Content -LiteralPath (Join-Path $script:workDir 'appsettings.json')
+
+        $script:mapFile = Join-Path $script:workDir '.configuration.map.ps1'
+        Write-ConfigMapFile $script:mapFile (@'
+@{
+    db = @{
+        _template = @{ type = 'dotenv'; file = '.env'; userSecretsId = '__ID__' }
+        options = [ordered]@{
+            local  = @{ DATABASE_URL = 'postgres://local' }
+            remote = @{ DATABASE_URL = 'user-secrets:db_remote' }
+            gone   = @{ DATABASE_URL = 'user-secrets:db_missing' }
+        }
+    }
+    app = @{
+        _template = @{ type = 'appconfig'; file = 'appsettings.json'; userSecretsId = '__ID__' }
+        options = [ordered]@{
+            local  = @{ 'Db:Conn' = 'postgres://local' }
+            remote = @{ 'Db:Conn' = 'user-secrets:db_remote' }
+        }
+    }
+    noid = @{
+        _template = 'dotenv:.env'
+        options = @{ remote = @{ DATABASE_URL = 'user-secrets:db_remote' } }
+    }
+}
+'@ -replace '__ID__', $script:secretsId)
+    }
+
+    AfterEach {
+        dotnet user-secrets clear --id $script:secretsId 2>&1 | Out-Null
+        Pop-Location
+    }
+
+    It 'writes the secret named by userSecretsId into the .env file' {
+        qconf -map $script:mapFile db -value remote -ErrorAction Stop
+
+        (Read-DotEnvFile $script:envFile)['DATABASE_URL'] | Should -Be 'postgres://remote'
+    }
+
+    It 'resolves a user-secrets: value set on a per-key entry' {
+        Set-Content -LiteralPath (Join-Path $script:workDir '.env.example') -Value 'DATABASE_URL=postgres://example'
+        Write-ConfigMapFile $script:mapFile (@'
+@{
+    db = @{
+        _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto'; userSecretsId = '__ID__' }
+    }
+}
+'@ -replace '__ID__', $script:secretsId)
+
+        qconf -map $script:mapFile db.DATABASE_URL -value 'user-secrets:db_remote' -ErrorAction Stop
+
+        (Read-DotEnvFile $script:envFile)['DATABASE_URL'] | Should -Be 'postgres://remote'
+    }
+
+    It 'matches a user-secrets: option by its resolved value' {
+        $result = qconf -map $script:mapFile db -porcelain -ErrorAction Stop
+        @($result.Active) | Should -Contain 'local'
+
+        Write-DotEnvFile $script:envFile @{ DATABASE_URL = 'postgres://elsewhere' }
+        $result = qconf -map $script:mapFile db -porcelain -ErrorAction Stop
+        $result.Active | Should -BeNullOrEmpty
+
+        qconf -map $script:mapFile db -value remote -ErrorAction Stop
+        $result = qconf -map $script:mapFile db -porcelain -ErrorAction Stop
+        @($result.Active) | Should -Contain 'remote'
+    }
+
+    It 'throws and keeps the file when a referenced secret is missing' {
+        { qconf -map $script:mapFile db -value gone -ErrorAction Stop } | Should -Throw '*db_missing*'
+
+        (Read-DotEnvFile $script:envFile)['DATABASE_URL'] | Should -Be 'postgres://local'
+    }
+
+    It 'throws instead of writing the reference when no store can be listed' {
+        { qconf -map $script:mapFile noid -value remote -ErrorAction Stop } | Should -Throw '*user secrets*'
+
+        (Read-DotEnvFile $script:envFile)['DATABASE_URL'] | Should -Be 'postgres://local'
+    }
+
+    It 'resolves user-secrets: values in an appsettings template' {
+        qconf -map $script:mapFile app -value remote -ErrorAction Stop
+
+        (Get-Content -Raw (Join-Path $script:workDir 'appsettings.json') | ConvertFrom-Json).Db.Conn | Should -Be 'postgres://remote'
+        $result = qconf -map $script:mapFile app -porcelain -ErrorAction Stop
+        @($result.Active) | Should -Contain 'remote'
+    }
+}
+
 Describe 'qconf dotenv _template option discovery' {
     BeforeEach {
         $script:workDir = Join-Path $TestDrive ("dotenv-auto-" + [guid]::NewGuid().ToString('n'))
@@ -1177,6 +1277,170 @@ Describe 'qbuild dotenv _template per-key entries' {
         @($result.Value.Keys) | Should -Not -Contain 'API_KEY'
     }
 
+    Context 'delegating to the parent entry' {
+        BeforeEach {
+            $global:DotEnvHookCalls = [System.Collections.Generic.List[object]]::new()
+        }
+
+        AfterEach {
+            Remove-Variable -Name DotEnvHookCalls -Scope Global -ErrorAction SilentlyContinue
+        }
+
+        It 'writes one key through the parent set override with a one-key value' {
+            Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options' }
+        _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto' }
+        set = {
+            param($ctx, $key, $value, $_context)
+            $global:DotEnvHookCalls.Add(@{ key = $key; value = $value; optionKey = $_context.optionKey; self = $_context.self })
+            & $_context.base.set $ctx $key $value $_context
+        }
+    }
+}
+'@
+
+            qbuild -map $script:buildMap api.API_URL -value 'https://hooked.example.com' -ErrorAction Stop
+
+            $global:DotEnvHookCalls.Count | Should -Be 1
+            $call = $global:DotEnvHookCalls[0]
+            $call.key | Should -BeNullOrEmpty
+            @($call.value.Keys) | Should -Be @('API_URL')
+            $call.value['API_URL'] | Should -Be 'https://hooked.example.com'
+            $call.optionKey | Should -Be 'API_URL'
+            $call.self.Contains('API_URL') | Should -BeTrue
+            $envValues = Read-DotEnvFile $script:envFile
+            $envValues['API_URL'] | Should -Be 'https://hooked.example.com'
+            $envValues['API_KEY'] | Should -Be 'k'
+        }
+
+        It 'still passes the key as $_context.envKey for existing overrides' {
+            Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options' }
+        _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto' }
+        set = {
+            param($ctx, $key, $value, $_context)
+            $global:DotEnvHookCalls.Add($_context.envKey)
+            & $_context.base.set $ctx $key $value $_context
+        }
+    }
+}
+'@
+
+            qbuild -map $script:buildMap api.API_URL -value 'https://x.example.com' -ErrorAction Stop
+
+            @($global:DotEnvHookCalls) | Should -Be @('API_URL')
+        }
+
+        It 'passes no optionKey to the parent set override when switching presets' {
+            Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options' }
+        _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto' }
+        set = {
+            param($ctx, $key, $value, $_context)
+            $global:DotEnvHookCalls.Add(@{ key = $key; optionKey = $_context.optionKey })
+            & $_context.base.set $ctx $key $value $_context
+        }
+    }
+}
+'@
+
+            qbuild -map $script:buildMap api -value prod -ErrorAction Stop
+
+            $global:DotEnvHookCalls[0].key | Should -Be 'prod'
+            $global:DotEnvHookCalls[0].optionKey | Should -BeNullOrEmpty
+        }
+
+        It 'reads one key through the parent get override' {
+            Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options' }
+        _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto' }
+        get = {
+            param($ctx, $options, $_context)
+            $global:DotEnvHookCalls.Add(@{ optionKey = $_context.optionKey; options = $options })
+            $result = & $_context.base.get $ctx $options $_context
+            if ($_context.optionKey -eq 'API_KEY') { $result.Value['API_KEY'] = '***' }
+            $result
+        }
+    }
+}
+'@
+
+            $result = qbuild -map $script:buildMap api.API_KEY -porcelain -ErrorAction Stop
+
+            $result.Value | Should -Be '***'
+            $global:DotEnvHookCalls[0].optionKey | Should -Be 'API_KEY'
+            @($global:DotEnvHookCalls[0].options.Keys) | Should -Contain 'prod'
+        }
+
+        It 'reads a key that no parent option contains' {
+            Write-DotEnvFile $script:envFile @{ API_URL = 'http://localhost:5000'; API_KEY = 'k'; FLAG = 'off' }
+            Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options' }
+        _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto' }
+        options   = @{ prod = @{ API_URL = 'https://prod' } }
+    }
+}
+'@
+
+            $result = qbuild -map $script:buildMap api.FLAG -porcelain -ErrorAction Stop
+
+            $result.Value | Should -Be 'off'
+        }
+
+        It 'throws when the parent get override returns no Value' {
+            Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options' }
+        _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto' }
+        get = {
+            param($ctx, $options, $_context)
+            'not a result'
+        }
+    }
+}
+'@
+
+            { qbuild -map $script:buildMap api.API_URL -porcelain -ErrorAction Stop } | Should -Throw "*'api'*Value*"
+        }
+
+        It 'keeps hand-written children on their own get and set' {
+            Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options' }
+        _template = @{ type = 'dotenv'; file = '.env'; keys = 'auto' }
+        set = {
+            param($ctx, $key, $value, $_context)
+            $global:DotEnvHookCalls.Add('parent')
+        }
+        API_URL = [ordered]@{
+            get = { param($ctx, $options, $_context) 'child-value' }
+            set = {
+                param($ctx, $key, $value, $_context)
+                $global:DotEnvHookCalls.Add('child')
+            }
+        }
+    }
+}
+'@
+
+            qbuild -map $script:buildMap api.API_URL -value 'x' -ErrorAction Stop
+
+            @($global:DotEnvHookCalls) | Should -Be @('child')
+        }
+    }
+
     It 'works against the dotenv sample' {
         $sampleDir = Join-Path $PSScriptRoot '..' 'samples' 'dotenv'
         Copy-Item -Path (Join-Path $sampleDir '*') -Destination $script:workDir -Recurse -Force
@@ -1188,6 +1452,158 @@ Describe 'qbuild dotenv _template per-key entries' {
 
         qbuild -map $sampleMap api.API_URL -value 'https://staging.example.com' -ErrorAction Stop
         (Read-DotEnvFile (Join-Path $script:workDir '.env'))['API_URL'] | Should -Be 'https://staging.example.com'
+    }
+}
+
+Describe 'qbuild options per-key entries from option presets' {
+    BeforeEach {
+        $script:workDir = Join-Path $TestDrive ("option-keys-" + [guid]::NewGuid().ToString('n'))
+        New-Item -ItemType Directory -Path $script:workDir -Force | Out-Null
+        Push-Location $script:workDir
+
+        $global:OptionKeyCalls = [System.Collections.Generic.List[object]]::new()
+        $script:stateFile = Join-Path $script:workDir 'state.json'
+        '{ "A": "1", "B": "2" }' | Set-Content -LiteralPath $script:stateFile
+
+        # A hand-written options entry: get/set keep a flat JSON object in state.json.
+        $script:buildMap = Join-Path $script:workDir '.build.map.ps1'
+        $script:customEntry = @'
+        _settings = @{ process = 'options'; keys = 'options' }
+        options   = [ordered]@{
+            local = [ordered]@{ A = '1'; B = '2'; __note = 'skipped' }
+            prod  = [ordered]@{ B = '3'; C = '4' }
+            flat  = 'not a preset hashtable'
+        }
+        get = {
+            param($ctx, $options, $_context)
+            $global:OptionKeyCalls.Add(@{ op = 'get'; optionKey = $_context.optionKey; options = $options })
+            $state = Get-Content -LiteralPath (Join-Path $_context.self._baseDir 'state.json') -Raw | ConvertFrom-Json -AsHashtable
+            @{ Value = $state; Active = $null }
+        }
+        set = {
+            param($ctx, $key, $value, $_context)
+            $global:OptionKeyCalls.Add(@{ op = 'set'; key = $key; value = $value; optionKey = $_context.optionKey })
+            $file = Join-Path $_context.self._baseDir 'state.json'
+            $state = Get-Content -LiteralPath $file -Raw | ConvertFrom-Json -AsHashtable
+            foreach ($k in $value.Keys) { $state[$k] = $value[$k] }
+            $state | ConvertTo-Json | Set-Content -LiteralPath $file
+        }
+'@
+        Write-ConfigMapFile $script:buildMap "[ordered]@{ app = [ordered]@{`n$script:customEntry`n} }"
+    }
+
+    AfterEach {
+        Remove-Variable -Name OptionKeyCalls -Scope Global -ErrorAction SilentlyContinue
+        Pop-Location
+    }
+
+    It 'creates one child per key merged from all presets' {
+        $buildMap = $script:buildMap
+        $result = InModuleScope configmap -Parameters @{ map = $buildMap } { Get-MapEntryList (Import-ConfigMap -Map $map) -language build }
+
+        @($result.Keys) | Should -Contain 'app.A'
+        @($result.Keys) | Should -Contain 'app.B'
+        @($result.Keys) | Should -Contain 'app.C'
+        @($result.Keys) | Should -Not -Contain 'app.__note'
+        $result['app.C'].description | Should -Be 'C'
+    }
+
+    It 'creates no children without the keys setting' {
+        Write-ConfigMapFile $script:buildMap ("[ordered]@{ app = [ordered]@{`n$script:customEntry`n} }" -replace "; keys = 'options'", '')
+
+        $buildMap = $script:buildMap
+        $result = InModuleScope configmap -Parameters @{ map = $buildMap } { Get-MapEntryList (Import-ConfigMap -Map $map) -language build }
+
+        @($result.Keys) | Should -Not -Contain 'app.A'
+    }
+
+    It 'reads one key through the parent get' {
+        $result = qbuild -map $script:buildMap app.B -porcelain -ErrorAction Stop
+
+        $result.Value | Should -Be '2'
+        $global:OptionKeyCalls[0].optionKey | Should -Be 'B'
+    }
+
+    It 'writes one key through the parent set with a one-key value' {
+        qbuild -map $script:buildMap app.C -value '9' -ErrorAction Stop
+
+        $call = @($global:OptionKeyCalls | Where-Object { $_.op -eq 'set' })[0]
+        $call.key | Should -BeNullOrEmpty
+        @($call.value.Keys) | Should -Be @('C')
+        $call.optionKey | Should -Be 'C'
+        $state = Get-Content -LiteralPath $script:stateFile -Raw | ConvertFrom-Json -AsHashtable
+        $state['C'] | Should -Be '9'
+        $state['A'] | Should -Be '1'
+    }
+
+    It 'keeps an explicit child entry instead of generating one' {
+        $explicit = @'
+        B = [ordered]@{
+            description = 'hand-written B'
+            get = { param($ctx, $options, $_context) 'explicit' }
+        }
+'@
+        Write-ConfigMapFile $script:buildMap "[ordered]@{ app = [ordered]@{`n$script:customEntry`n$explicit`n} }"
+
+        $result = qbuild -map $script:buildMap app.B -porcelain -ErrorAction Stop
+
+        $result.Value | Should -Be 'explicit'
+    }
+
+    It 'generates children from discovered dotenv presets' {
+        Write-DotEnvFile (Join-Path $script:workDir '.env') @{ API_URL = 'http://localhost' }
+        Write-DotEnvFile (Join-Path $script:workDir '.env.prod') @{ API_URL = 'https://prod'; API_KEY = 'prod-key' }
+        Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options'; keys = 'options' }
+        _template = 'dotenv:.env'
+    }
+}
+'@
+
+        qbuild -map $script:buildMap api.API_KEY -value 'k2' -ErrorAction Stop
+
+        (Read-DotEnvFile (Join-Path $script:workDir '.env'))['API_KEY'] | Should -Be 'k2'
+    }
+
+    It 'skips keys the dotenv template excludes' {
+        Write-DotEnvFile (Join-Path $script:workDir '.env') @{ API_URL = 'http://localhost' }
+        Write-DotEnvFile (Join-Path $script:workDir '.env.prod') @{ API_URL = 'https://prod'; API_KEY = 'prod-key' }
+        Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    api = [ordered]@{
+        _settings = @{ process = 'options'; keys = 'options' }
+        _template = @{ type = 'dotenv'; file = '.env'; exclude = 'API_KEY' }
+    }
+}
+'@
+
+        $buildMap = $script:buildMap
+        $result = InModuleScope configmap -Parameters @{ map = $buildMap } { Get-MapEntryList (Import-ConfigMap -Map $map) -language build }
+
+        @($result.Keys) | Should -Contain 'api.API_URL'
+        @($result.Keys) | Should -Not -Contain 'api.API_KEY'
+    }
+
+    It 'marks children of a user-secrets entry as sensitive' {
+        Write-ConfigMapFile $script:buildMap @'
+[ordered]@{
+    secrets = [ordered]@{
+        _settings = @{ process = 'options'; keys = 'options' }
+        _template = 'user-secrets:app.csproj'
+        options   = @{ dev = @{ ApiKey = 'x' } }
+    }
+}
+'@
+
+        $buildMap = $script:buildMap
+        $sensitive = InModuleScope configmap -Parameters @{ map = $buildMap } {
+            $loaded = Import-ConfigMap -Map $map
+            Test-ConfigEntrySensitive -Entry $loaded.secrets.ApiKey
+        }
+
+        $sensitive | Should -BeTrue
     }
 }
 
@@ -1262,5 +1678,52 @@ Describe 'qconf dotenv bw: option values' {
         $result = qconf -map $script:mapFile api -porcelain -ErrorAction Stop
 
         $result.Value['API_KEY'] | Should -Be 'from-bitwarden'
+    }
+}
+
+Describe 'qconf user-secrets: listing and cache' {
+    BeforeEach {
+        $script:workDir = Join-Path $TestDrive ("secrets-cache-" + [guid]::NewGuid().ToString('n'))
+        New-Item -ItemType Directory -Path $script:workDir -Force | Out-Null
+        Push-Location $script:workDir
+
+        $script:secretsId = "configmap-test-" + [guid]::NewGuid().ToString('n')
+        dotnet user-secrets set 'Api:Key' 'key=with=equals' --id $script:secretsId | Out-Null
+
+        $script:settingsFile = Join-Path $script:workDir 'appsettings.json'
+        '{ "Api": { "Key": "old" } }' | Set-Content -LiteralPath $script:settingsFile -Encoding utf8
+
+        $script:mapFile = Join-Path $script:workDir '.configuration.map.ps1'
+        Write-ConfigMapFile $script:mapFile (@'
+@{
+    app = @{
+        _template = @{ type = 'appconfig'; file = 'appsettings.json'; userSecretsId = '__ID__' }
+        options = @{ dev = @{ 'Api:Key' = 'user-secrets:Api:Key' } }
+    }
+}
+'@ -replace '__ID__', $script:secretsId)
+    }
+
+    AfterEach {
+        dotnet user-secrets clear --id $script:secretsId 2>&1 | Out-Null
+        Pop-Location
+    }
+
+    It 'keeps = and newlines in a secret value' {
+        dotnet user-secrets set 'Api:Key' "a=b`nsecond line" --id $script:secretsId | Out-Null
+
+        qconf -map $script:mapFile app -value dev -ErrorAction Stop 6>$null
+
+        (Read-AppSettings $script:settingsFile).Api.Key | Should -Be "a=b`nsecond line"
+    }
+
+    It 'sees a secret changed after an earlier read in the same session' {
+        qconf -map $script:mapFile app -value dev -ErrorAction Stop 6>$null
+        (Read-AppSettings $script:settingsFile).Api.Key | Should -Be 'key=with=equals'
+
+        dotnet user-secrets set 'Api:Key' 'rotated' --id $script:secretsId | Out-Null
+        qconf -map $script:mapFile app -value dev -ErrorAction Stop 6>$null
+
+        (Read-AppSettings $script:settingsFile).Api.Key | Should -Be 'rotated'
     }
 }

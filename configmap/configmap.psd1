@@ -3,7 +3,7 @@
     RootModule           = 'configmap.psm1'
 
     # Version number of this module.
-    ModuleVersion = '1.4.17.0'
+    ModuleVersion = '1.4.24.0'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Core')
@@ -86,7 +86,8 @@
         'Initialize-ProcessMap',
         'Get-MapLanguage',
         'Merge-IncludeDirectives',
-        'Add-BaseDir'
+        'Add-BaseDir',
+        'Resolve-ConfigMapValue'
     )
 
     # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
@@ -172,6 +173,13 @@ Initial release of ConfigMap module providing:
     # Default prefix for commands exported from this module. Override the default prefix using Import-Module -Prefix.
     # DefaultCommandPrefix = ''
 }
+
+
+
+
+
+
+
 
 
 

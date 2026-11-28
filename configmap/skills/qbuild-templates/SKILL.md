@@ -101,6 +101,22 @@ Long form: `_template = @{ type = "user-secrets"; csproj = "src/App/App.csproj" 
 
 `qbuild list` does not read these entries: it shows `<not read>` and the option names. Query the entry (`qbuild <entry>`) to see the active option and its value.
 
+### User-secret values in `dotenv` / `appsettings` → `userSecretsId`
+
+A `user-secrets:{name}` value in a `dotenv` or `appsettings` entry is copied from `dotnet user-secrets` into the file. Name the store with `userSecretsId` (read with `--id`, no project needed); without it the project in the file's directory is used:
+
+```powershell
+"db" = @{
+    _template = @{ type = "dotenv"; file = ".env.local"; userSecretsId = "my-app" }
+    options   = @{
+        local  = @{ DATABASE_URL = "postgres://localhost/app" }
+        shared = @{ DATABASE_URL = "user-secrets:DATABASE_URL_shared" }
+    }
+}
+```
+
+`set` throws and writes nothing if a secret is missing or the store can't be listed. `get` lists the store once and matches `user-secrets:` options by their value (a missing secret never matches); if listing fails they match any value.
+
 ### Bitwarden values → `bw:`
 
 Any option value in an `appsettings`, `dotenv` or `user-secrets` entry can be `bw:{item}` (the item's password) or `bw:{item}/{field}`, where `field` is `username`, `password`, `totp`, `uri`, `notes` or a custom field name:
@@ -110,6 +126,17 @@ options = @{ prod = @{ API_KEY = "bw:my-api/apikey"; DB_USER = "bw:my-db/usernam
 ```
 
 Needs the `bw` CLI on PATH and an unlocked vault (`bw unlock`, then `BW_SESSION`). A failed lookup warns and leaves the literal `bw:...`; a `user-secrets` entry throws instead of writing it. Option matching ignores `bw:` values, so `get` never calls `bw`. Status output masks keys filled from `bw:` as `********`; `-porcelain` still returns the real value.
+
+### Secrets in scripts → `Resolve-ConfigMapValue`
+
+A build-map `exec` (or any script) resolves the same references with the exported `Resolve-ConfigMapValue`; a hashtable is resolved recursively. `-Required` throws, naming the failed keys and references but never a value:
+
+```powershell
+exec = {
+    $env:API_KEY = Resolve-ConfigMapValue "bw:my-api/apikey" -Required
+    $db = Resolve-ConfigMapValue @{ user = "user-secrets:Db:User"; pass = "user-secrets:Db:Pass" } -UserSecretsId my-app -Required
+}
+```
 
 ### Keep / remove
 

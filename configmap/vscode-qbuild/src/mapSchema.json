@@ -80,7 +80,14 @@
     },
     { "key": "Process", "detail": "Select how the entry runs", "valuesFrom": "processes" },
     { "key": "ForceCheck", "detail": "steps: run each step's check before deciding to run it", "type": "boolean", "default": "$false" },
-    { "key": "UseWorkDir", "detail": "Run entry scripts in the caller's directory instead of the map's", "type": "boolean", "default": "$false" }
+    { "key": "UseWorkDir", "detail": "Run entry scripts in the caller's directory instead of the map's", "type": "boolean", "default": "$false" },
+    {
+      "key": "Keys",
+      "detail": "options: generate one child entry per key in the option presets",
+      "values": [
+        { "value": "options", "detail": "Merge keys from all option presets" }
+      ]
+    }
   ],
   "processes": [
     { "name": "exec", "detail": "Run the entry exec scriptblock (default)" },
@@ -98,7 +105,13 @@
       "pathKey": "file",
       "fileMatch": "^appsettings.*\\.json$",
       "detail": "Options stored in an appsettings JSON file",
-      "keys": []
+      "keys": [
+        {
+          "key": "userSecretsId",
+          "detail": "Store for user-secrets: option values (dotnet user-secrets --id), for repos without a .NET project",
+          "insertText": "userSecretsId = '${1:my-app}'"
+        }
+      ]
     },
     {
       "type": "dotenv",
@@ -116,6 +129,11 @@
           "key": "exclude",
           "detail": "Keys (wildcards allowed) kept out of per-key entries",
           "insertText": "exclude = @('${1:SECRET_*}')"
+        },
+        {
+          "key": "userSecretsId",
+          "detail": "Store for user-secrets: option values (dotnet user-secrets --id), for repos without a .NET project",
+          "insertText": "userSecretsId = '${1:my-app}'"
         }
       ]
     },

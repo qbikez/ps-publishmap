@@ -509,6 +509,18 @@ Creates a `.configuration.map.ps1` file with sample configuration entries.
         _template   = @{ type = "dotenv"; file = ".env"; keys = "auto" }
     }
 
+    # A "user-secrets:{name}" value in a dotenv or appsettings entry is copied from dotnet
+    # user-secrets. userSecretsId names the store (`--id`, no project needed); without it the
+    # project in the file's directory is used. A missing secret makes set throw, and get
+    # matches the option by the secret's value.
+    "db" = @{
+        _template = @{ type = "dotenv"; file = ".env.local"; userSecretsId = "my-app" }
+        options   = @{
+            local  = @{ DATABASE_URL = "postgres://localhost/app" }
+            shared = @{ DATABASE_URL = "user-secrets:DATABASE_URL_shared" }
+        }
+    }
+
     # Built-in user-secrets template backed by `dotnet user-secrets`
     # Short form below; long form is _template = @{ type = "user-secrets"; csproj = "..." }
     # csproj is a project file or its directory; a "user-secrets:{name}" value copies
@@ -531,7 +543,27 @@ Option values in `appsettings`, `dotenv` and `user-secrets` entries can also pul
 options = @{ prod = @{ API_KEY = "bw:my-api/apikey"; DB_USER = "bw:my-db/username" } }
 ```
 
+`user-secrets:{name}` values are listed with `dotnet user-secrets list --json` (values may contain `=` or newlines) and cached per process until the store's `secrets.json` changes.
+
 Author-supplied `get` / `set` always win over the template fill-in. Template implementations stay on `$_context.base` (`$_context.base.get` / `$_context.base.set`) so overrides can wrap them. See `samples/process-mixed` (`endpoint_override`) and `qbuild !agent.skills qbuild-templates`.
+
+#### Per-key entries from option presets
+
+`_settings.keys = 'options'` gives an options entry one child entry per key found in any of its presets (keys from all presets are merged; keys starting with `__` are skipped). It works with any `_template` type and with hand-written get/set:
+
+```powershell
+storage = @{
+    _settings = @{ process = 'options'; keys = 'options' }
+    _template = 'appsettings:appsettings.json'
+    options   = @{
+        local = @{ 'Storage:BaseUrl' = 'https://127.0.0.1:10000'; 'Storage:Account' = 'devstore' }
+        prod  = @{ 'Storage:BaseUrl' = 'https://storage.example' }
+    }
+}
+# qbuild storage.Storage:Account -value other
+```
+
+Generated children (these and dotenv `keys = 'auto'` ones) read and write through the parent's `get` / `set`, overrides included. The parent's `set` gets `$key = $null` and a one-key `$value` such as `@{ 'Storage:Account' = 'other' }`; its `get` gets the parent's presets. `$_context.optionKey` names the key in both, and is `$null` for a preset switch. A key the map already defines as a child is not generated, nor is a reserved key or one containing `.`. A dotenv template's `exclude` applies, and children of a `user-secrets` entry are not read by `list`.
 
 ### Configuration Usage
 ```powershell
@@ -586,6 +618,16 @@ Returns structured command metadata for agents and automation:
 Get-ConfigMapCommandCatalog -Map $buildMap -Language build
 Get-ConfigMapCommandCatalog -Map $buildMap -Path build -Language build
 ```
+
+### Resolve-ConfigMapValue
+Resolves value references (`keyvault:` and every [plugin prefix](#plugins-value-prefixes), such as `bw:` and `user-secrets:`) outside qconf, e.g. in a build-map `exec`:
+```powershell
+Resolve-ConfigMapValue [-Value] <string|IDictionary> [-Directory <dir>] [-UserSecretsId <id>] [-Required]
+
+$env:API_KEY = Resolve-ConfigMapValue "bw:my-api/apikey" -Required
+$db = Resolve-ConfigMapValue @{ user = "user-secrets:Db:User"; conn = @{ main = "user-secrets:Db:Conn" } } -UserSecretsId my-app
+```
+A plain string comes back unchanged. A dictionary is resolved recursively and returned as the same kind (hashtable or ordered) with the same keys. An unresolved reference warns and stays as the original string. `-Directory` is the .NET project for `user-secrets:` (default: the current directory); `-UserSecretsId` reads them by id instead. `-Required` throws when any value is still null or a reference; the message names the keys and references (`conn.main: user-secrets:Db:Conn`), never a value.
 
 ## Entry Types
 
@@ -666,7 +708,7 @@ The following keys have special meaning in map files:
 - `get` - Get configuration value (for qconf)
 - `set` - Set configuration value (for qconf)
 - `validate` - Validation function (for qconf)
-- `_template` - Built-in entry type: `@{ type; file }` or `"appsettings:{filepath}"` / `"dotenv:{filepath}"`, or `@{ type = "user-secrets"; csproj }` / `"user-secrets:{csproj}"`, that fills get/set when omitted; author get/set override the fill-in and can call `$_context.base`
+- `_template` - Built-in entry type: `@{ type; file }` or `"appsettings:{filepath}"` / `"dotenv:{filepath}"`, or `@{ type = "user-secrets"; csproj }` / `"user-secrets:{csproj}"`, that fills get/set when omitted (`appconfig` and `dotenv` also take `userSecretsId` for `user-secrets:{name}` values); author get/set override the fill-in and can call `$_context.base`
 - `description` - Command description
 - `#include` - Include other maps by directory or map file path (see [Included Maps](#included-maps))
 - `completions` - Custom tab completion values
@@ -749,6 +791,6 @@ A plugin (`plugins/<name>/_plugin.ps1`, returning a hashtable) can claim option 
 
 The shipped prefixes are `bw:` (`plugin-bw`), `user-secrets:` (`plugin-user-secrets`) and `keyvault:{vault}/{secret}` (`plugin-keyvault`, reads Azure Key Vault with `az`; masked like `bw:`).
 
-`$Context` carries what the caller knows: `Directory` and an already-listed `Secrets` table (used by `plugin-user-secrets`). Core code that calls a plugin's functions directly loads it first with `Import-ConfigMapPlugin <name>`.
+`$Context` carries what the caller knows: `Directory`, the template's `UserSecretsId` (or `Resolve-ConfigMapValue -UserSecretsId`) and an already-listed `Secrets` table (used by `plugin-user-secrets`). Every prefix is resolved by qconf templates and by the exported `Resolve-ConfigMapValue`. Core code that calls a plugin's functions directly loads it first with `Import-ConfigMapPlugin <name>`.
 
 The manifest is read at import, so prefixes are recognised (and never resolved) by `list` and entry reads without loading the implementation. The implementation file is dot-sourced in a child scope of the module: declare what it exposes as `function script:name` and keep state in `$script:`. If two plugins claim a prefix, the lower `priority` wins and a warning is shown.
